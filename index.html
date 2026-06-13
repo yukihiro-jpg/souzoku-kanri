@@ -404,7 +404,19 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 
     <!-- ===== Simulation ===== -->
     <section class="view" id="view-simulation">
-      <div class="view-head"><h1>相続税試算</h1><p>遺産分割の割り当てに基づき、相続税法の規定に従って相続税額を試算します。</p></div>
+      <div class="view-head"><h1>相続税試算</h1><p>遺産分割の割り当てに基づき、相続税法（現行法）の規定に従って相続税額を計算します。小規模宅地等の特例は財産一覧の各土地（⚙）で、贈与税額控除は各生前贈与（⚙）で設定します。</p></div>
+
+      <div class="card">
+        <h2>詳細条件</h2>
+        <div class="card-sub">相次相続控除（今回の被相続人が、10年以内の前回の相続で相続税を納めている場合に適用）。</div>
+        <label class="field" style="flex-direction:row;align-items:center;gap:8px;margin-bottom:12px;"><input type="checkbox" style="width:auto;" id="sc_enabled" onchange="onSuccessiveInput()"> <span class="lbl">相次相続控除を適用する</span></label>
+        <div class="grid grid-3" id="scFields">
+          <div class="field"><label>前回の相続で被相続人が納めた相続税額 (A)</label><input type="text" class="num" id="sc_A" placeholder="円" oninput="onSuccessiveInput()"></div>
+          <div class="field"><label>前回の相続で被相続人が取得した純資産価額 (B)</label><input type="text" class="num" id="sc_B" placeholder="円" oninput="onSuccessiveInput()"></div>
+          <div class="field"><label>前回の相続からの経過年数 (E)</label><input type="number" min="0" max="10" id="sc_years" placeholder="年（1年未満切捨て）" oninput="onSuccessiveInput()"></div>
+        </div>
+        <div id="koboSummary" style="margin-top:14px;"></div>
+      </div>
 
       <div class="card">
         <h2>① 課税価格と相続税の総額</h2>
@@ -794,13 +806,20 @@ function newCaseObject(name){
     collectionDeadline:'', meetingMemo:'',
     heirs:[ newHeir() ],
     checklist:{},   // key -> {checked,memo,receivedPart,unreceivedPart}
-    assets:[],      // {id,category,subcategory,name,location,quantity,unitPrice,value,memo,allocations:[{heirId,amount}]}
+    assets:[],      // {id,category,subcategory,name,location,quantity,unitPrice,value,memo,allocations,kobo:{type,area},giftTax,is4to7}
+    successive:{ enabled:false, A:'', B:'', years:'' }, // 相次相続控除
     agreement:{ date:'', notes:'', extraHeirId:'' }
   };
 }
-function newHeir(){ return { id:uid(), name:'', kana:'', relationType:'child', address:'', tel:'', job:'', age:'', disabled:false, disabilityType:'general', surcharge:false, isRepresentative:false, hideFromContract:false }; }
-const RELATION_LABELS={spouse:'配偶者',child:'子',parent:'父母（直系尊属）',sibling:'兄弟姉妹',other:'その他'};
-function autoSurcharge(rt){ return rt==='sibling'||rt==='other'; }
+function newHeir(){ return { id:uid(), name:'', kana:'', relationType:'child', isAdopted:false, adoptedAsReal:false, isDaishu:false, daishuGroup:'', isRenounced:false, address:'', tel:'', job:'', age:'', disabled:false, disabilityType:'general', surcharge:false, surchargeManual:false, isRepresentative:false, hideFromContract:false }; }
+const RELATION_LABELS={spouse:'配偶者',child:'子',grandchild:'孫（代襲）',parent:'父母（直系尊属）',sibling:'兄弟姉妹',nephew:'甥姪（代襲）',other:'その他'};
+function autoSurcharge(h){
+  if(h.relationType==='spouse'||h.relationType==='parent') return false;
+  if(h.relationType==='child') return h.isAdopted && h.isGrandAdopted===true; // 孫養子のみ2割加算（通常はfalse）
+  if(h.relationType==='grandchild') return !h.isDaishu; // 代襲孫は対象外、非代襲(孫養子)は対象
+  return true; // 兄弟姉妹・甥姪・その他
+}
+function effSurcharge(h){ return h.surchargeManual? !!h.surcharge : autoSurcharge(h); }
 
 // ============================================================
 //  Navigation
@@ -910,8 +929,10 @@ function migrateCase(data){
   c.deceased=Object.assign(base.deceased, data.deceased||{});
   c.agreement=Object.assign(base.agreement, data.agreement||{});
   c.checklist=data.checklist||{};
+  c.successive=Object.assign({enabled:false,A:'',B:'',years:''}, data.successive||{});
   c.assets=(data.assets||[]).map(a=>{
-    const na=Object.assign({id:uid(),category:'other',subcategory:'',name:'',location:'',quantity:'',unitPrice:'',value:0,memo:'',allocations:[]},a);
+    const na=Object.assign({id:uid(),category:'other',subcategory:'',name:'',location:'',quantity:'',unitPrice:'',value:0,memo:'',allocations:[],kobo:{type:'none',area:''},giftTax:0,is4to7:false},a);
+    if(!na.kobo) na.kobo={type:'none',area:''};
     if(na.detail!==undefined && !na.location){ na.location=na.detail; } delete na.detail;
     if((!na.allocations||!na.allocations.length) && na.acquirerId){ na.allocations=[{heirId:na.acquirerId,amount:Number(na.value)||0}]; }
     if(!Array.isArray(na.allocations)) na.allocations=[];
@@ -1011,8 +1032,11 @@ function calcDeadlines(){
 // ============================================================
 function addHeir(){ if(!currentCase) return; currentCase.heirs.push(newHeir()); renderHeirs(); cacheCurrentCase(); }
 function removeHeir(id){ if(!currentCase) return; currentCase.heirs=currentCase.heirs.filter(h=>h.id!==id); if(!currentCase.heirs.length) currentCase.heirs.push(newHeir()); renderHeirs(); refreshAcquirerSelects(); cacheCurrentCase(); }
-function updateHeir(id,field,val){ const h=currentCase.heirs.find(x=>x.id===id); if(h){ h[field]=val; if(field==='relationType'){ h.surcharge=autoSurcharge(val); renderHeirs(); } cacheCurrentCase(); if(field==='name'||field==='relationType') refreshAcquirerSelects(); } }
-function updateHeirBool(id,field,checked){ const h=currentCase.heirs.find(x=>x.id===id); if(h){ h[field]=checked; cacheCurrentCase(); } }
+function updateHeir(id,field,val){ const h=currentCase.heirs.find(x=>x.id===id); if(h){ h[field]=val; if(field==='relationType'){ if(!h.surchargeManual) h.surcharge=autoSurcharge(h); renderHeirs(); } cacheCurrentCase(); if(field==='name'||field==='relationType') refreshAcquirerSelects(); } }
+function updateHeirBool(id,field,checked){ const h=currentCase.heirs.find(x=>x.id===id); if(h){ h[field]=checked;
+  if(field==='surcharge') h.surchargeManual=true;
+  if(field==='isAdopted'||field==='isDaishu'){ if(!h.surchargeManual) h.surcharge=autoSurcharge(h); renderHeirs(); }
+  cacheCurrentCase(); } }
 function relTypeOptions(cur){ return Object.keys(RELATION_LABELS).map(k=>'<option value="'+k+'"'+(k===cur?' selected':'')+'>'+RELATION_LABELS[k]+'</option>').join(''); }
 function disabilityOptions(h){ const cur=h.disabled?(h.disabilityType||'general'):'none'; return [['none','なし'],['general','一般障害者'],['special','特別障害者']].map(o=>'<option value="'+o[0]+'"'+(o[0]===cur?' selected':'')+'>'+o[1]+'</option>').join(''); }
 function updateLegalShareLabels(){ if(!currentCase) return; const sh=legalShares(currentCase.heirs); currentCase.heirs.forEach(h=>{ const el=$('lshare-'+h.id); if(el) el.textContent=fracText(sh[h.id]); }); }
@@ -1037,9 +1061,16 @@ function renderHeirs(){
       +'<div class="field"><label>職業</label><input type="text" value="'+esc(h.job)+'" oninput="updateHeir(\''+h.id+'\',\'job\',this.value)"></div>'
       +'</div>'
       +'<div class="grid grid-4" style="margin-top:12px;align-items:end;">'
+      +'<div class="field"><label>実子／養子</label><select onchange="updateHeirBool(\''+h.id+'\',\'isAdopted\',this.value===\'adopted\')"'+( (h.relationType==='child'||h.relationType==='grandchild')?'':' disabled style="opacity:.4"')+'><option value="real"'+(!h.isAdopted?' selected':'')+'>実子</option><option value="adopted"'+(h.isAdopted?' selected':'')+'>養子</option></select></div>'
+      +'<div class="field"><label>養子を実子とみなす<br><span style="font-weight:400;font-size:10.5px;">特別養子・連れ子養子・代襲</span></label><select onchange="updateHeirBool(\''+h.id+'\',\'adoptedAsReal\',this.value===\'yes\')"'+(h.isAdopted?'':' disabled style="opacity:.4"')+'><option value="no"'+(!h.adoptedAsReal?' selected':'')+'>いいえ</option><option value="yes"'+(h.adoptedAsReal?' selected':'')+'>はい</option></select></div>'
+      +'<label class="field" style="flex-direction:row;align-items:center;gap:8px;"><input type="checkbox" style="width:auto;" '+(h.isDaishu?'checked':'')+' onchange="updateHeirBool(\''+h.id+'\',\'isDaishu\',this.checked)"> <span class="lbl">代襲相続人</span></label>'
+      +'<div class="field"><label>代襲元グループ<br><span style="font-weight:400;font-size:10.5px;">同じ被代襲者は同名に</span></label><input type="text" value="'+esc(h.daishuGroup)+'" placeholder="例：長男" oninput="updateHeir(\''+h.id+'\',\'daishuGroup\',this.value)"'+(h.isDaishu?'':' disabled style="opacity:.4"')+'></div>'
+      +'</div>'
+      +'<div class="grid grid-4" style="margin-top:12px;align-items:end;">'
+      +'<label class="field" style="flex-direction:row;align-items:center;gap:8px;"><input type="checkbox" style="width:auto;" '+(h.isRenounced?'checked':'')+' onchange="updateHeirBool(\''+h.id+'\',\'isRenounced\',this.checked)"> <span class="lbl">相続放棄</span></label>'
       +'<div class="field"><label>年齢（未成年者/障害者控除）</label><input type="number" min="0" value="'+esc(h.age)+'" placeholder="例：45" oninput="updateHeir(\''+h.id+'\',\'age\',this.value)"></div>'
       +'<div class="field"><label>障害者控除</label><select onchange="updateHeir(\''+h.id+'\',\'disabilityType\',this.value);updateHeirBool(\''+h.id+'\',\'disabled\',this.value!==\'none\')">'+disabilityOptions(h)+'</select></div>'
-      +'<label class="field" style="flex-direction:row;align-items:center;gap:8px;"><input type="checkbox" style="width:auto;" '+(h.surcharge?'checked':'')+' onchange="updateHeirBool(\''+h.id+'\',\'surcharge\',this.checked)"> <span class="lbl">相続税額の2割加算</span></label>'
+      +'<label class="field" style="flex-direction:row;align-items:center;gap:8px;"><input type="checkbox" style="width:auto;" '+(effSurcharge(h)?'checked':'')+' onchange="updateHeirBool(\''+h.id+'\',\'surcharge\',this.checked)"> <span class="lbl">相続税額の2割加算</span></label>'
       +'<div class="muted" style="font-size:11.5px;">法定相続分：<b id="lshare-'+h.id+'">—</b></div>'
       +'</div>';
     c.appendChild(div);
@@ -1164,19 +1195,42 @@ function assetRowHtml(t,a){
     +'<td><input type="text" class="num" style="width:100%" value="'+esc(a.quantity)+'" placeholder="'+esc(t.f3&&t.f3.ph?t.f3.ph:'')+'" oninput="updateAsset(\''+a.id+'\',\'quantity\',this.value)"></td>'
     +'<td><input type="text" class="num" style="width:100%" value="'+(a.unitPrice?Number(a.unitPrice).toLocaleString('ja-JP'):'')+'" placeholder="—" oninput="updateAsset(\''+a.id+'\',\'unitPrice\',this.value)"></td>'
     +'<td><input type="text" class="num val-input" id="val-'+a.id+'" style="width:100%" value="'+(a.value?Number(a.value).toLocaleString('ja-JP'):'')+'" placeholder="0" oninput="updateAsset(\''+a.id+'\',\'value\',this.value)" onblur="this.value=(Number(String(this.value).replace(/[^0-9.\\-]/g,\'\'))||0).toLocaleString(\'ja-JP\')"></td>'
-    +'<td class="col-del"><button class="row-del" title="削除" onclick="removeAsset(\''+a.id+'\')">×</button></td>'
-    +'</tr>';
+    +'<td class="col-del">'+(  (t.key==='land'||t.key==='gift')? '<button class="row-del" title="詳細" onclick="toggleDetail(\''+a.id+'\')">⚙</button>':'' )+'<button class="row-del" title="削除" onclick="removeAsset(\''+a.id+'\')">×</button></td>'
+    +'</tr>'
+    + ((t.key==='land')? koboDetailRow(a) : (t.key==='gift'? giftDetailRow(a):''));
 }
 function subOptions(t,cur){ return '<option value="">—</option>'+t.subs.map(s=>'<option value="'+esc(s)+'"'+(s===cur?' selected':'')+'>'+esc(s)+'</option>').join(''); }
+function toggleDetail(id){ const el=$('detail-'+id); if(el) el.style.display=(el.style.display==='none'||!el.style.display)?'table-row':'none'; }
+function koboDetailRow(a){
+  const k=a.kobo||{type:'none',area:''};
+  const opts=[['none','適用しない'],['residence','特定居住用宅地等(330㎡,80%)'],['business','特定事業用宅地等(400㎡,80%)'],['company','特定同族会社事業用(400㎡,80%)'],['rental','貸付事業用宅地等(200㎡,50%)']]
+    .map(o=>'<option value="'+o[0]+'"'+(o[0]===k.type?' selected':'')+'>'+o[1]+'</option>').join('');
+  const red=(typeof currentCase!=='undefined')? (computeKobo().byAsset[a.id]||0):0;
+  return '<tr class="asset-detail" id="detail-'+a.id+'" style="display:none;"><td colspan="7"><div class="alloc-split">'
+    +'<div class="as-row"><span class="nm"><b>小規模宅地等の特例</b>（㎡単価×適用面積×減額率で計算。単価は「単価」欄を使用）</span></div>'
+    +'<div class="as-row"><span class="lbl">区分</span><select style="width:auto;flex:1;max-width:340px;" onchange="updateKobo(\''+a.id+'\',\'type\',this.value)">'+opts+'</select></div>'
+    +'<div class="as-row"><span class="lbl">適用面積(㎡)</span><input type="text" class="num" value="'+esc(k.area)+'" placeholder="未入力で地積全部" oninput="updateKobo(\''+a.id+'\',\'area\',this.value)"><span class="nm" style="text-align:right;">減額 <b id="kobored-'+a.id+'">'+yen(red)+'</b></span></div>'
+    +'</div></td></tr>';
+}
+function giftDetailRow(a){
+  return '<tr class="asset-detail" id="detail-'+a.id+'" style="display:none;"><td colspan="7"><div class="alloc-split">'
+    +'<div class="as-row"><span class="nm"><b>贈与税額控除</b>（この贈与に課された贈与税額。暦年分は算出税額を限度、精算課税分は控除不足が還付）</span></div>'
+    +'<div class="as-row"><span class="lbl">課された贈与税額(円)</span><input type="text" class="num" value="'+(a.giftTax?Number(a.giftTax).toLocaleString("ja-JP"):"")+'" placeholder="0" oninput="updateGiftDetail(\''+a.id+'\',\'giftTax\',this.value)"></div>'
+    +'<label class="as-row" style="cursor:pointer;"><input type="checkbox" style="width:auto;" '+(a.is4to7?'checked':'')+' onchange="updateGiftDetail(\''+a.id+'\',\'is4to7\',this.checked)"> <span class="nm">相続開始前3年超7年以内の暦年贈与（合計100万円控除の対象）</span></label>'
+    +'</div></td></tr>';
+}
+function updateKobo(id,field,val){ const a=currentCase.assets.find(x=>x.id===id); if(!a) return; if(!a.kobo) a.kobo={type:'none',area:''}; a.kobo[field]=(field==='area')? (val===''?'':val) : val; const k=computeKobo(); const el=$('kobored-'+id); if(el) el.textContent=yen(k.byAsset[id]||0); renderSummary(); cacheCurrentCase(); }
+function updateGiftDetail(id,field,val){ const a=currentCase.assets.find(x=>x.id===id); if(!a) return; a[field]=(field==='giftTax')? (Number(String(val).replace(/[^0-9.\-]/g,''))||0):val; cacheCurrentCase(); }
 
 function calcSummary(){
-  const n=currentCase? currentCase.heirs.filter(h=>h.name.trim()).length || currentCase.heirs.length : 0;
+  const n=currentCase? (buildStatutory(currentCase.heirs).count||1) : 0;
   const sum={};
   ASSET_TYPES.forEach(t=>sum[t.key]=0);
   (currentCase?currentCase.assets:[]).forEach(a=>{ sum[a.category]=(sum[a.category]||0)+(Number(a.value)||0); });
+  const koboTotal=currentCase? computeKobo().total : 0;
   const insExempt=Math.min(sum.insurance, 5000000*n);
   const retExempt=Math.min(sum.retirement, 5000000*n);
-  const plus=sum.land+sum.building+sum.securities+sum.unlisted+sum.cash+sum.other;
+  const plus=sum.land+sum.building+sum.securities+sum.unlisted+sum.cash+sum.other - koboTotal;
   const mfumi=(sum.insurance-insExempt)+(sum.retirement-retExempt);
   const taxablePositive=plus+mfumi+sum.gift;
   const minus=sum.debt+sum.funeral;
@@ -1191,7 +1245,8 @@ function renderSummary(){
   const s=calcSummary();
   const g=$('summaryGrid');
   g.innerHTML=
-    box('プラス財産（債務控除前）', yen(s.plus+s.mfumi+s.sum.gift))
+    box('プラス財産（特例後・債務控除前）', yen(s.plus+s.mfumi+s.sum.gift))
+    +box('小規模宅地 減額', '−'+yen(currentCase?computeKobo().total:0))
     +box('債務・葬式費用', '−'+yen(s.minus))
     +boxAccent('課税価格（概算）', yen(Math.max(0,s.taxableValue)))
     +box('基礎控除額', yen(s.basicDeduction)+' ('+s.n+'人)')
@@ -1203,31 +1258,43 @@ function boxAccent(l,v){ return '<div class="sum-box accent"><div class="sl">'+l
 // ============================================================
 //  相続税 計算エンジン（相続税法に基づく算出シミュレーション）
 // ============================================================
-// 法定相続分の判定（民法900条／配偶者と血族相続人の順位）
-function legalShares(heirs){
+// 法定相続人・法定相続分の判定
+//   ・相続税法15条2項：相続放棄は「なかったものとした」数。養子の数の制限を適用。
+//   ・民法900/901条：配偶者と血族相続人の順位、代襲相続（株分け）。
+function buildStatutory(heirs){
   const shares={}; (heirs||[]).forEach(h=>shares[h.id]=0);
-  if(!heirs||!heirs.length) return shares;
-  const by={spouse:[],child:[],parent:[],sibling:[],other:[]};
-  heirs.forEach(h=>{ (by[h.relationType]||by.other).push(h); });
-  const spouse=by.spouse;
-  // 血族相続人の順位：子 > 直系尊属 > 兄弟姉妹
-  let group=null, spouseRate=1, groupRate=0;
-  if(by.child.length){ group=by.child; spouseRate=1/2; groupRate=1/2; }
-  else if(by.parent.length){ group=by.parent; spouseRate=2/3; groupRate=1/3; }
-  else if(by.sibling.length){ group=by.sibling; spouseRate=3/4; groupRate=1/4; }
-  else if(by.other.length){ group=by.other; spouseRate=1/2; groupRate=1/2; } // その他は子に準じて概算
-  if(spouse.length && group){
-    spouse.forEach(h=>shares[h.id]=spouseRate/spouse.length);
-    group.forEach(h=>shares[h.id]=groupRate/group.length);
-  } else if(spouse.length){
-    spouse.forEach(h=>shares[h.id]=1/spouse.length);
-  } else if(group){
-    group.forEach(h=>shares[h.id]=1/group.length);
-  } else {
-    heirs.forEach(h=>shares[h.id]=1/heirs.length);
+  if(!heirs||!heirs.length) return {shares,count:0,group:[],level:'none',spouse:[]};
+  const spouse=heirs.filter(h=>h.relationType==='spouse');
+  const childLevel=heirs.filter(h=>h.relationType==='child'||h.relationType==='grandchild');
+  const parents=heirs.filter(h=>h.relationType==='parent');
+  const siblingLevel=heirs.filter(h=>h.relationType==='sibling'||h.relationType==='nephew');
+  // 血族相続人の順位：子（孫代襲含む）＞直系尊属＞兄弟姉妹（甥姪代襲含む）。放棄者も「放棄なかったもの」として順位判定に含める。
+  let group=[], spouseRate=1, groupRate=0, level='none';
+  if(childLevel.length){ group=childLevel; spouseRate=1/2; groupRate=1/2; level='child'; }
+  else if(parents.length){ group=parents; spouseRate=2/3; groupRate=1/3; level='parent'; }
+  else if(siblingLevel.length){ group=siblingLevel; spouseRate=3/4; groupRate=1/4; level='sibling'; }
+  // 養子の数の制限（子の階級のみ）：実子がいれば養子は1人、いなければ2人まで算入。
+  let capped=group.slice();
+  if(level==='child'){
+    const isReal=h=> !h.isAdopted || h.adoptedAsReal || (h.relationType==='grandchild'&&h.isDaishu);
+    const real=group.filter(isReal);
+    const adopted=group.filter(h=>!isReal(h));
+    const allowed=real.length>0?1:2;
+    capped=real.concat(adopted.slice(0,allowed));
   }
-  return shares;
+  // 代襲の株分け：同じ代襲元グループは1株を分け合う。それ以外は各人1株。
+  const slots={};
+  capped.forEach(h=>{ const key=(h.isDaishu&&h.daishuGroup)?('g:'+h.daishuGroup):('h:'+h.id); (slots[key]=slots[key]||[]).push(h); });
+  const slotKeys=Object.keys(slots); const nSlots=slotKeys.length;
+  if(spouse.length && nSlots){
+    spouse.forEach(h=>shares[h.id]=spouseRate/spouse.length);
+    slotKeys.forEach(k=>{ const mem=slots[k]; mem.forEach(h=>shares[h.id]=(groupRate/nSlots)/mem.length); });
+  } else if(spouse.length){ spouse.forEach(h=>shares[h.id]=1/spouse.length); }
+  else if(nSlots){ slotKeys.forEach(k=>{ const mem=slots[k]; mem.forEach(h=>shares[h.id]=(1/nSlots)/mem.length); }); }
+  const count=spouse.length + capped.length; // 法定相続人の数（放棄なかったもの・養子制限後）
+  return {shares,count,group:capped,level,spouse};
 }
+function legalShares(heirs){ return buildStatutory(heirs).shares; }
 // 相続税の速算表
 function taxByTable(x){
   const b=[[10000000,.10,0],[30000000,.15,500000],[50000000,.20,2000000],[100000000,.30,7000000],[200000000,.40,17000000],[300000000,.45,27000000],[600000000,.50,42000000],[Infinity,.55,72000000]];
@@ -1235,75 +1302,125 @@ function taxByTable(x){
   for(const r of b){ if(x<=r[0]) return x*r[1]-r[2]; }
   return 0;
 }
+// 小規模宅地等の特例（措置法69の4）：区分ごとの限度面積・併用調整で減額を算出
+function computeKobo(){
+  const byAsset={}; const detail=[]; let total=0; let warn='';
+  const caps={residence:330,business:400,rental:200};
+  const rates={residence:.8,business:.8,company:.8,rental:.5};
+  const typeName={residence:'特定居住用',business:'特定事業用',company:'特定同族会社事業用',rental:'貸付事業用'};
+  const groupOf=t=> t==='residence'?'residence':(t==='rental'?'rental':'business');
+  const used={residence:0,business:0,rental:0};
+  currentCase.assets.filter(a=>a.category==='land'&&a.kobo&&a.kobo.type&&a.kobo.type!=='none').forEach(a=>{
+    const type=a.kobo.type, grp=groupOf(type);
+    const area=Number(a.quantity)||0;
+    let req=(a.kobo.area!==''&&a.kobo.area!=null)? Number(a.kobo.area): area;
+    req=Math.min(req, area||req);
+    const applied=Math.max(0,Math.min(req, caps[grp]-used[grp]));
+    used[grp]+=applied;
+    const per=Number(a.unitPrice)>0? Number(a.unitPrice): (area>0? assetVal(a)/area : 0);
+    const red=Math.round(per*applied*rates[type]);
+    byAsset[a.id]=red; total+=red;
+    detail.push({name:a.name||'土地',type:typeName[type],applied,red});
+  });
+  if(used.rental>0){ const eff=used.residence*200/330+used.business*200/400+used.rental; if(eff>200.5) warn='貸付事業用を含む併用の限度（居住×200/330＋事業×200/400＋貸付≦200㎡）を超えています。適用面積をご調整ください。'; }
+  return {byAsset,total,detail,used,warn};
+}
+// 未成年者控除・障害者控除：本人から控除し、引ききれない分は扶養義務者（他の相続人）へ按分移転
+function applyTransferCredit(heirs,ph,field,label){
+  let pool=0;
+  heirs.forEach(h=>{ const p=ph[h.id]; const amt=p[field]||0; if(amt<=0) return; const ap=Math.min(p.afterStd,amt); if(ap>0){ p.detail.push({k:label,v:ap}); p.afterStd-=ap; } const ex=amt-ap; if(ex>0) pool+=ex; });
+  if(pool>0){ const rem=heirs.filter(h=>ph[h.id].afterStd>0); const remT=rem.reduce((s,h)=>s+ph[h.id].afterStd,0);
+    if(remT>0) rem.forEach(h=>{ const p=ph[h.id]; const give=Math.min(p.afterStd,pool*(p.afterStd/remT)); if(give>0){ p.detail.push({k:label+'(扶養義務者へ移転)',v:give}); p.afterStd-=give; } }); }
+}
 function calcTax(){
   const heirs=currentCase.heirs;
-  const n=heirs.length||1;
-  const shares=legalShares(heirs);
-  // 生命保険金・退職手当金の非課税限度額
+  const stat=buildStatutory(heirs);
+  const n=stat.count||1;
+  const shares=stat.shares;
+  const kobo=computeKobo();
+  // 生命保険金・退職手当金の非課税限度額（法定相続人の数）
   let insTotal=0, retTotal=0;
   currentCase.assets.forEach(a=>{ if(a.category==='insurance') insTotal+=assetVal(a); if(a.category==='retirement') retTotal+=assetVal(a); });
   const insExemptTotal=Math.min(insTotal,5000000*n);
   const retExemptTotal=Math.min(retTotal,5000000*n);
   // 各人の取得内訳
-  const ph={}; heirs.forEach(h=>ph[h.id]={acquired:0,ins:0,ret:0,gift:0,debt:0,taxable:0,taxableR:0});
+  const ph={}; heirs.forEach(h=>ph[h.id]={acquired:0,ins:0,ret:0,giftKei:0,giftSeisan:0,debt:0,kobo:0,giftTaxKei:0,giftTaxSeisan:0,detail:[]});
   let unassigned=0;
+  const kei47={}; heirs.forEach(h=>kei47[h.id]=0);
   currentCase.assets.forEach(a=>{
-    const t=ASSET_BY_KEY[a.category];
+    const t=ASSET_BY_KEY[a.category]; const aVal=assetVal(a);
     let allocs=(a.allocations&&a.allocations.length)?a.allocations:[];
-    if(!allocs.length && assetVal(a)) allocs=[{heirId:'',amount:assetVal(a)}];
+    if(!allocs.length && aVal) allocs=[{heirId:'',amount:aVal}];
     allocs.forEach(al=>{
-      const amt=Number(al.amount)||0; const p=ph[al.heirId];
+      const amt=Number(al.amount)||0; const p=ph[al.heirId]; const frac=aVal>0?amt/aVal:1;
       if(!p){ unassigned+=amt*(t.sign<0?-1:1); return; }
-      if(a.category==='insurance') p.ins+=amt;
-      else if(a.category==='retirement') p.ret+=amt;
-      else if(a.category==='gift') p.gift+=amt;
+      if(a.category==='insurance') p.ins=(p.ins||0)+amt;
+      else if(a.category==='retirement') p.ret=(p.ret||0)+amt;
+      else if(a.category==='gift'){
+        if(a.subcategory==='相続時精算課税'){ p.giftSeisan+=amt; p.giftTaxSeisan+=(Number(a.giftTax)||0)*frac; }
+        else { p.giftKei+=amt; p.giftTaxKei+=(Number(a.giftTax)||0)*frac; if(a.is4to7) kei47[al.heirId]+=amt; }
+      }
       else if(t.sign<0) p.debt+=amt;
-      else p.acquired+=amt;
+      else { p.acquired+=amt; if(a.category==='land'&&kobo.byAsset[a.id]) p.kobo+=kobo.byAsset[a.id]*frac; }
     });
   });
-  // 各人の課税価格
+  // 各人の課税価格（生保・退職金は非課税控除後、暦年加算は4〜7年分の合計100万円控除後）
   let totalTaxable=0;
   heirs.forEach(h=>{
     const p=ph[h.id];
+    p.ins=p.ins||0; p.ret=p.ret||0;
     const insEx=insTotal>0? insExemptTotal*(p.ins/insTotal):0;
     const retEx=retTotal>0? retExemptTotal*(p.ret/retTotal):0;
-    let v=p.acquired + Math.max(0,p.ins-insEx) + Math.max(0,p.ret-retEx) + p.gift - p.debt;
+    const ded47=Math.min(kei47[h.id],1000000);
+    p.giftKeiAdd=Math.max(0,p.giftKei-ded47);
+    p.insEx=insEx; p.retEx=retEx; p.ded47=ded47;
+    let v=(p.acquired-p.kobo)+Math.max(0,p.ins-insEx)+Math.max(0,p.ret-retEx)+p.giftKeiAdd+p.giftSeisan-p.debt;
     if(v<0) v=0;
-    p.taxable=v; p.taxableR=Math.floor(v/1000)*1000; // 1,000円未満切捨て
+    p.taxable=v; p.taxableR=Math.floor(v/1000)*1000;
     totalTaxable+=p.taxableR;
   });
   const basic=30000000+6000000*n;
   const netEstate=Math.max(0,totalTaxable-basic);
-  // 相続税の総額（法定相続分で按分→速算表→合算）
+  // 相続税の総額：法定相続人（養子制限後・代襲反映）×法定相続分→速算表→合算（100円未満切捨て）
   let totalTax=0; const portions={};
-  heirs.forEach(h=>{ const por=Math.floor(netEstate*shares[h.id]/1000)*1000; portions[h.id]=por; totalTax+=taxByTable(por); });
+  stat.spouse.concat(stat.group).forEach(h=>{ const por=Math.floor(netEstate*shares[h.id]/1000)*1000; portions[h.id]=por; totalTax+=taxByTable(por); });
   totalTax=Math.floor(totalTax/100)*100;
-  // 各人の算出税額・加算・控除
+  // 相次相続控除の総額（相法20）
+  const sc=currentCase.successive||{}; let successiveTotal=0;
+  if(sc.enabled){ const A=Number(sc.A)||0,B=Number(sc.B)||0,E=Math.min(10,Math.floor(Number(sc.years)||0)); if(A>0&&B>A){ let r=totalTaxable/(B-A); if(r>1) r=1; successiveTotal=A*r*(10-E)/10; } }
+  // 各人の算出税額・2割加算・各控除（相法17〜20の2の順）
+  heirs.forEach(h=>{
+    const p=ph[h.id]; const ratio=totalTaxable>0? p.taxableR/totalTaxable:0;
+    p.base=totalTax*ratio;
+    p.surchargeAmt=effSurcharge(h)? p.base*0.2:0;
+    p.afterSurcharge=p.base+p.surchargeAmt;
+    let tax=p.afterSurcharge;
+    const gk=Math.min(tax,p.giftTaxKei); if(p.giftTaxKei>0){ p.detail.push({k:'贈与税額控除(暦年)',v:gk}); } tax-=gk; // 暦年贈与税額控除
+    if(h.relationType==='spouse'){ // 配偶者の税額軽減
+      const legalAmt=Math.max(totalTaxable*shares[h.id],160000000);
+      const baseAmt=Math.min(legalAmt,p.taxableR);
+      const relief=Math.floor(totalTax*baseAmt/(totalTaxable||1));
+      const ap=Math.min(tax,relief); if(ap>0){ p.detail.push({k:'配偶者の税額軽減',v:ap}); tax-=ap; }
+    }
+    p.afterStd=tax;
+    const age=(h.age!==''&&h.age!=null)? Math.floor(Number(h.age)):null;
+    p.minorAmt=(age!=null&&age<18)? (18-age)*100000:0;
+    p.disAmt=h.disabled? Math.max(0,(85-(age!=null?age:0)))*(h.disabilityType==='special'?200000:100000):0;
+  });
+  applyTransferCredit(heirs,ph,'minorAmt','未成年者控除');
+  applyTransferCredit(heirs,ph,'disAmt','障害者控除');
+  if(successiveTotal>0&&totalTaxable>0){ heirs.forEach(h=>{ const p=ph[h.id]; const portion=successiveTotal*(p.taxableR/totalTaxable); const ap=Math.min(p.afterStd,portion); if(ap>0){ p.detail.push({k:'相次相続控除',v:ap}); p.afterStd-=ap; } }); }
+  // 相続時精算課税分の贈与税額控除（控除しきれない分は還付）
   let grandTotal=0;
   heirs.forEach(h=>{
-    const p=ph[h.id];
-    const ratio=totalTaxable>0? p.taxableR/totalTaxable : 0;
-    let tax=totalTax*ratio;
-    p.base=tax;
-    p.surchargeAmt=0;
-    if(h.surcharge){ p.surchargeAmt=tax*0.2; tax+=p.surchargeAmt; }
-    p.afterSurcharge=tax;
-    // 控除
-    let credits=0; const detail=[];
-    if(h.relationType==='spouse'){
-      const A=Math.max(totalTaxable*shares[h.id],160000000);
-      const relief=totalTax*Math.min(A,p.taxableR)/(totalTaxable||1);
-      const applied=Math.min(tax,relief);
-      credits+=applied; detail.push({k:'配偶者の税額軽減',v:applied});
-    }
-    const age=h.age!==''&&h.age!=null? Math.floor(Number(h.age)) : null;
-    if(age!=null && age<18){ const mc=(18-age)*100000; credits+=mc; detail.push({k:'未成年者控除',v:mc}); }
-    if(h.disabled){ const per=h.disabilityType==='special'?200000:100000; const dc=Math.max(0,(85-(age!=null?age:0)))*per; credits+=dc; detail.push({k:'障害者控除',v:dc}); }
-    p.credits=credits; p.creditDetail=detail;
-    p.final=Math.max(0,Math.floor((tax-credits)/100)*100);
+    const p=ph[h.id]; let tax=p.afterStd;
+    if(p.giftTaxSeisan>0){ p.detail.push({k:'贈与税額控除(精算課税)',v:p.giftTaxSeisan}); }
+    tax-=p.giftTaxSeisan;
+    p.final = tax>=0? Math.floor(tax/100)*100 : -Math.floor(-tax/100)*100;
+    p.credits=(p.afterSurcharge-p.afterStd)+p.giftTaxSeisan;
     grandTotal+=p.final;
   });
-  return {n,shares,insTotal,retTotal,insExemptTotal,retExemptTotal,ph,unassigned,totalTaxable,basic,netEstate,totalTax,portions,grandTotal};
+  return {n,stat,shares,insTotal,retTotal,insExemptTotal,retExemptTotal,ph,unassigned,totalTaxable,basic,netEstate,totalTax,portions,grandTotal,kobo,successiveTotal};
 }
 
 // ============================================================
@@ -1393,38 +1510,51 @@ function renderHeirTotals(){
 // ============================================================
 //  Simulation view
 // ============================================================
+function onSuccessiveInput(){ if(!currentCase) return; const sc=currentCase.successive; sc.enabled=$('sc_enabled').checked; sc.A=$('sc_A').value; sc.B=$('sc_B').value; sc.years=$('sc_years').value; renderSimulation(); cacheCurrentCase(); }
 function renderSimulation(){
   if(!currentCase) return;
+  // sync 相次相続控除 inputs
+  const sc=currentCase.successive||{}; $('sc_enabled').checked=!!sc.enabled; $('sc_A').value=sc.A||''; $('sc_B').value=sc.B||''; $('sc_years').value=sc.years||'';
+  $('scFields').style.opacity=sc.enabled?'1':'.4';
   const r=calcTax();
+  // 小規模宅地サマリー
+  let ks='';
+  if(r.kobo.detail.length){
+    ks='<div class="lbl" style="margin-bottom:6px;">小規模宅地等の特例による減額</div><table class="sim-table"><thead><tr><th>宅地</th><th>区分</th><th>適用面積</th><th>減額</th></tr></thead><tbody>'
+      +r.kobo.detail.map(d=>'<tr><td>'+esc(d.name)+'</td><td>'+d.type+'</td><td>'+d.applied+'㎡</td><td>−'+yen(d.red)+'</td></tr>').join('')
+      +'</tbody><tfoot><tr><td>合計</td><td></td><td></td><td>−'+yen(r.kobo.total)+'</td></tr></tfoot></table>'
+      +(r.kobo.warn?'<div class="disclaimer" style="margin-top:8px;">⚠ '+r.kobo.warn+'</div>':'');
+  }
+  $('koboSummary').innerHTML=ks;
   // steps
-  const steps=$('simSteps');
-  steps.innerHTML=
-    simStep(1,'課税価格の合計額', yen(r.totalTaxable), '各相続人の課税価格（1,000円未満切捨て）の合計'+(r.unassigned!==0?' ／ <span style="color:var(--orange)">未割当 '+yen(r.unassigned)+'</span>':''))
-    +simStep(2,'基礎控除額', yen(r.basic), '3,000万円 ＋ 600万円 × 法定相続人 '+r.n+'人')
+  $('simSteps').innerHTML=
+    simStep(1,'課税価格の合計額', yen(r.totalTaxable), '各人の課税価格（小規模宅地特例・生保退職金の非課税・生前贈与加算を反映、1,000円未満切捨て）の合計'+(r.unassigned!==0?' ／ <span style="color:var(--orange)">未割当 '+yen(r.unassigned)+'</span>':''))
+    +simStep(2,'基礎控除額', yen(r.basic), '3,000万円 ＋ 600万円 × 法定相続人 '+r.n+'人（養子の数の制限・放棄なかったものとして算入）')
     +simStep(3,'課税遺産総額', yen(r.netEstate), '課税価格の合計額 − 基礎控除額')
-    +simStep(4,'相続税の総額', yen(r.totalTax), '課税遺産総額を法定相続分で按分し、速算表を適用して合算（各人按分は下表）');
+    +simStep(4,'相続税の総額', yen(r.totalTax), '課税遺産総額を法定相続分（代襲・養子制限反映）で按分し速算表を適用して合算');
   // heir table
   const rows=currentCase.heirs.map(h=>{
     const p=r.ph[h.id]; const ratio=r.totalTaxable>0?p.taxableR/r.totalTaxable:0;
-    return '<tr><td>'+esc(h.name||'(無名)')+'<div style="font-size:11px;color:var(--ink-2)">'+RELATION_LABELS[h.relationType]+'／法定相続分 '+fracText(r.shares[h.id])+(h.surcharge?'／2割加算':'')+'</div></td>'
+    const tags=[RELATION_LABELS[h.relationType],'法定相続分 '+fracText(r.shares[h.id])]; if(h.isRenounced) tags.push('放棄'); if(effSurcharge(h)) tags.push('2割加算');
+    return '<tr><td>'+esc(h.name||'(無名)')+'<div style="font-size:11px;color:var(--ink-2)">'+tags.join('／')+'</div></td>'
       +'<td>'+yen(p.taxableR)+'</td>'
       +'<td>'+(Math.round(ratio*1000)/10)+'%</td>'
       +'<td>'+yen(Math.floor(p.base))+'</td>'
       +'<td>'+(p.surchargeAmt?'+'+yen(Math.floor(p.surchargeAmt)):'—')+'</td>'
       +'<td>'+(p.credits?'−'+yen(Math.round(p.credits)):'—')+'</td>'
-      +'<td><b>'+yen(p.final)+'</b></td></tr>';
+      +'<td><b'+(p.final<0?' style="color:var(--green)"':'')+'>'+(p.final<0?'還付 ':'')+yen(Math.abs(p.final))+'</b></td></tr>';
   }).join('');
   $('simHeirTable').innerHTML=
-    '<thead><tr><th>相続人</th><th>課税価格</th><th>按分割合</th><th>算出税額</th><th>2割加算</th><th>税額控除</th><th>納付税額</th></tr></thead>'
+    '<thead><tr><th>相続人</th><th>課税価格</th><th>按分割合</th><th>算出税額</th><th>2割加算</th><th>税額控除等</th><th>納付税額</th></tr></thead>'
     +'<tbody>'+rows+'</tbody>'
     +'<tfoot><tr><td>合計</td><td>'+yen(r.totalTaxable)+'</td><td>100%</td><td>'+yen(r.totalTax)+'</td><td></td><td></td><td>'+yen(r.grandTotal)+'</td></tr></tfoot>';
   // credits detail
   let cd='';
-  currentCase.heirs.forEach(h=>{ const p=r.ph[h.id]; if(p.creditDetail&&p.creditDetail.length){
-    cd+='<div style="margin-bottom:8px;"><b>'+esc(h.name||'(無名)')+'</b>：'+p.creditDetail.map(d=>d.k+' '+yen(Math.round(d.v))).join('、')+'</div>'; } });
-  $('simCredits').innerHTML=cd||'<div class="muted">適用される税額控除はありません。（配偶者の税額軽減・未成年者控除・障害者控除は、相続人の続柄区分／年齢／障害者区分から自動判定します。）</div>';
-  $('simDisclaimer').innerHTML='※ 本試算は概算です。法定相続人数は登録された相続人数（'+r.n+'人）を用い、養子の数の制限・相続放棄・代襲相続・小規模宅地等の特例・各種非課税や端数処理の一部は反映していません。'
-    +'配偶者の税額軽減・未成年者控除・障害者控除は自動適用、贈与税額控除・相次相続控除・外国税額控除は未対応です。最終的な税額は必ず税理士がご確認ください。';
+  currentCase.heirs.forEach(h=>{ const p=r.ph[h.id]; if(p.detail&&p.detail.length){
+    cd+='<div style="margin-bottom:8px;"><b>'+esc(h.name||'(無名)')+'</b>：'+p.detail.map(d=>d.k+' '+yen(Math.round(d.v))).join('、')+'</div>'; } });
+  $('simCredits').innerHTML=cd||'<div class="muted">適用される税額控除はありません。</div>';
+  $('simDisclaimer').innerHTML='※ 法定相続人の数は養子の数の制限・相続放棄を放棄なかったものとして算入し、代襲相続（株分け）を反映しています。配偶者の税額軽減（1.6億円／法定相続分の上限調整）・未成年者控除・障害者控除（引ききれない額は扶養義務者へ移転）・贈与税額控除（暦年／精算課税）・相次相続控除・小規模宅地等の特例を反映します。'
+    +'納税猶予、外国税額控除、半血兄弟姉妹の相続分調整、小規模宅地の限度面積の最適自動選択、特定の特例要件判定は対象外です。最終的な申告は必ず税理士がご確認ください。';
 }
 function simStep(no,t,v,sub){ return '<div class="sim-step"><div class="no">'+no+'</div><div class="body"><div class="t">'+t+'</div><div class="v">'+v+'</div><div class="sub">'+sub+'</div></div></div>'; }
 
