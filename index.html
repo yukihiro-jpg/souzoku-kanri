@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>相続管理 — 相続税申告サポート</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+:root{
+  --bg:#f5f5f7;
+  --surface:#ffffff;
+  --surface-2:#fbfbfd;
+  --ink:#1d1d1f;
+  --ink-2:#6e6e73;
+  --line:#e5e5ea;
+  --line-2:#d2d2d7;
+  --accent:#0071e3;
+  --accent-ink:#0058b8;
+  --green:#34c759;
+  --red:#ff3b30;
+  --orange:#ff9500;
+  --teal:#30b0c7;
+  --radius:18px;
+  --radius-sm:12px;
+  --shadow:0 1px 3px rgba(0,0,0,.05), 0 8px 24px rgba(0,0,0,.06);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.06);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro JP","SF Pro Text","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;
+  background:var(--bg);color:var(--ink);
+  -webkit-font-smoothing:antialiased;line-height:1.6;font-size:15px;
+}
+button{font-family:inherit;}
+input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink);}
+::placeholder{color:#b0b0b8;}
+
+/* ---------- Layout ---------- */
+.app{display:grid;grid-template-columns:248px 1fr;grid-template-rows:auto 1fr;grid-template-areas:"sidebar topbar" "sidebar main";height:100vh;}
+.sidebar{grid-area:sidebar;background:rgba(250,250,252,.85);backdrop-filter:saturate(180%) blur(20px);border-right:1px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;overflow-y:auto;}
+.brand{display:flex;align-items:center;gap:10px;padding:6px 10px 18px;}
+.brand .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(145deg,#0071e3,#42a5f5);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:18px;box-shadow:0 2px 6px rgba(0,113,227,.4);}
+.brand .title{font-weight:700;font-size:16px;letter-spacing:-.01em;}
+.brand .subtitle{font-size:11px;color:var(--ink-2);}
+.nav{display:flex;flex-direction:column;gap:2px;margin-top:6px;}
+.nav-section{font-size:11px;font-weight:600;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em;padding:14px 12px 6px;}
+.nav-item{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:10px;cursor:pointer;color:var(--ink);font-size:14px;font-weight:500;border:none;background:none;text-align:left;width:100%;transition:background .15s;position:relative;}
+.nav-item:hover{background:rgba(0,0,0,.04);}
+.nav-item.active{background:var(--accent);color:#fff;}
+.nav-item.active .nav-ico{opacity:1;}
+.nav-ico{width:22px;text-align:center;font-size:16px;opacity:.85;flex-shrink:0;}
+.nav-item .step-no{position:absolute;right:10px;font-size:11px;opacity:.5;font-weight:600;}
+.nav-item.disabled{opacity:.4;pointer-events:none;}
+.sidebar-foot{margin-top:auto;padding:12px 10px 4px;font-size:11px;color:var(--ink-2);}
+
+.topbar{grid-area:topbar;background:rgba(255,255,255,.8);backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line);padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:58px;}
+.topbar-left{display:flex;align-items:center;gap:14px;min-width:0;}
+.case-chip{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line);border-radius:980px;padding:6px 14px;font-size:13px;font-weight:600;max-width:340px;}
+.case-chip .dot{width:7px;height:7px;border-radius:50%;background:var(--line-2);flex-shrink:0;}
+.case-chip.has-case .dot{background:var(--green);}
+.case-chip .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.topbar-right{display:flex;align-items:center;gap:12px;}
+.drive-status{font-size:12.5px;color:var(--ink-2);display:flex;align-items:center;gap:6px;}
+.drive-status .d{width:8px;height:8px;border-radius:50%;background:var(--line-2);}
+.drive-status.on .d{background:var(--green);}
+
+.main{grid-area:main;overflow-y:auto;padding:30px 36px 80px;}
+.view{display:none;max-width:1040px;margin:0 auto;animation:fade .25s ease;}
+.view.active{display:block;}
+@keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+.view-head{margin-bottom:22px;}
+.view-head h1{font-size:28px;font-weight:700;letter-spacing:-.02em;}
+.view-head p{color:var(--ink-2);font-size:14px;margin-top:4px;}
+
+/* ---------- Cards ---------- */
+.card{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;margin-bottom:20px;}
+.card h2{font-size:18px;font-weight:700;letter-spacing:-.01em;margin-bottom:4px;}
+.card .card-sub{color:var(--ink-2);font-size:13px;margin-bottom:18px;}
+.card-head-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+
+/* ---------- Forms ---------- */
+.field{display:flex;flex-direction:column;gap:5px;}
+.field label,.lbl{font-size:12.5px;font-weight:600;color:var(--ink-2);}
+.input,input[type=text],input[type=date],input[type=tel],input[type=number],select,textarea{
+  width:100%;padding:9px 12px;border:1px solid var(--line-2);border-radius:10px;background:#fff;outline:none;transition:border .15s,box-shadow .15s;
+}
+.input:focus,input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,113,227,.15);}
+textarea{resize:vertical;min-height:60px;line-height:1.5;}
+.grid{display:grid;gap:14px;}
+.grid-2{grid-template-columns:1fr 1fr;}
+.grid-3{grid-template-columns:1fr 1fr 1fr;}
+.grid-4{grid-template-columns:repeat(4,1fr);}
+@media(max-width:760px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr;}}
+
+/* ---------- Buttons ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;border:none;border-radius:980px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer;transition:all .15s;background:var(--surface-2);color:var(--ink);border:1px solid var(--line-2);}
+.btn:hover{background:#f0f0f3;}
+.btn:active{transform:scale(.98);}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+.btn.primary:hover{background:#0077ed;}
+.btn.green{background:var(--green);color:#fff;border-color:var(--green);}
+.btn.red{background:#fff;color:var(--red);border-color:#ffc4c0;}
+.btn.red:hover{background:#fff5f5;}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--accent);}
+.btn.ghost:hover{background:rgba(0,113,227,.08);}
+.btn.sm{padding:6px 13px;font-size:13px;}
+.btn.lg{padding:12px 26px;font-size:15px;}
+.btn:disabled{opacity:.45;cursor:not-allowed;}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;}
+
+/* ---------- Cases list ---------- */
+.case-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;}
+.case-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px;cursor:pointer;transition:transform .15s,box-shadow .15s;position:relative;box-shadow:var(--shadow-sm);}
+.case-card:hover{transform:translateY(-2px);box-shadow:var(--shadow);}
+.case-card.active-case{border-color:var(--accent);box-shadow:0 0 0 2px rgba(0,113,227,.2);}
+.case-card .cc-name{font-size:18px;font-weight:700;letter-spacing:-.01em;}
+.case-card .cc-meta{font-size:12.5px;color:var(--ink-2);margin-top:6px;line-height:1.7;}
+.case-card .cc-badge{display:inline-block;font-size:11px;font-weight:600;color:var(--accent);background:rgba(0,113,227,.1);border-radius:6px;padding:2px 8px;margin-top:10px;}
+.case-card .cc-del{position:absolute;top:14px;right:14px;width:26px;height:26px;border-radius:50%;border:none;background:rgba(0,0,0,.04);color:var(--ink-2);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;}
+.case-card .cc-del:hover{background:var(--red);color:#fff;}
+.empty-state{text-align:center;padding:60px 20px;color:var(--ink-2);}
+.empty-state .em-ico{font-size:46px;margin-bottom:12px;}
+
+/* ---------- Heirs ---------- */
+.heir-card{border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px;margin-bottom:12px;background:var(--surface-2);}
+.heir-card .heir-top{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+.heir-card .heir-no{font-weight:700;font-size:14px;color:var(--ink-2);}
+.tag-btn{border:1px solid var(--line-2);background:#fff;border-radius:980px;padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--ink-2);}
+.tag-btn.active.rep{background:var(--orange);border-color:var(--orange);color:#fff;}
+.tag-btn.active.hide{background:#8e8e93;border-color:#8e8e93;color:#fff;}
+
+/* ---------- Checklist ---------- */
+.cl-cat{border:1px solid var(--line);border-radius:var(--radius-sm);margin-bottom:12px;overflow:hidden;background:#fff;}
+.cl-cat-head{display:flex;align-items:center;gap:10px;padding:13px 16px;cursor:pointer;user-select:none;background:var(--surface-2);}
+.cl-cat-head:hover{background:#f0f0f3;}
+.cl-cat-head .arrow{transition:transform .2s;font-size:11px;color:var(--ink-2);}
+.cl-cat-head.collapsed .arrow{transform:rotate(-90deg);}
+.cl-cat-head h3{flex:1;font-size:15px;font-weight:700;}
+.cl-cat-head .cnt{font-size:12px;color:var(--ink-2);}
+.cl-cat-body.hidden{display:none;}
+.cl-note{padding:8px 16px;font-size:12.5px;color:var(--ink-2);background:#fff8e6;border-bottom:1px solid var(--line);}
+.cl-item{padding:14px 16px;border-top:1px solid var(--line);}
+.cl-item-name{font-weight:600;font-size:14.5px;margin-bottom:8px;}
+.cl-item-name .num{color:var(--accent);font-weight:700;margin-right:4px;}
+.cl-btns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;}
+.cl-chk{border:1.5px solid var(--line-2);background:#fff;border-radius:8px;padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--ink-2);transition:all .12s;}
+.cl-chk:hover{border-color:var(--ink-2);}
+.cl-chk.yes{background:var(--green);border-color:var(--green);color:#fff;}
+.cl-chk.no{background:#8e8e93;border-color:#8e8e93;color:#fff;}
+.cl-chk.received{background:var(--accent);border-color:var(--accent);color:#fff;}
+.cl-chk.partial{background:var(--orange);border-color:var(--orange);color:#fff;}
+.cl-desc{font-size:13px;color:var(--ink-2);white-space:pre-line;margin-bottom:6px;}
+.cl-howto{font-size:12.5px;color:var(--ink-2);background:var(--surface-2);border-left:3px solid var(--line-2);border-radius:6px;padding:8px 10px;white-space:pre-line;margin-bottom:8px;}
+.cl-howto b{color:var(--accent);}
+.cl-partial{display:none;gap:10px;margin-bottom:8px;flex-wrap:wrap;}
+.cl-partial.show{display:flex;}
+.cl-memo input{font-size:13px;}
+
+/* ---------- Assets ---------- */
+.asset-sec{border:1px solid var(--line);border-radius:var(--radius-sm);margin-bottom:14px;overflow:hidden;}
+.asset-sec-head{display:flex;align-items:center;gap:10px;padding:13px 16px;background:var(--surface-2);border-bottom:1px solid var(--line);}
+.asset-sec-head .ic{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;flex-shrink:0;}
+.asset-sec-head h3{flex:1;font-size:15px;font-weight:700;}
+.asset-sec-head .subtotal{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;}
+.asset-sec-head .subtotal.minus{color:var(--red);}
+.asset-row{padding:14px 16px;border-bottom:1px solid var(--line);display:grid;gap:10px;}
+.asset-row:last-child{border-bottom:none;}
+.asset-row .r1{display:grid;grid-template-columns:1.4fr 1.4fr .8fr 1fr;gap:10px;}
+.asset-row .r2{display:grid;grid-template-columns:1fr 1.6fr auto;gap:10px;align-items:end;}
+@media(max-width:760px){.asset-row .r1,.asset-row .r2{grid-template-columns:1fr;}}
+.asset-row .mini-lbl{font-size:11px;font-weight:600;color:var(--ink-2);margin-bottom:3px;display:block;}
+.asset-add{padding:12px 16px;}
+.val-input{text-align:right;font-variant-numeric:tabular-nums;}
+
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;}
+.sum-box{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px;}
+.sum-box .sl{font-size:12.5px;color:var(--ink-2);font-weight:600;}
+.sum-box .sv{font-size:22px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:4px;}
+.sum-box.accent{background:linear-gradient(145deg,#0071e3,#3a9bff);border:none;color:#fff;}
+.sum-box.accent .sl{color:rgba(255,255,255,.85);}
+.disclaimer{font-size:12px;color:var(--ink-2);background:#fff8e6;border-radius:10px;padding:10px 14px;margin-top:14px;line-height:1.6;}
+
+/* ---------- Agreement ---------- */
+.alloc-table{width:100%;border-collapse:collapse;font-size:13.5px;}
+.alloc-table th{text-align:left;font-size:12px;color:var(--ink-2);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);}
+.alloc-table td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;}
+.alloc-table .v{text-align:right;font-variant-numeric:tabular-nums;}
+.heir-total-chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--line);border-radius:980px;padding:6px 14px;font-size:13px;font-weight:600;margin:4px 6px 4px 0;}
+
+/* ---------- Settings ---------- */
+.setting-row{display:flex;gap:18px;align-items:flex-start;padding:18px 0;border-bottom:1px solid var(--line);}
+.setting-row:last-child{border-bottom:none;}
+.setting-row .sr-info{flex:0 0 230px;}
+.setting-row .sr-info .t{font-weight:600;font-size:14px;}
+.setting-row .sr-info .d{font-size:12.5px;color:var(--ink-2);margin-top:3px;}
+.setting-row .sr-control{flex:1;}
+
+/* ---------- Modal ---------- */
+.modal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.modal-ov.active{display:flex;}
+.modal{background:var(--surface);border-radius:var(--radius);padding:26px;max-width:560px;width:92%;max-height:82vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.modal h2{font-size:20px;font-weight:700;margin-bottom:6px;}
+.modal .m-sub{color:var(--ink-2);font-size:13px;margin-bottom:18px;}
+.file-list{list-style:none;}
+.file-list li{display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:background .12s;}
+.file-list li:hover{background:var(--surface-2);}
+.file-list .fn{font-weight:600;font-size:14px;}
+.file-list .fm{font-size:11.5px;color:var(--ink-2);}
+
+/* ---------- Toast ---------- */
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);background:#1d1d1f;color:#fff;padding:12px 22px;border-radius:980px;font-size:14px;font-weight:500;box-shadow:0 8px 30px rgba(0,0,0,.3);opacity:0;pointer-events:none;transition:all .3s;z-index:2000;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.err{background:var(--red);}
+
+.muted{color:var(--ink-2);}
+.center-msg{text-align:center;padding:50px 20px;color:var(--ink-2);}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">相</div>
+      <div>
+        <div class="title">相続管理</div>
+        <div class="subtitle">相続税申告サポート</div>
+      </div>
+    </div>
+    <nav class="nav" id="nav">
+      <button class="nav-item active" data-view="cases"><span class="nav-ico">🗂</span>案件一覧</button>
+      <div class="nav-section">案件の作業</div>
+      <button class="nav-item needs-case" data-view="basic"><span class="nav-ico">📝</span>基本情報・打合せ<span class="step-no">1</span></button>
+      <button class="nav-item needs-case" data-view="checklist"><span class="nav-ico">✅</span>必要資料<span class="step-no">2</span></button>
+      <button class="nav-item needs-case" data-view="assets"><span class="nav-ico">💰</span>財産一覧<span class="step-no">3</span></button>
+      <button class="nav-item needs-case" data-view="agreement"><span class="nav-ico">📜</span>遺産分割協議書<span class="step-no">4</span></button>
+      <div class="nav-section">その他</div>
+      <button class="nav-item" data-view="settings"><span class="nav-ico">⚙️</span>設定</button>
+    </nav>
+    <div class="sidebar-foot">データはGoogleドライブの<br>指定フォルダに保存されます。</div>
+  </aside>
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="case-chip" id="caseChip"><span class="dot"></span><span class="nm">案件が選択されていません</span></div>
+    </div>
+    <div class="topbar-right">
+      <div class="drive-status" id="driveStatus"><span class="d"></span><span>未接続</span></div>
+      <button class="btn primary sm needs-case" id="btnSaveTop" onclick="saveCurrentCase()">💾 保存</button>
+      <button class="btn sm" id="btnLogin" onclick="googleLogin()">Googleでログイン</button>
+      <button class="btn sm" id="btnLogout" onclick="googleLogout()" style="display:none;">ログアウト</button>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- ===== Cases ===== -->
+    <section class="view active" id="view-cases">
+      <div class="view-head"><h1>案件一覧</h1><p>被相続人ごとに相続案件を管理します。新規作成または既存案件を選択してください。</p></div>
+      <div class="card-head-row" style="max-width:none;">
+        <div class="btn-row">
+          <button class="btn primary" onclick="openNewCaseModal()">＋ 新規案件</button>
+          <button class="btn" onclick="refreshDriveCases()">🔄 Driveから一覧取得</button>
+        </div>
+        <div class="btn-row">
+          <button class="btn sm" onclick="importLocalJson()">⬆️ JSONを取り込み</button>
+        </div>
+      </div>
+      <div id="casesContainer"></div>
+    </section>
+
+    <!-- ===== Basic ===== -->
+    <section class="view" id="view-basic">
+      <div class="view-head"><h1>基本情報・打合せ</h1><p>相続開始時の打合せ情報を入力します。被相続人と相続人の情報、各期限を管理します。</p></div>
+
+      <div class="card">
+        <h2>被相続人情報</h2>
+        <div class="card-sub">亡くなられた方の情報を入力してください。</div>
+        <div class="grid grid-2">
+          <div class="field"><label>氏名</label><input type="text" id="d_name" placeholder="例：山田 太郎" oninput="onBasicInput()"></div>
+          <div class="field"><label>フリガナ</label><input type="text" id="d_kana" placeholder="例：ヤマダ タロウ" oninput="onBasicInput()"></div>
+          <div class="field"><label>生年月日</label><input type="date" id="d_birth" oninput="onBasicInput()"></div>
+          <div class="field"><label>相続開始日（死亡日）</label><input type="date" id="d_death" oninput="onBasicInput();calcDeadlines();"></div>
+          <div class="field"><label>死亡時の住所</label><input type="text" id="d_address" placeholder="例：茨城県水戸市〇〇町1-2-3" oninput="onBasicInput()"></div>
+          <div class="field"><label>本籍地</label><input type="text" id="d_honseki" placeholder="例：茨城県水戸市〇〇町1番地" oninput="onBasicInput()"></div>
+        </div>
+        <div class="grid grid-3" style="margin-top:16px;">
+          <div class="sum-box accent"><div class="sl">申告期限（相続開始から10ヶ月）</div><div class="sv" id="filingDeadline" style="font-size:18px;">—</div></div>
+          <div class="field"><label>資料収集期限（目安）</label><input type="date" id="d_collect" oninput="onBasicInput()"></div>
+          <div class="sum-box"><div class="sl">準確定申告期限（4ヶ月）</div><div class="sv" id="junkakuDeadline" style="font-size:18px;">—</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head-row">
+          <div><h2>相続人情報</h2><div class="card-sub" style="margin:0;">相続人を追加し、代表者・契約書非表示を設定できます。</div></div>
+          <button class="btn primary sm" onclick="addHeir()">＋ 相続人を追加</button>
+        </div>
+        <div id="heirsContainer"></div>
+      </div>
+
+      <div class="card">
+        <h2>打合せメモ</h2>
+        <div class="card-sub">初回打合せの内容や留意事項を記録します。</div>
+        <textarea id="d_meetingMemo" rows="5" placeholder="例：相続人間の関係、遺言の有無、不動産の概況、二次相続の懸念、依頼者の希望スケジュール 等" oninput="onBasicInput()"></textarea>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn contract" onclick="downloadContract()" style="background:#3a2a52;color:#fff;border-color:#3a2a52;">📄 委任契約書を作成</button>
+      </div>
+    </section>
+
+    <!-- ===== Checklist ===== -->
+    <section class="view" id="view-checklist">
+      <div class="view-head"><h1>必要資料チェックリスト</h1><p>打合せ時に必要資料を確認します。各資料を「必要 / 不要 / 受領済 / 一部受領済」で管理できます。</p></div>
+      <div class="card-head-row" style="max-width:none;">
+        <div class="muted" id="clProgress">チェック済み: 0 / 0 項目</div>
+        <div class="btn-row">
+          <button class="btn sm pdf" onclick="downloadChecklistPDF()" style="background:#fff;color:var(--red);border-color:#ffc4c0;">🖨 必要資料をPDF出力</button>
+          <button class="btn sm" onclick="downloadChecklistExcel()">📊 Excel出力</button>
+        </div>
+      </div>
+      <div id="checklistContainer"></div>
+    </section>
+
+    <!-- ===== Assets ===== -->
+    <section class="view" id="view-assets">
+      <div class="view-head"><h1>財産一覧</h1><p>相続財産・債務・葬式費用・生前贈与財産を種別ごとに登録します。課税価格の概算が自動計算されます。</p></div>
+
+      <div class="card">
+        <h2>集計サマリー（概算）</h2>
+        <div class="card-sub">入力内容から課税価格・基礎控除の目安を自動計算します。正式な税額計算ではありません。</div>
+        <div class="summary-grid" id="summaryGrid"></div>
+        <div class="disclaimer">※ 生命保険金・退職手当金の非課税枠（500万円 × 法定相続人数）および基礎控除（3,000万円＋600万円 × 法定相続人数）は、入力された相続人の人数を法定相続人数として概算しています。実際の法定相続人数・各種特例・端数処理とは異なる場合があります。最終的な税額は必ず専門家がご確認ください。</div>
+      </div>
+
+      <div id="assetsContainer"></div>
+    </section>
+
+    <!-- ===== Agreement ===== -->
+    <section class="view" id="view-agreement">
+      <div class="view-head"><h1>遺産分割協議書</h1><p>各財産を取得する相続人を割り当て、遺産分割協議書を作成します。</p></div>
+
+      <div class="card">
+        <h2>取得者の割り当て</h2>
+        <div class="card-sub">財産一覧で登録した各財産について、取得する相続人を選択してください。</div>
+        <div id="allocContainer"></div>
+      </div>
+
+      <div class="card">
+        <h2>相続人別の取得額</h2>
+        <div id="heirTotals"></div>
+      </div>
+
+      <div class="card">
+        <h2>協議書の設定</h2>
+        <div class="grid grid-2">
+          <div class="field"><label>協議成立日</label><input type="date" id="ag_date" oninput="onAgreementInput()"></div>
+          <div class="field"><label>後日判明財産の取得者</label>
+            <select id="ag_extraHeir" onchange="onAgreementInput()"></select>
+          </div>
+        </div>
+        <div class="field" style="margin-top:14px;"><label>特記事項（任意）</label><textarea id="ag_notes" rows="3" placeholder="例：代償金の支払い、債務の負担、その他の取り決め等" oninput="onAgreementInput()"></textarea></div>
+        <div class="btn-row" style="margin-top:18px;">
+          <button class="btn primary lg" onclick="downloadAgreement()">📜 遺産分割協議書を作成</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Settings ===== -->
+    <section class="view" id="view-settings">
+      <div class="view-head"><h1>設定</h1><p>Googleドライブ連携の設定を行います。指定したフォルダに案件データ（JSON）が保存されます。</p></div>
+
+      <div class="card">
+        <h2>Googleドライブ連携</h2>
+        <div class="setting-row">
+          <div class="sr-info"><div class="t">保存先フォルダのURL</div><div class="d">Googleドライブで保存先フォルダを開き、ブラウザのアドレスバーのURLを貼り付けてください。</div></div>
+          <div class="sr-control">
+            <input type="text" id="set_folderUrl" placeholder="https://drive.google.com/drive/folders/XXXXXXXXXXXX" oninput="onFolderUrlInput()">
+            <div class="muted" id="folderIdStatus" style="font-size:12px;margin-top:6px;">フォルダ未設定</div>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="sr-info"><div class="t">OAuth クライアントID</div><div class="d">Google Cloud Consoleで発行したクライアントID。初期値が入っていますが、ご自身の環境に合わせて変更できます。</div></div>
+          <div class="sr-control">
+            <input type="text" id="set_clientId" placeholder="xxxxxx.apps.googleusercontent.com" oninput="onClientIdInput()">
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="sr-info"><div class="t">接続テスト</div><div class="d">ログイン後、保存先フォルダにアクセスできるか確認します。</div></div>
+          <div class="sr-control"><button class="btn" onclick="testDriveConnection()">接続をテスト</button></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>ローカルバックアップ</h2>
+        <div class="card-sub">現在の案件をJSONファイルとして書き出し／取り込みできます（Drive未接続時のバックアップにも利用できます）。</div>
+        <div class="btn-row">
+          <button class="btn needs-case" onclick="exportLocalJson()">⬇️ 現在の案件をJSON出力</button>
+          <button class="btn" onclick="importLocalJson()">⬆️ JSONを取り込み</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>使い方</h2>
+        <div class="muted" style="font-size:13.5px;line-height:1.9;">
+          1. このHTMLは <b>http://localhost</b> 経由で開いてください（Googleログインの仕様上 file:// では認証できません）。<br>
+          　例：フォルダ内で <code>python -m http.server 8000</code> を実行し、<code>http://localhost:8000</code> を開く。<br>
+          2. 「設定」で保存先フォルダURLを入力 →「Googleでログイン」。<br>
+          3. 「案件一覧」で新規案件を作成 → 各ステップを入力 → 「保存」でDriveに保存。<br>
+          4. 次回はログイン後「Driveから一覧取得」で案件を読み込み、続きから作業できます。
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- New case modal -->
+<div class="modal-ov" id="newCaseModal">
+  <div class="modal">
+    <h2>新規案件の作成</h2>
+    <div class="m-sub">被相続人の氏名を入力してください。後から変更できます。</div>
+    <div class="field"><label>被相続人 氏名</label><input type="text" id="nc_name" placeholder="例：山田 太郎"></div>
+    <div class="btn-row" style="margin-top:20px;justify-content:flex-end;">
+      <button class="btn" onclick="closeModal('newCaseModal')">キャンセル</button>
+      <button class="btn primary" onclick="createCase()">作成する</button>
+    </div>
+  </div>
+</div>
+
+<!-- Load modal -->
+<div class="modal-ov" id="loadModal">
+  <div class="modal">
+    <h2>Driveの案件を読み込む</h2>
+    <div class="m-sub">保存先フォルダ内の案件データ一覧です。</div>
+    <ul class="file-list" id="loadFileList"></ul>
+    <div class="btn-row" style="justify-content:flex-end;"><button class="btn" onclick="closeModal('loadModal')">閉じる</button></div>
+  </div>
+</div>
+
+<input type="file" id="jsonFileInput" accept="application/json,.json" style="display:none;" onchange="handleJsonFile(this)">
+<div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================================
+   相続管理アプリ  —  single-file
+   ===================================================================== */
+
+// ---------- Constants ----------
+const DEFAULT_CLIENT_ID = '127398939064-jbcq7b0p45dj9jdsa2dhosvh2otd4v4l.apps.googleusercontent.com';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const FILE_PREFIX = '相続案件_';
+const LS_SETTINGS = 'souzoku_settings_v1';
+const LS_CASE_CACHE = 'souzoku_case_cache_v1';
+
+// ---------- App state ----------
+let settings = { folderUrl:'', folderId:'', clientId:DEFAULT_CLIENT_ID };
+let currentCase = null;       // the active case object
+let currentFileId = null;     // Drive file id of active case
+let accessToken = null;
+let tokenClient = null;
+let gisReady = false;
+
+// ============================================================
+//  Asset type definitions
+// ============================================================
+const ASSET_TYPES = [
+  { key:'land',       name:'土地',         color:'#34c759', icon:'🟩', sign:1, group:'plus',
+    subs:['宅地','田','畑','山林','原野','雑種地','その他'],
+    f1:{label:'所在地',ph:'例：水戸市〇〇町1-2-3'}, f2:{label:'利用区分・備考',ph:'例：自用地／貸宅地'}, f3:{label:'地積(㎡)',ph:'例：150.25'} },
+  { key:'building',   name:'建物',         color:'#30b0c7', icon:'🏠', sign:1, group:'plus',
+    subs:['居宅','共同住宅','店舗','事務所','倉庫','その他'],
+    f1:{label:'所在地',ph:'例：水戸市〇〇町1-2-3'}, f2:{label:'家屋番号・種類',ph:'例：1番2／木造2階建'}, f3:{label:'床面積(㎡)',ph:'例：95.40'} },
+  { key:'securities', name:'有価証券',     color:'#5e5ce6', icon:'📈', sign:1, group:'plus',
+    subs:['上場株式','投資信託','公社債','その他'],
+    f1:{label:'銘柄',ph:'例：〇〇株式会社'}, f2:{label:'取扱機関・口座',ph:'例：〇〇証券 〇〇支店'}, f3:{label:'数量(株/口)',ph:'例：1000'} },
+  { key:'unlisted',   name:'非上場株式',   color:'#7d4fe6', icon:'🏢', sign:1, group:'plus',
+    subs:['非上場株式','出資金','その他'],
+    f1:{label:'会社名',ph:'例：〇〇商事(株)'}, f2:{label:'所在地・備考',ph:'例：水戸市〇〇'}, f3:{label:'株数',ph:'例：200'} },
+  { key:'cash',       name:'現金・預貯金', color:'#0071e3', icon:'💴', sign:1, group:'plus',
+    subs:['普通預金','定期預金','当座預金','貯金','現金','出資金','その他'],
+    f1:{label:'金融機関・支店',ph:'例：〇〇銀行 〇〇支店'}, f2:{label:'種別・口座番号',ph:'例：普通 1234567'}, f3:{label:'',ph:''} },
+  { key:'insurance',  name:'生命保険金等', color:'#ff2d55', icon:'🛡', sign:1, group:'mfumi',
+    subs:['死亡保険金','その他'],
+    f1:{label:'保険会社',ph:'例：〇〇生命'}, f2:{label:'証券番号・受取人',ph:'例：受取人 山田花子'}, f3:{label:'',ph:''} },
+  { key:'retirement', name:'退職手当金等', color:'#ff9500', icon:'🏛', sign:1, group:'mtaisho',
+    subs:['死亡退職金','功労金','その他'],
+    f1:{label:'支給者',ph:'例：〇〇株式会社'}, f2:{label:'受取人',ph:'例：山田花子'}, f3:{label:'',ph:''} },
+  { key:'other',      name:'その他の財産', color:'#af52de', icon:'📦', sign:1, group:'plus',
+    subs:['自動車','会員権','貴金属・書画骨董','貸付金','家庭用財産','未収金','暗号資産','その他'],
+    f1:{label:'内容',ph:'例：普通乗用車（〇〇）'}, f2:{label:'明細・所在',ph:'例：登録番号／所在地'}, f3:{label:'数量',ph:'例：1'} },
+  { key:'debt',       name:'債務',         color:'#ff3b30', icon:'➖', sign:-1, group:'minus',
+    subs:['借入金','未払租税公課','未払費用','預り敷金','その他'],
+    f1:{label:'債権者・支払先',ph:'例：〇〇銀行'}, f2:{label:'内容',ph:'例：住宅ローン'}, f3:{label:'',ph:''} },
+  { key:'funeral',    name:'葬式費用',     color:'#8e8e93', icon:'🕯', sign:-1, group:'minus',
+    subs:['葬儀費用','飲食費','火葬料','お布施','その他'],
+    f1:{label:'支払先',ph:'例：〇〇葬祭'}, f2:{label:'内容',ph:'例：通夜・告別式'}, f3:{label:'',ph:''} },
+  { key:'gift',       name:'生前贈与財産', color:'#a2845e', icon:'🎁', sign:1, group:'gift',
+    subs:['暦年課税(加算対象)','相続時精算課税'],
+    f1:{label:'受贈者',ph:'例：山田一郎'}, f2:{label:'贈与日・内容',ph:'例：R5.6.1 現金'}, f3:{label:'',ph:''} }
+];
+const ASSET_BY_KEY = Object.fromEntries(ASSET_TYPES.map(t=>[t.key,t]));
+
+// ============================================================
+//  Checklist data (from reference document)
+// ============================================================
+const categories = [
+  { name:"マイナンバー・身分証", note:"申告を行う全ての相続人様の分が必要となります。※原本はお預かりできませんので必ずコピーをご用意ください。", items:[
+    { id:"①", name:"相続人全員のマイナンバー資料のコピー", desc:"・マイナンバーカード(番号記載面)\n・住民票（マイナンバーが記載されているもの）\n・通知カード（住民票と住所等が一致しているもの）", howTo:"お手元にあるものをご用意ください。" },
+    { id:"②", name:"相続人全員の身元確認書類のコピー", desc:"・マイナンバーカード(顔写真の面)\n・運転免許証\n・健康保険証\n・パスポート　など", howTo:"" }
+  ]},
+  { name:"身分関係書類", note:"原則として相続開始日から10日を経過した日以後に取得したものが必要となります。", items:[
+    { id:"①", name:"法定相続情報一覧図（図形式かつ実子・養子の判別ができるもの）", desc:"法務局にて作成されている場合に限り、ご提出ください。", howTo:"以下2~7の書類に代わるものです。相続手続きが必要な金融機関が多い場合は、手続き簡略化のために作成することをお勧めいたします。" },
+    { id:"②", name:"被相続人の出生から死亡までの連続した戸籍謄本等", desc:"亡くなられた方の、生まれてから亡くなるまでのすべての戸籍です。\n法定相続人の人数を確認するための書類として、税務署に提出する必要がございます。", howTo:"亡くなった方の配偶者・父母・子・孫にあたる方が、最寄りの市区町村窓口で一括請求が可能です。" },
+    { id:"③", name:"被相続人の戸籍の附票", desc:"住所の移り変わりを確かめることのできる書類です。", howTo:"被相続人の本籍地の役所で取得できます。" },
+    { id:"④", name:"被相続人の住民票の除票（③がある場合は不要）", desc:"死亡時の住所を示す書類です。", howTo:"被相続人の住所地の役所等で取得できます。(マイナンバーの記載不要)" },
+    { id:"⑤", name:"相続人全員の戸籍謄本", desc:"相続人の現在戸籍です。被相続人の戸籍に含まれる場合は、取得する必要はありません。", howTo:"最寄りの市区町村窓口で取得できます。" },
+    { id:"⑥", name:"相続人の戸籍の附票", desc:"住所の移り変わりを確かめることのできる書類です。\n※小規模宅地等の特例を「家なき子」要件で適用する場合は必要です。", howTo:"相続人の本籍地の役所で取得できます。" },
+    { id:"⑦", name:"相続人全員の住民票（⑥がある場合は不要）", desc:"相続人の住民票です。", howTo:"相続人の住所地の役所等で取得できます。(マイナンバーの記載不要)" },
+    { id:"⑧", name:"相続人全員の印鑑証明書", desc:"相続人が1名の場合や、公正証書遺言書を使用して申告する場合は不要です。", howTo:"相続人の住所地の役所等で取得できます。" }
+  ]},
+  { name:"土地", note:"", items:[
+    { id:"①", name:"登記簿謄本（全部事項証明書）", desc:"土地の地番、地積、地目、所有者、所有割合などの情報が記載された書類です。", howTo:"不動産の所在地を管轄する法務局（登記所）で取得できます。" },
+    { id:"②", name:"公図 及び 地積測量図", desc:"土地の位置や形状を示した図面です。", howTo:"登記簿謄本と同様の方法で取得できます。地積測量図は無いこともあります。" },
+    { id:"③", name:"固定資産評価証明書", desc:"固定資産税評価額が記載された書類です。", howTo:"市町村役場の固定資産税担当の窓口で取得できます。" },
+    { id:"④", name:"名寄帳 または 固定資産税課税明細書（納税通知書）", desc:"被相続人がその市区町村内に所有している不動産の一覧表です。", howTo:"市町村役場の固定資産税担当の窓口で取得できます。" },
+    { id:"⑤", name:"賃貸借契約書", desc:"土地の賃貸借契約の内容を示す書類です。", howTo:"貸地・借地等がある場合にご用意ください。" }
+  ]},
+  { name:"建物", note:"", items:[
+    { id:"①", name:"登記簿謄本（全部事項証明書）", desc:"建物の情報が記載された書類です。", howTo:"土地と同様の方法で取得できます。" },
+    { id:"②", name:"固定資産税評価証明書", desc:"固定資産税評価額が記載された書類です。", howTo:"市町村役場で取得できます。" },
+    { id:"③", name:"名寄帳、課税明細書", desc:"建物の一覧表です。", howTo:"市町村役場で取得できます。" },
+    { id:"④", name:"売買契約書、建築図面、間取り図等", desc:"各部屋の床面積を確認するための書類です。", howTo:"2世帯住宅や一部賃貸の場合に必要です。" },
+    { id:"⑤", name:"賃貸借契約書", desc:"建物の賃貸借契約の内容を示す書類です。", howTo:"貸家・アパート等がある場合に入居者全員分が必要です。" }
+  ]},
+  { name:"有価証券（上場株式・投資信託等）", note:"", items:[
+    { id:"①", name:"証券会社の残高証明書", desc:"相続開始日時点の被相続人名義の口座にあるすべての金融商品の残高です。", howTo:"ご契約の証券会社へお問い合わせください。" },
+    { id:"②", name:"名簿上の残高証明書", desc:"株主名簿に記載された株数を示す書類です。", howTo:"株主名簿管理人（信託銀行証券代行部等）へお問い合わせください。" },
+    { id:"③", name:"配当金の支払通知書または議決権行使書の写し", desc:"配当金の通知書や議決権の数が記載された書類です。", howTo:"お手元にある場合はご用意ください。" },
+    { id:"④", name:"過去5年間の取引明細", desc:"「顧客口座元帳」等と呼ばれる書類です。", howTo:"ご契約の証券会社へお問い合わせください。" }
+  ]},
+  { name:"非上場株式", note:"", items:[
+    { id:"①", name:"過去3期分の決算書や税務申告書等", desc:"非上場株式を評価するために必要な書類です。", howTo:"お手元にあるものをご用意ください。" }
+  ]},
+  { name:"現金預金", note:"", items:[
+    { id:"①", name:"預金残高証明書", desc:"相続開始日時点の被相続人名義のすべての預貯金の残高です。", howTo:"お取引金融機関へお問い合わせください。出資金の金額も記載いただいてください。" },
+    { id:"②", name:"ゆうちょ銀行の調査結果のお知らせ", desc:"ゆうちょ銀行における被相続人名義の預貯金等の有無を確認できる書類です。", howTo:"「貯金等照会書」をご提出ください。" },
+    { id:"③", name:"既経過利息計算書", desc:"相続開始日時点での定期預金の利息額を示す書類です。", howTo:"お取引金融機関へお問い合わせください。" },
+    { id:"④", name:"過去5年分の通帳又は入出金履歴", desc:"預金移動調査を行う場合に必要となります。", howTo:"お手元にあるものをご用意ください。" },
+    { id:"⑤", name:"名義預金に関する資料", desc:"被相続人名義でなくても実質的に相続財産にあたるものです。", howTo:"該当する方の預金通帳をご用意ください。" },
+    { id:"⑥", name:"手許現金", desc:"相続開始日時点での被相続人のお手元にあった現金の金額。", howTo:"メモ書きもしくは口頭でお知らせください。" }
+  ]},
+  { name:"生命保険", note:"", items:[
+    { id:"①", name:"生命保険金支払通知書", desc:"死亡保険金の支払額の通知書です。", howTo:"生命保険会社へ支払請求を行ってください。" },
+    { id:"②", name:"保険証書のコピーか契約内容のお知らせ", desc:"契約者、被保険者、受取人が記載された書類です。", howTo:"お手元にあるものをご用意ください。" },
+    { id:"③", name:"火災保険等の保険証書", desc:"損害保険契約の契約期間、補償内容が記載された書類です。", howTo:"保険料を一括払している場合等に必要です。" },
+    { id:"④", name:"解約返戻金や年金評価額のわかる資料", desc:"被保険者が他の方である生命保険の解約返戻金額等です。", howTo:"保険会社へ相続開始日時点の評価額の発行を依頼してください。" },
+    { id:"⑤", name:"名義保険に関する資料", desc:"保険料負担が被相続人で契約者名が他の方である保険の資料です。", howTo:"評価額の確認のために必要です。" }
+  ]},
+  { name:"その他財産", note:"", items:[
+    { id:"①", name:"自動車", desc:"車の財産価値のわかる書類です。", howTo:"査定書、または車検証のコピーと購入時の請求書をご用意ください。" },
+    { id:"②", name:"退職金", desc:"勤務先からの支払通知書をご用意ください。", howTo:"複数の支払がある場合は関連資料一式を。" },
+    { id:"③", name:"ゴルフ会員権・リゾート会員権", desc:"会員権の証書や預託金の証書、契約書等。", howTo:"退会手続済の場合は返金の有無をお知らせください。" },
+    { id:"④", name:"貸付金、前払金等", desc:"貸付金残高がわかる書類。", howTo:"金銭消費貸借契約書がある場合に必要です。" },
+    { id:"⑤", name:"貴金属(金・プラチナ)、書画、骨董など", desc:"購入時の資料や査定書、現物の写真。", howTo:"金銭的価値があるものは査定額をお知らせください。" },
+    { id:"⑥", name:"未収の給与、地代、家賃、公租公課 等", desc:"相続開始日後に入金があった場合の金額のわかる書類。", howTo:"未支給給与、未収家賃、所得税還付金等。" },
+    { id:"⑦", name:"暗号資産、電子マネー、NFT等のデジタル資産", desc:"各種デジタル財産の金額がわかる書類。", howTo:"管理会社等に相続開始日時点の金額をご確認ください。" }
+  ]},
+  { name:"贈与（過去3年以内・精算課税等）", note:"", items:[
+    { id:"①", name:"過去分の贈与税申告書", desc:"税務署に提出された申告書の控えです。", howTo:"相続財産に加算するため控えをご用意ください。" },
+    { id:"②", name:"贈与契約書", desc:"贈与時に作成された契約書です。", howTo:"贈与財産・金額・贈与日の確認のために必要です。" },
+    { id:"③", name:"相続時精算課税制度の選択届出書等一式", desc:"申告時に提出した届出書・申告書・契約書一式。", howTo:"お手元の控えをご用意ください。" }
+  ]},
+  { name:"債務・葬式費用", note:"", items:[
+    { id:"①", name:"借入金、ローン等の残高証明書および返済計画表", desc:"相続開始日時点の借入金残高・返済期間・利息額等。", howTo:"金融機関やローン契約先にお問い合わせください。" },
+    { id:"②", name:"未納の租税公課、未払費用等の領収書等", desc:"本来被相続人が払うべきだったもの（債務控除可）。", howTo:"所得税・住民税・固定資産税・医療費・公共料金等。" },
+    { id:"③", name:"葬式費用の請求書・領収書等", desc:"葬式に関する費用（債務控除可）。", howTo:"請求書・領収書・内訳明細書をご用意ください。お布施はメモで可。" }
+  ]},
+  { name:"その他", note:"", items:[
+    { id:"①", name:"被相続人の過去3年分の確定申告書", desc:"事業内容・所得額・扶養関係などを確認するための書類。", howTo:"準確定申告がお済みの場合はその控えも。" },
+    { id:"②", name:"遺言書", desc:"自筆証書遺言もしくは公正証書遺言書。", howTo:"検認を受けている場合は検認証明書も。" },
+    { id:"③", name:"被相続人の略歴等", desc:"被相続人様の略歴をご記入いただく書類。", howTo:"分かる範囲でご記入ください。" },
+    { id:"④", name:"過去の相続税申告書", desc:"被相続人が過去に財産を相続した際の申告書。", howTo:"相次相続控除に関係します。" },
+    { id:"⑤", name:"老人ホームの入居契約書・退去清算書", desc:"小規模宅地等の特例の要件確認のために必要。", howTo:"お手元にあるものをご用意ください。" },
+    { id:"⑥", name:"障害者手帳のコピー等", desc:"障害者控除の適用確認のための書類。", howTo:"等級が確認できるものをご用意ください。" }
+  ]}
+];
+
+// ============================================================
+//  Utilities
+// ============================================================
+function uid(){ return 'id-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8); }
+function $(id){ return document.getElementById(id); }
+function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function yen(n){ n=Number(n)||0; return '¥'+n.toLocaleString('ja-JP'); }
+function toast(msg, isErr){ const t=$('toast'); t.textContent=msg; t.className='toast show'+(isErr?' err':''); setTimeout(()=>t.className='toast',2600); }
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+
+function formatJDate(val){
+  if(!val) return '';
+  const d=new Date(val); if(isNaN(d)) return val;
+  return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日';
+}
+function toWareki(val){
+  if(!val) return '';
+  const d=new Date(val); if(isNaN(d)) return '';
+  const y=d.getFullYear(),m=d.getMonth()+1,day=d.getDate();
+  let era='',ey=0;
+  if(y>=2019){era='令和';ey=y-2018;} else if(y>=1989){era='平成';ey=y-1988;}
+  else if(y>=1926){era='昭和';ey=y-1925;} else if(y>=1912){era='大正';ey=y-1911;} else {era='明治';ey=y-1867;}
+  return era+(ey===1?'元':ey)+'年'+m+'月'+day+'日';
+}
+
+// ============================================================
+//  Settings (localStorage)
+// ============================================================
+function loadSettings(){
+  try{ const s=JSON.parse(localStorage.getItem(LS_SETTINGS)); if(s) settings=Object.assign(settings,s); }catch(e){}
+  if(!settings.clientId) settings.clientId=DEFAULT_CLIENT_ID;
+  $('set_folderUrl').value=settings.folderUrl||'';
+  $('set_clientId').value=settings.clientId||'';
+  updateFolderStatus();
+}
+function saveSettings(){ localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); }
+function extractFolderId(url){
+  if(!url) return '';
+  let m=url.match(/\/folders\/([a-zA-Z0-9_-]+)/); if(m) return m[1];
+  m=url.match(/[?&]id=([a-zA-Z0-9_-]+)/); if(m) return m[1];
+  if(/^[a-zA-Z0-9_-]{10,}$/.test(url.trim())) return url.trim();
+  return '';
+}
+function onFolderUrlInput(){
+  settings.folderUrl=$('set_folderUrl').value.trim();
+  settings.folderId=extractFolderId(settings.folderUrl);
+  saveSettings(); updateFolderStatus();
+}
+function onClientIdInput(){ settings.clientId=$('set_clientId').value.trim()||DEFAULT_CLIENT_ID; saveSettings(); gisReady=false; initGis(); }
+function updateFolderStatus(){
+  const el=$('folderIdStatus');
+  if(settings.folderId){ el.textContent='✓ フォルダID: '+settings.folderId; el.style.color='var(--green)'; }
+  else { el.textContent='フォルダ未設定（URLを貼り付けてください）'; el.style.color='var(--ink-2)'; }
+}
+
+// ============================================================
+//  Google Identity / Drive (token + fetch based)
+// ============================================================
+function initGis(){
+  if(typeof google==='undefined' || !google.accounts || !google.accounts.oauth2) return;
+  try{
+    tokenClient=google.accounts.oauth2.initTokenClient({
+      client_id: settings.clientId,
+      scope: DRIVE_SCOPE,
+      callback:(resp)=>{
+        if(resp.error){ toast('認証エラー: '+resp.error, true); return; }
+        accessToken=resp.access_token;
+        setDriveStatus(true);
+        if(window.__afterLogin){ const cb=window.__afterLogin; window.__afterLogin=null; cb(); }
+      }
+    });
+    gisReady=true;
+  }catch(e){ console.error(e); }
+}
+function googleLogin(){
+  if(!settings.clientId){ toast('設定でクライアントIDを入力してください', true); switchView('settings'); return; }
+  if(!gisReady) initGis();
+  if(!gisReady){ toast('Google APIの読み込み中です。少々お待ちください', true); return; }
+  tokenClient.requestAccessToken({ prompt: accessToken?'':'consent' });
+}
+function googleLogout(){
+  if(accessToken){ try{ google.accounts.oauth2.revoke(accessToken,()=>{}); }catch(e){} }
+  accessToken=null; setDriveStatus(false);
+}
+function setDriveStatus(on){
+  const el=$('driveStatus');
+  el.className='drive-status'+(on?' on':'');
+  el.querySelector('span:last-child').textContent=on?'Drive接続中':'未接続';
+  $('btnLogin').style.display=on?'none':'';
+  $('btnLogout').style.display=on?'':'none';
+}
+function ensureLogin(cb){
+  if(accessToken){ cb(); return; }
+  window.__afterLogin=cb; googleLogin();
+}
+async function driveFetch(url, opts){
+  opts=opts||{}; opts.headers=Object.assign({Authorization:'Bearer '+accessToken}, opts.headers||{});
+  const r=await fetch(url, opts);
+  if(!r.ok){ const t=await r.text(); throw new Error('Drive API '+r.status+': '+t); }
+  return r;
+}
+// Create or update a JSON file in the folder
+async function driveSaveJson(name, jsonStr, fileId){
+  const boundary='-------souzoku'+Date.now();
+  const meta = fileId ? {} : { name:name, mimeType:'application/json', parents: settings.folderId?[settings.folderId]:undefined };
+  const body =
+    '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+
+    '\r\n--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+jsonStr+
+    '\r\n--'+boundary+'--';
+  const base='https://www.googleapis.com/upload/drive/v3/files';
+  const url=(fileId? base+'/'+fileId : base)+'?uploadType=multipart&supportsAllDrives=true&fields=id,name';
+  const r=await driveFetch(url,{ method:fileId?'PATCH':'POST', headers:{'Content-Type':'multipart/related; boundary='+boundary}, body });
+  return r.json();
+}
+async function driveListCases(){
+  if(!settings.folderId) throw new Error('保存先フォルダが未設定です');
+  const q=encodeURIComponent("'"+settings.folderId+"' in parents and trashed=false and mimeType='application/json'");
+  const url='https://www.googleapis.com/drive/v3/files?q='+q+'&orderBy=modifiedTime desc&pageSize=200&fields=files(id,name,modifiedTime)&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives';
+  const r=await driveFetch(url); return (await r.json()).files||[];
+}
+async function driveDownloadJson(fileId){
+  const r=await driveFetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?alt=media&supportsAllDrives=true');
+  return r.json();
+}
+async function driveDelete(fileId){
+  await driveFetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?supportsAllDrives=true',{method:'DELETE'});
+}
+async function driveRename(fileId,name){
+  await driveFetch('https://www.googleapis.com/drive/v3/files/'+fileId+'?supportsAllDrives=true&fields=id',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+}
+async function testDriveConnection(){
+  if(!settings.folderId){ toast('先に保存先フォルダURLを入力してください', true); return; }
+  ensureLogin(async()=>{
+    try{ const files=await driveListCases(); toast('接続成功：フォルダ内に '+files.length+' 件の案件データ'); }
+    catch(e){ toast('接続失敗：'+e.message, true); }
+  });
+}
+
+// ============================================================
+//  Case model
+// ============================================================
+function newCaseObject(name){
+  return {
+    version:2, caseId:uid(), createdAt:new Date().toISOString(), savedAt:null,
+    deceased:{ name:name||'', kana:'', birth:'', deathDate:'', address:'', honseki:'' },
+    collectionDeadline:'', meetingMemo:'',
+    heirs:[ newHeir() ],
+    checklist:{},   // key -> {checked,memo,receivedPart,unreceivedPart}
+    assets:[],      // {id,category,name,detail,quantity,value,subcategory,acquirerId,memo}
+    agreement:{ date:'', notes:'', extraHeirId:'' }
+  };
+}
+function newHeir(){ return { id:uid(), name:'', kana:'', relation:'', address:'', tel:'', job:'', isRepresentative:false, hideFromContract:false }; }
+
+// ============================================================
+//  Navigation
+// ============================================================
+function switchView(view){
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
+  if(view==='assets'){ renderAssets(); renderSummary(); }
+  if(view==='agreement'){ renderAgreement(); }
+  if(view==='checklist'){ renderChecklist(); }
+  if(view==='basic'){ /* already rendered */ }
+}
+document.querySelectorAll('.nav-item').forEach(b=>{
+  b.addEventListener('click',()=>{
+    const v=b.dataset.view;
+    if(b.classList.contains('needs-case') && !currentCase){ toast('先に案件を作成または選択してください', true); switchView('cases'); return; }
+    switchView(v);
+  });
+});
+function refreshNavLock(){
+  document.querySelectorAll('.needs-case').forEach(el=>{
+    if(el.classList.contains('nav-item')) el.classList.toggle('disabled', !currentCase);
+    else el.disabled=!currentCase;
+  });
+}
+
+// ============================================================
+//  Cases view
+// ============================================================
+let driveCaseFiles=[]; // [{id,name,modifiedTime}]
+function renderCasesList(){
+  const c=$('casesContainer');
+  if(!driveCaseFiles.length && !currentCase){
+    c.innerHTML='<div class="empty-state"><div class="em-ico">🗂</div><div style="font-size:17px;font-weight:600;color:var(--ink);">案件がありません</div><p style="margin-top:6px;">「＋ 新規案件」で作成するか、Driveから読み込んでください。</p></div>';
+    return;
+  }
+  let html='<div class="case-grid">';
+  // current (unsaved/new) case card if not in drive list
+  if(currentCase){
+    const inList=driveCaseFiles.some(f=>f.id===currentFileId);
+    if(!inList){
+      html+=caseCardHtml({ id:null, name:'(編集中) '+(currentCase.deceased.name||'無題'), modifiedTime:null }, true);
+    }
+  }
+  driveCaseFiles.forEach(f=>{ html+=caseCardHtml(f, currentFileId===f.id); });
+  html+='</div>';
+  c.innerHTML=html;
+}
+function caseCardHtml(f, isActive){
+  const nm=f.name? f.name.replace(FILE_PREFIX,'').replace(/\.json$/,'') : '無題';
+  const meta=f.modifiedTime? '最終更新: '+new Date(f.modifiedTime).toLocaleString('ja-JP') : '未保存';
+  return '<div class="case-card'+(isActive?' active-case':'')+'" onclick="openCase(\''+(f.id||'')+'\')">'
+    +(f.id?'<button class="cc-del" onclick="event.stopPropagation();deleteCase(\''+f.id+'\',\''+esc(nm)+'\')">×</button>':'')
+    +'<div class="cc-name">'+esc(nm)+'</div>'
+    +'<div class="cc-meta">'+esc(meta)+'</div>'
+    +(isActive?'<span class="cc-badge">作業中</span>':'')
+    +'</div>';
+}
+function openNewCaseModal(){ $('nc_name').value=''; openModal('newCaseModal'); setTimeout(()=>$('nc_name').focus(),100); }
+function createCase(){
+  const name=$('nc_name').value.trim();
+  if(!name){ toast('氏名を入力してください', true); return; }
+  currentCase=newCaseObject(name); currentFileId=null;
+  closeModal('newCaseModal');
+  loadCaseIntoUI();
+  cacheCurrentCase();
+  toast('案件を作成しました。「保存」でDriveに保存できます。');
+  switchView('basic');
+  renderCasesList();
+}
+function openCase(fileId){
+  if(!fileId){ switchView('basic'); return; } // current editing card
+  if(currentCase && unsavedWarnNeeded()){
+    if(!confirm('現在の案件の未保存の変更が失われる可能性があります。読み込みますか？')) return;
+  }
+  ensureLogin(async()=>{
+    try{
+      const data=await driveDownloadJson(fileId);
+      currentCase=migrateCase(data); currentFileId=fileId;
+      loadCaseIntoUI(); cacheCurrentCase();
+      toast('案件を読み込みました'); switchView('basic'); renderCasesList();
+    }catch(e){ toast('読み込み失敗：'+e.message, true); }
+  });
+}
+function deleteCase(fileId,nm){
+  if(!confirm('この案件をDriveから削除しますか？\n'+nm+'\n\n※この操作は取り消せません。')) return;
+  ensureLogin(async()=>{
+    try{
+      await driveDelete(fileId);
+      if(currentFileId===fileId){ currentFileId=null; }
+      driveCaseFiles=driveCaseFiles.filter(f=>f.id!==fileId);
+      renderCasesList(); toast('削除しました');
+    }catch(e){ toast('削除失敗：'+e.message, true); }
+  });
+}
+function refreshDriveCases(){
+  if(!settings.folderId){ toast('設定で保存先フォルダURLを入力してください', true); switchView('settings'); return; }
+  ensureLogin(async()=>{
+    try{ driveCaseFiles=await driveListCases(); renderCasesList(); toast(driveCaseFiles.length+' 件の案件を取得しました'); }
+    catch(e){ toast('取得失敗：'+e.message, true); }
+  });
+}
+function migrateCase(data){
+  const base=newCaseObject('');
+  const c=Object.assign(base, data);
+  c.deceased=Object.assign(base.deceased, data.deceased||{});
+  c.agreement=Object.assign(base.agreement, data.agreement||{});
+  c.checklist=data.checklist||{};
+  c.assets=(data.assets||[]).map(a=>Object.assign({id:uid(),category:'other',subcategory:'',name:'',detail:'',quantity:'',value:0,acquirerId:'',memo:''},a));
+  c.heirs=(data.heirs||[]).map(h=>Object.assign(newHeir(),h));
+  if(!c.heirs.length) c.heirs=[newHeir()];
+  return c;
+}
+function unsavedWarnNeeded(){ return true; }
+
+// ============================================================
+//  Save
+// ============================================================
+function syncUIToCase(){
+  if(!currentCase) return;
+  // basic
+  currentCase.deceased.name=$('d_name').value;
+  currentCase.deceased.kana=$('d_kana').value;
+  currentCase.deceased.birth=$('d_birth').value;
+  currentCase.deceased.deathDate=$('d_death').value;
+  currentCase.deceased.address=$('d_address').value;
+  currentCase.deceased.honseki=$('d_honseki').value;
+  currentCase.collectionDeadline=$('d_collect').value;
+  currentCase.meetingMemo=$('d_meetingMemo').value;
+  // agreement
+  currentCase.agreement.date=$('ag_date').value;
+  currentCase.agreement.notes=$('ag_notes').value;
+  currentCase.agreement.extraHeirId=$('ag_extraHeir').value;
+}
+function cacheCurrentCase(){ try{ if(currentCase) localStorage.setItem(LS_CASE_CACHE, JSON.stringify({fileId:currentFileId,case:currentCase})); }catch(e){} }
+async function saveCurrentCase(){
+  if(!currentCase){ toast('保存する案件がありません', true); return; }
+  syncUIToCase();
+  if(!currentCase.deceased.name.trim()){ toast('被相続人氏名を入力してください', true); switchView('basic'); return; }
+  currentCase.savedAt=new Date().toISOString();
+  cacheCurrentCase();
+  if(!settings.folderId){ toast('Driveに保存するには設定でフォルダURLを入力してください。ローカルにはキャッシュ済みです。', true); return; }
+  ensureLogin(async()=>{
+    try{
+      const name=FILE_PREFIX+currentCase.deceased.name+'.json';
+      const json=JSON.stringify(currentCase,null,2);
+      const res=await driveSaveJson(name, json, currentFileId);
+      if(!currentFileId){ currentFileId=res.id; }
+      else { try{ await driveRename(currentFileId,name); }catch(e){} }
+      toast('Driveに保存しました：'+name);
+      try{ driveCaseFiles=await driveListCases(); }catch(e){}
+      renderCasesList();
+    }catch(e){ toast('保存失敗：'+e.message, true); }
+  });
+}
+
+// ============================================================
+//  Load case into UI
+// ============================================================
+function loadCaseIntoUI(){
+  refreshNavLock();
+  updateCaseChip();
+  if(!currentCase) return;
+  const d=currentCase.deceased;
+  $('d_name').value=d.name||''; $('d_kana').value=d.kana||'';
+  $('d_birth').value=d.birth||''; $('d_death').value=d.deathDate||'';
+  $('d_address').value=d.address||''; $('d_honseki').value=d.honseki||'';
+  $('d_collect').value=currentCase.collectionDeadline||'';
+  $('d_meetingMemo').value=currentCase.meetingMemo||'';
+  $('ag_date').value=currentCase.agreement.date||'';
+  $('ag_notes').value=currentCase.agreement.notes||'';
+  calcDeadlines();
+  renderHeirs();
+  renderChecklist();
+  renderAssets(); renderSummary();
+  renderAgreement();
+}
+function updateCaseChip(){
+  const chip=$('caseChip');
+  if(currentCase && currentCase.deceased.name){ chip.className='case-chip has-case'; chip.querySelector('.nm').textContent=currentCase.deceased.name+' 様'; }
+  else if(currentCase){ chip.className='case-chip has-case'; chip.querySelector('.nm').textContent='(無題の案件)'; }
+  else { chip.className='case-chip'; chip.querySelector('.nm').textContent='案件が選択されていません'; }
+}
+function onBasicInput(){ if(!currentCase) return; syncUIToCase(); updateCaseChip(); cacheCurrentCase(); }
+
+// ============================================================
+//  Deadlines
+// ============================================================
+function calcDeadlines(){
+  const v=$('d_death').value;
+  if(!v){ $('filingDeadline').textContent='—'; $('junkakuDeadline').textContent='—'; return; }
+  const f=new Date(v); f.setMonth(f.getMonth()+10);
+  $('filingDeadline').textContent=formatJDate(f.toISOString().slice(0,10));
+  const j=new Date(v); j.setMonth(j.getMonth()+4);
+  $('junkakuDeadline').textContent=formatJDate(j.toISOString().slice(0,10));
+}
+
+// ============================================================
+//  Heirs
+// ============================================================
+function addHeir(){ if(!currentCase) return; currentCase.heirs.push(newHeir()); renderHeirs(); cacheCurrentCase(); }
+function removeHeir(id){ if(!currentCase) return; currentCase.heirs=currentCase.heirs.filter(h=>h.id!==id); if(!currentCase.heirs.length) currentCase.heirs.push(newHeir()); renderHeirs(); refreshAcquirerSelects(); cacheCurrentCase(); }
+function updateHeir(id,field,val){ const h=currentCase.heirs.find(x=>x.id===id); if(h){ h[field]=val; cacheCurrentCase(); if(field==='name') refreshAcquirerSelects(); } }
+function toggleRep(id){ currentCase.heirs.forEach(h=>h.isRepresentative=(h.id===id)?!h.isRepresentative:false); renderHeirs(); cacheCurrentCase(); }
+function toggleHide(id){ const h=currentCase.heirs.find(x=>x.id===id); if(h){ h.hideFromContract=!h.hideFromContract; renderHeirs(); cacheCurrentCase(); } }
+function renderHeirs(){
+  if(!currentCase) return;
+  const c=$('heirsContainer'); c.innerHTML='';
+  currentCase.heirs.forEach((h,i)=>{
+    const div=document.createElement('div'); div.className='heir-card';
+    div.innerHTML=
+      '<div class="heir-top"><span class="heir-no">相続人 '+(i+1)+'</span>'
+      +'<button class="tag-btn rep '+(h.isRepresentative?'active':'')+'" onclick="toggleRep(\''+h.id+'\')">代表者</button>'
+      +'<button class="tag-btn hide '+(h.hideFromContract?'active':'')+'" onclick="toggleHide(\''+h.id+'\')">契約書非表示</button>'
+      +'<button class="btn red sm" style="margin-left:auto;" onclick="removeHeir(\''+h.id+'\')">削除</button></div>'
+      +'<div class="grid grid-3">'
+      +'<div class="field"><label>氏名</label><input type="text" value="'+esc(h.name)+'" oninput="updateHeir(\''+h.id+'\',\'name\',this.value)"></div>'
+      +'<div class="field"><label>続柄</label><input type="text" value="'+esc(h.relation)+'" placeholder="例：長男 / 配偶者" oninput="updateHeir(\''+h.id+'\',\'relation\',this.value)"></div>'
+      +'<div class="field"><label>電話番号</label><input type="tel" value="'+esc(h.tel)+'" oninput="updateHeir(\''+h.id+'\',\'tel\',this.value)"></div>'
+      +'<div class="field" style="grid-column:1/3;"><label>住所</label><input type="text" value="'+esc(h.address)+'" oninput="updateHeir(\''+h.id+'\',\'address\',this.value)"></div>'
+      +'<div class="field"><label>職業</label><input type="text" value="'+esc(h.job)+'" oninput="updateHeir(\''+h.id+'\',\'job\',this.value)"></div>'
+      +'</div>';
+    c.appendChild(div);
+  });
+}
+
+// ============================================================
+//  Checklist
+// ============================================================
+function clKey(ci,ii){ return ci+'-'+ii; }
+function getClState(key){ if(!currentCase.checklist[key]) currentCase.checklist[key]={checked:null,memo:'',receivedPart:'',unreceivedPart:''}; return currentCase.checklist[key]; }
+function renderChecklist(){
+  if(!currentCase) return;
+  const c=$('checklistContainer'); c.innerHTML='';
+  let total=0;
+  categories.forEach((cat,ci)=>{
+    const cat_div=document.createElement('div'); cat_div.className='cl-cat';
+    let itemsHtml='';
+    cat.items.forEach((item,ii)=>{
+      total++;
+      const key=clKey(ci,ii); const s=getClState(key);
+      const howto=item.howTo? '<div class="cl-howto"><b>取得方法：</b>'+esc(item.howTo)+'</div>':'';
+      itemsHtml+='<div class="cl-item" id="cl-item-'+key+'">'
+        +'<div class="cl-btns">'
+        +clBtn(key,'yes','必要',s.checked)+clBtn(key,'no','不要',s.checked)+clBtn(key,'received','受領済',s.checked)+clBtn(key,'partial','一部受領済',s.checked)
+        +'</div>'
+        +'<div class="cl-item-name"><span class="num">'+esc(item.id)+'</span>'+esc(item.name)+'</div>'
+        +'<div class="cl-partial '+(s.checked==='partial'?'show':'')+'" id="cl-partial-'+key+'">'
+        +'<div class="field" style="flex:1;"><label>受領済分</label><input type="text" value="'+esc(s.receivedPart)+'" oninput="updateClPartial(\''+key+'\',\'receivedPart\',this.value)"></div>'
+        +'<div class="field" style="flex:1;"><label>未受領分</label><input type="text" value="'+esc(s.unreceivedPart)+'" oninput="updateClPartial(\''+key+'\',\'unreceivedPart\',this.value)"></div>'
+        +'</div>'
+        +'<div class="cl-desc">'+esc(item.desc)+'</div>'+howto
+        +'<div class="cl-memo field"><input type="text" placeholder="メモ（任意）" value="'+esc(s.memo)+'" oninput="updateClMemo(\''+key+'\',this.value)"></div>'
+        +'</div>';
+    });
+    cat_div.innerHTML='<div class="cl-cat-head" onclick="toggleClCat(this)"><span class="arrow">▼</span><h3>'+esc(cat.name)+'</h3>'
+      +'<button class="btn sm" onclick="event.stopPropagation();bulkNo('+ci+')">一括不要</button></div>'
+      +'<div class="cl-cat-body">'+(cat.note?'<div class="cl-note">'+esc(cat.note)+'</div>':'')+itemsHtml+'</div>';
+    c.appendChild(cat_div);
+  });
+  updateClProgress(total);
+}
+function clBtn(key,val,label,cur){ return '<button class="cl-chk '+(cur===val?val:'')+'" onclick="toggleCl(\''+key+'\',\''+val+'\')">'+label+'</button>'; }
+function toggleClCat(head){ head.classList.toggle('collapsed'); head.nextElementSibling.classList.toggle('hidden'); }
+function toggleCl(key,val){
+  const s=getClState(key);
+  s.checked = (s.checked===val)? null : val;
+  if(s.checked!=='partial'){ s.receivedPart=''; s.unreceivedPart=''; }
+  const item=$('cl-item-'+key);
+  item.querySelectorAll('.cl-chk').forEach(b=>{ b.className='cl-chk'; });
+  if(s.checked){ const idx={yes:0,no:1,received:2,partial:3}[s.checked]; item.querySelectorAll('.cl-chk')[idx].classList.add(s.checked); }
+  $('cl-partial-'+key).className='cl-partial'+(s.checked==='partial'?' show':'');
+  if(s.checked==='partial'){ const ins=$('cl-partial-'+key).querySelectorAll('input'); ins[0].value=s.receivedPart; ins[1].value=s.unreceivedPart; }
+  cacheCurrentCase(); updateClProgress();
+}
+function updateClPartial(key,field,val){ getClState(key)[field]=val; cacheCurrentCase(); }
+function updateClMemo(key,val){ getClState(key).memo=val; cacheCurrentCase(); }
+function bulkNo(ci){
+  categories[ci].items.forEach((item,ii)=>{ const s=getClState(clKey(ci,ii)); s.checked='no'; s.receivedPart=''; s.unreceivedPart=''; });
+  renderChecklist(); cacheCurrentCase();
+}
+function updateClProgress(total){
+  if(total===undefined){ total=0; categories.forEach(c=>total+=c.items.length); }
+  const checked=Object.values(currentCase.checklist).filter(s=>s.checked!==null&&s.checked!==undefined).length;
+  $('clProgress').textContent='チェック済み: '+checked+' / '+total+' 項目';
+}
+
+// ============================================================
+//  Assets
+// ============================================================
+function addAsset(catKey){
+  if(!currentCase) return;
+  currentCase.assets.push({id:uid(),category:catKey,subcategory:'',name:'',detail:'',quantity:'',value:0,acquirerId:'',memo:''});
+  renderAssets(); renderSummary(); cacheCurrentCase();
+}
+function removeAsset(id){ currentCase.assets=currentCase.assets.filter(a=>a.id!==id); renderAssets(); renderSummary(); cacheCurrentCase(); }
+function updateAsset(id,field,val){
+  const a=currentCase.assets.find(x=>x.id===id); if(!a) return;
+  a[field]=(field==='value')? (Number(String(val).replace(/[^0-9.-]/g,''))||0) : val;
+  if(field==='value') renderSummary();
+  cacheCurrentCase();
+}
+function renderAssets(){
+  if(!currentCase) return;
+  const c=$('assetsContainer'); c.innerHTML='';
+  const heirOpts=acquirerOptionsHtml();
+  ASSET_TYPES.forEach(t=>{
+    const items=currentCase.assets.filter(a=>a.category===t.key);
+    const subtotal=items.reduce((s,a)=>s+(Number(a.value)||0),0);
+    const sec=document.createElement('div'); sec.className='asset-sec';
+    let rows='';
+    items.forEach(a=>{ rows+=assetRowHtml(t,a,heirOpts); });
+    sec.innerHTML=
+      '<div class="asset-sec-head"><div class="ic" style="background:'+t.color+'">'+t.icon+'</div>'
+      +'<h3>'+t.name+'</h3>'
+      +'<span class="subtotal'+(t.sign<0?' minus':'')+'">'+(t.sign<0?'−':'')+yen(subtotal)+'</span></div>'
+      +'<div>'+rows+'</div>'
+      +'<div class="asset-add"><button class="btn ghost sm" onclick="addAsset(\''+t.key+'\')">＋ '+t.name+'を追加</button></div>';
+    c.appendChild(sec);
+  });
+}
+function assetRowHtml(t,a,heirOpts){
+  const showQty=t.f3 && t.f3.label;
+  return '<div class="asset-row">'
+    +'<div class="r1">'
+    +'<div><span class="mini-lbl">区分</span><select onchange="updateAsset(\''+a.id+'\',\'subcategory\',this.value)">'+subOptions(t,a.subcategory)+'</select></div>'
+    +'<div><span class="mini-lbl">'+esc(t.f1.label)+'</span><input type="text" value="'+esc(a.name)+'" placeholder="'+esc(t.f1.ph)+'" oninput="updateAsset(\''+a.id+'\',\'name\',this.value)"></div>'
+    +'<div><span class="mini-lbl">'+(showQty?esc(t.f3.label):'数量')+'</span><input type="text" value="'+esc(a.quantity)+'" placeholder="'+(showQty?esc(t.f3.ph):'')+'" oninput="updateAsset(\''+a.id+'\',\'quantity\',this.value)" '+(showQty?'':'disabled style="opacity:.4"')+'></div>'
+    +'<div><span class="mini-lbl">評価額(円)</span><input type="text" class="val-input" value="'+(a.value?Number(a.value).toLocaleString('ja-JP'):'')+'" placeholder="0" oninput="updateAsset(\''+a.id+'\',\'value\',this.value)" onblur="renderAssets()"></div>'
+    +'</div>'
+    +'<div class="r2">'
+    +'<div><span class="mini-lbl">'+esc(t.f2.label)+'</span><input type="text" value="'+esc(a.detail)+'" placeholder="'+esc(t.f2.ph)+'" oninput="updateAsset(\''+a.id+'\',\'detail\',this.value)"></div>'
+    +'<div><span class="mini-lbl">メモ</span><input type="text" value="'+esc(a.memo)+'" oninput="updateAsset(\''+a.id+'\',\'memo\',this.value)"></div>'
+    +'<div><button class="btn red sm" onclick="removeAsset(\''+a.id+'\')">削除</button></div>'
+    +'</div></div>';
+}
+function subOptions(t,cur){ return '<option value="">—</option>'+t.subs.map(s=>'<option value="'+esc(s)+'"'+(s===cur?' selected':'')+'>'+esc(s)+'</option>').join(''); }
+function acquirerOptionsHtml(){ return ''; }
+
+function calcSummary(){
+  const n=currentCase? currentCase.heirs.filter(h=>h.name.trim()).length || currentCase.heirs.length : 0;
+  const sum={};
+  ASSET_TYPES.forEach(t=>sum[t.key]=0);
+  (currentCase?currentCase.assets:[]).forEach(a=>{ sum[a.category]=(sum[a.category]||0)+(Number(a.value)||0); });
+  const insExempt=Math.min(sum.insurance, 5000000*n);
+  const retExempt=Math.min(sum.retirement, 5000000*n);
+  const plus=sum.land+sum.building+sum.securities+sum.unlisted+sum.cash+sum.other;
+  const mfumi=(sum.insurance-insExempt)+(sum.retirement-retExempt);
+  const taxablePositive=plus+mfumi+sum.gift;
+  const minus=sum.debt+sum.funeral;
+  const taxableValue=taxablePositive-minus;
+  const basicDeduction=30000000+6000000*n;
+  const netTaxable=Math.max(0, taxableValue-basicDeduction);
+  return {n,sum,insExempt,retExempt,plus,mfumi,minus,taxableValue,basicDeduction,netTaxable,
+    grossAssets:plus+sum.insurance+sum.retirement+sum.gift};
+}
+function renderSummary(){
+  if(!currentCase){ return; }
+  const s=calcSummary();
+  const g=$('summaryGrid');
+  g.innerHTML=
+    box('プラス財産（債務控除前）', yen(s.plus+s.mfumi+s.sum.gift))
+    +box('債務・葬式費用', '−'+yen(s.minus))
+    +boxAccent('課税価格（概算）', yen(Math.max(0,s.taxableValue)))
+    +box('基礎控除額', yen(s.basicDeduction)+' ('+s.n+'人)')
+    +box('課税遺産総額（概算）', yen(s.netTaxable));
+}
+function box(l,v){ return '<div class="sum-box"><div class="sl">'+l+'</div><div class="sv">'+v+'</div></div>'; }
+function boxAccent(l,v){ return '<div class="sum-box accent"><div class="sl">'+l+'</div><div class="sv">'+v+'</div></div>'; }
+
+// ============================================================
+//  Agreement (遺産分割協議書)
+// ============================================================
+function onAgreementInput(){ if(!currentCase) return; currentCase.agreement.date=$('ag_date').value; currentCase.agreement.notes=$('ag_notes').value; currentCase.agreement.extraHeirId=$('ag_extraHeir').value; renderHeirTotals(); cacheCurrentCase(); }
+function refreshAcquirerSelects(){ if(document.getElementById('view-agreement').classList.contains('active')) renderAgreement(); }
+function heirSelectHtml(currentId, idAttr){
+  let opts='<option value="">未定 / 共有</option>';
+  currentCase.heirs.forEach(h=>{ const lbl=h.name||'(無名)'; opts+='<option value="'+h.id+'"'+(h.id===currentId?' selected':'')+'>'+esc(lbl)+'</option>'; });
+  return opts;
+}
+function renderAgreement(){
+  if(!currentCase) return;
+  // alloc table grouped by category, only categories with positive-asset (exclude funeral? include debt as 承継)
+  const c=$('allocContainer');
+  const assets=currentCase.assets.filter(a=>a.category!=='gift'); // gifts are not divided
+  if(!assets.length){ c.innerHTML='<div class="center-msg">財産一覧で財産を登録すると、ここで取得者を割り当てられます。</div>'; }
+  else{
+    let html='<table class="alloc-table"><thead><tr><th>種別</th><th>内容</th><th class="v">評価額</th><th style="width:180px;">取得者</th></tr></thead><tbody>';
+    assets.forEach(a=>{
+      const t=ASSET_BY_KEY[a.category];
+      const label=(a.name||t.name)+(a.detail?'（'+a.detail+'）':'');
+      html+='<tr><td><span style="color:'+t.color+'">'+t.icon+'</span> '+esc(t.name)+'</td>'
+        +'<td>'+esc(label)+'</td>'
+        +'<td class="v">'+(t.sign<0?'−':'')+yen(a.value)+'</td>'
+        +'<td><select onchange="updateAsset(\''+a.id+'\',\'acquirerId\',this.value);renderHeirTotals();">'+heirSelectHtml(a.acquirerId)+'</select></td></tr>';
+    });
+    html+='</tbody></table>';
+    c.innerHTML=html;
+  }
+  // extra heir select
+  const ex=$('ag_extraHeir'); ex.innerHTML=heirSelectHtml(currentCase.agreement.extraHeirId);
+  $('ag_date').value=currentCase.agreement.date||'';
+  $('ag_notes').value=currentCase.agreement.notes||'';
+  renderHeirTotals();
+}
+function renderHeirTotals(){
+  if(!currentCase) return;
+  const totals={}; currentCase.heirs.forEach(h=>totals[h.id]=0); let unassigned=0;
+  currentCase.assets.filter(a=>a.category!=='gift').forEach(a=>{
+    const t=ASSET_BY_KEY[a.category]; const v=(Number(a.value)||0)*(t.sign<0?-1:1);
+    if(a.acquirerId && totals[a.acquirerId]!==undefined) totals[a.acquirerId]+=v; else unassigned+=v;
+  });
+  let html='';
+  currentCase.heirs.forEach(h=>{ html+='<span class="heir-total-chip">'+esc(h.name||'(無名)')+'：'+yen(totals[h.id])+'</span>'; });
+  html+='<span class="heir-total-chip" style="background:#fff8e6;">未割当：'+yen(unassigned)+'</span>';
+  $('heirTotals').innerHTML=html;
+}
+
+// ============================================================
+//  Print helper
+// ============================================================
+function openPrintWindow(title, bodyHtml, styles){
+  const iframe=document.createElement('iframe');
+  iframe.style.cssText='position:fixed;inset:0;width:100%;height:100%;border:none;z-index:99999;background:#fff;';
+  document.body.appendChild(iframe);
+  const doc=iframe.contentDocument||iframe.contentWindow.document;
+  const btns='.np-btns{position:fixed;top:12px;right:12px;z-index:100;display:flex;gap:8px;}.np-btns button{padding:9px 18px;border:none;border-radius:8px;cursor:pointer;font-weight:600;color:#fff;font-size:14px;}@media print{.np-btns{display:none;}}';
+  doc.open();
+  doc.write('<html lang="ja"><head><meta charset="UTF-8"><title>'+title+'</title><style>'+styles+btns+'</style></head><body>'
+    +'<div class="np-btns"><button id="bp" style="background:#0071e3">印刷 / PDF保存</button><button id="bc" style="background:#8e8e93">閉じる</button></div>'
+    +bodyHtml+'</body></html>');
+  doc.close();
+  setTimeout(()=>{ const d=iframe.contentDocument; d.getElementById('bp').onclick=()=>iframe.contentWindow.print(); d.getElementById('bc').onclick=()=>iframe.remove(); },200);
+}
+const DOC_STYLE_BASE=`*{margin:0;padding:0;box-sizing:border-box;}body{font-family:"Hiragino Mincho ProN","Yu Mincho",serif;color:#000;background:#fff;padding:20mm;font-size:11pt;line-height:1.9;}h1{font-size:15pt;text-align:center;margin-bottom:18px;letter-spacing:2px;}@media print{body{padding:0;}@page{margin:18mm;size:A4;}}`;
+
+// ============================================================
+//  Document: 遺産分割協議書
+// ============================================================
+function downloadAgreement(){
+  if(!currentCase){ toast('案件がありません', true); return; }
+  syncUIToCase();
+  const d=currentCase.deceased;
+  if(!d.name){ toast('被相続人氏名を入力してください', true); return; }
+  const heirs=currentCase.heirs.filter(h=>h.name.trim());
+  if(!heirs.length){ toast('相続人を入力してください', true); return; }
+
+  const assets=currentCase.assets.filter(a=>a.category!=='gift');
+  // group by heir
+  let sections='';
+  let secNo=0;
+  heirs.forEach(h=>{
+    const mine=assets.filter(a=>a.acquirerId===h.id);
+    if(!mine.length) return;
+    secNo++;
+    let lines='';
+    let n=0;
+    mine.forEach(a=>{
+      const t=ASSET_BY_KEY[a.category]; n++;
+      const isDebt=t.sign<0;
+      const detail=[a.name,a.detail,a.quantity?('数量 '+a.quantity):''].filter(Boolean).join('　');
+      lines+='<div class="asset-line"><span class="an">('+n+')</span> <span class="at">【'+t.name+'】</span>'+esc(detail)
+        +' <span class="av">'+(isDebt?'（債務）':'')+yen(a.value)+'</span></div>';
+    });
+    sections+='<div class="agr-sec"><div class="agr-sec-title">第'+secNo+'条　次の財産は、相続人 '+esc(h.name)+' が取得（承継）する。</div>'
+      +'<div class="agr-assets">'+lines+'</div></div>';
+  });
+  if(!secNo){ toast('取得者が割り当てられた財産がありません。遺産分割協議書タブで割り当ててください。', true); switchView('agreement'); return; }
+
+  secNo++;
+  const extraHeir=heirs.find(h=>h.id===currentCase.agreement.extraHeirId);
+  const extraName=extraHeir?extraHeir.name:'相続人全員';
+  sections+='<div class="agr-sec"><div class="agr-sec-title">第'+secNo+'条　本協議書に記載のない遺産及び後日判明した遺産については、'+esc(extraName)+' がこれを取得する。</div></div>';
+
+  if(currentCase.agreement.notes){
+    secNo++;
+    sections+='<div class="agr-sec"><div class="agr-sec-title">第'+secNo+'条　特記事項</div><div class="agr-assets">'+esc(currentCase.agreement.notes).replace(/\n/g,'<br>')+'</div></div>';
+  }
+
+  const dateStr=currentCase.agreement.date? formatJDate(currentCase.agreement.date) : '令和　　年　　月　　日';
+  let sigs='';
+  heirs.forEach(h=>{
+    sigs+='<div class="sig-block">'
+      +'<div class="sig-row"><span class="sl">住　所</span><span class="sv">'+esc(h.address||'')+'</span></div>'
+      +'<div class="sig-row"><span class="sl">氏　名</span><span class="sv">'+esc(h.name)+'</span><span class="seal">印</span></div>'
+      +'</div>';
+  });
+
+  const styles=DOC_STYLE_BASE+`
+    .intro{text-indent:1em;margin-bottom:8px;}
+    .dec-info{margin:10px 0 16px;border:1px solid #000;}
+    .dec-info div{display:flex;border-bottom:1px solid #ccc;}
+    .dec-info div:last-child{border-bottom:none;}
+    .dec-info .k{width:140px;padding:4px 10px;background:#f2f2f2;border-right:1px solid #ccc;font-size:10pt;}
+    .dec-info .v{flex:1;padding:4px 10px;font-size:10pt;}
+    .agr-sec{margin:12px 0;page-break-inside:avoid;}
+    .agr-sec-title{font-weight:700;margin-bottom:4px;}
+    .agr-assets{margin-left:1em;}
+    .asset-line{padding:2px 0;font-size:10.5pt;}
+    .asset-line .an{font-weight:700;}
+    .asset-line .at{font-weight:700;}
+    .asset-line .av{float:right;}
+    .closing{text-indent:1em;margin:18px 0;}
+    .date{margin:16px 0;}
+    .sig-area{margin-top:10px;}
+    .sig-block{margin-bottom:16px;page-break-inside:avoid;}
+    .sig-row{display:flex;align-items:baseline;margin-bottom:4px;}
+    .sig-row .sl{width:80px;}
+    .sig-row .sv{flex:1;border-bottom:1px solid #000;padding:0 6px;min-height:1.6em;}
+    .sig-row .seal{margin-left:16px;}
+  `;
+  const body='<h1>遺産分割協議書</h1>'
+    +'<p class="intro">被相続人 '+esc(d.name)+'（以下「被相続人」という。）の遺産については、共同相続人全員において分割協議を行った結果、次のとおり分割し、取得することに合意した。</p>'
+    +'<div class="dec-info">'
+    +'<div><span class="k">被相続人</span><span class="v">'+esc(d.name)+'</span></div>'
+    +(d.birth?'<div><span class="k">生年月日</span><span class="v">'+formatJDate(d.birth)+'</span></div>':'')
+    +(d.deathDate?'<div><span class="k">相続開始日</span><span class="v">'+formatJDate(d.deathDate)+'（死亡）</span></div>':'')
+    +(d.address?'<div><span class="k">最後の住所</span><span class="v">'+esc(d.address)+'</span></div>':'')
+    +(d.honseki?'<div><span class="k">本　籍</span><span class="v">'+esc(d.honseki)+'</span></div>':'')
+    +'</div>'
+    +sections
+    +'<p class="closing">以上のとおり遺産分割協議が成立したので、これを証するため本協議書を'+heirs.length+'通作成し、各自署名押印のうえ、各1通を保有する。</p>'
+    +'<div class="date">'+dateStr+'</div>'
+    +'<div class="sig-area">'+sigs+'</div>';
+  openPrintWindow('遺産分割協議書_'+d.name, body, styles);
+}
+
+// ============================================================
+//  Document: 委任契約書
+// ============================================================
+function downloadContract(){
+  if(!currentCase){ toast('案件がありません', true); return; }
+  syncUIToCase();
+  const d=currentCase.deceased;
+  const rep=currentCase.heirs.find(h=>h.isRepresentative);
+  const repName=rep?rep.name:'（代表者未選択）';
+  const visible=currentCase.heirs.filter(h=>!h.hideFromContract && h.name.trim());
+  let sigs='';
+  visible.forEach(h=>{
+    const label=h.isRepresentative?'委任者の代表（甲）相続人':'委任者　相続人';
+    sigs+='<div class="sig-line"><div class="sig-row"><span class="sl">住所</span><span class="sv">'+esc(h.address||'')+'</span></div>'
+      +'<div class="sig-row"><span class="sl">'+label+'　'+esc(h.name)+'</span><span class="seal">印</span></div></div>';
+  });
+  const styles=DOC_STYLE_BASE+`
+    .intro{text-indent:1em;margin-bottom:14px;}
+    .sec{margin-bottom:10px;}.sec .t{font-weight:700;}.sec .b{margin-left:1em;}
+    .indent{margin-left:2em;text-indent:-1em;padding-left:1em;}
+    .closing{margin-top:18px;text-indent:1em;}.date{margin-top:20px;}
+    .sig-area{margin-top:24px;}.sig-line{margin-bottom:18px;}
+    .sig-row{display:flex;align-items:baseline;}.sig-row .sl{min-width:240px;}
+    .sig-row .sv{flex:1;border-bottom:1px dotted #999;padding-left:4px;min-height:1.5em;}.seal{margin-left:auto;padding-left:20px;}
+    .juninsha{margin-top:30px;}
+  `;
+  const body='<h1>相続税申告に関する委任契約書</h1>'
+    +'<p class="intro">委任者の代表'+esc(repName)+'（以下「甲」という）は、被相続人故'+esc(d.name)+'氏にかかる相続に関し、受任者 税理士日下部幸広（以下「乙」という）に対し下記事項(2、3、4)を確認・承認の上、次の事項(1)を委任し、乙はこれを承諾した。</p>'
+    +'<div class="sec"><div class="t">1　委任の範囲</div><div class="b">本件相続に関する税務代理、税務相談、税務書類の作成(相続税申告書、延納申請書、物納申請書)</div></div>'
+    +'<div class="sec"><div class="t">2　資料の提示</div>'
+    +'<div class="indent">① 甲は、委任業務の遂行に必要な資料等をその責任と費用負担において乙に提供しなければならない。</div>'
+    +'<div class="indent">② 資料等は、乙の請求があった場合には、甲は速やかに提出しなければならない。</div>'
+    +'<div class="indent">③ 甲の資料提供の不足、誤りに基づく不利益は甲において負担する。</div>'
+    +'<div class="indent">④ 乙は、業務上知り得た甲の秘密を正当な理由なく他に漏らし、または窃用してはならない。</div></div>'
+    +'<div class="sec"><div class="t">3　情報の開示と説明及び免責</div>'
+    +'<div class="indent">① 乙は処理方法が複数存在する場合等は甲に説明し、承諾を得なければならない。</div>'
+    +'<div class="indent">② 甲が説明を受け承諾したときは、当該項目につき後に生ずる不利益について乙は責任を負わない。</div></div>'
+    +'<div class="sec"><div class="t">4　説明事項の確認</div><div class="b">甲は乙より各事項の説明を受け、必要な事項について承諾し確認した。</div></div>'
+    +'<div class="sec"><div class="t">5　報酬</div><div class="b">本件相続の税務代理、税務書類の作成にかかる報酬は、当税理士事務所の報酬規定による。</div></div>'
+    +'<p class="closing">以上の委任契約を明らかにするため本契約書を作成する。</p>'
+    +'<p class="date">'+(currentCase.agreement.date?formatJDate(currentCase.agreement.date):'令和　　年　　月　　日')+'</p>'
+    +'<div class="sig-area">'+sigs+'</div>'
+    +'<div class="juninsha"><div class="sig-row"><span class="sl">事務所所在地</span><span class="sv">茨城県水戸市姫子1-820-6　ヴィラエスポワールⅠ　1F</span></div>'
+    +'<div class="sig-row"><span class="sl">受任者（乙）</span><span class="sv">税理士　日下部幸広</span><span class="seal">印</span></div></div>';
+  openPrintWindow('委任契約書_'+d.name, body, styles);
+}
+
+// ============================================================
+//  Document: 必要資料チェックリスト PDF
+// ============================================================
+function downloadChecklistPDF(){
+  if(!currentCase){ toast('案件がありません', true); return; }
+  const d=currentCase.deceased;
+  let itemsHtml=''; let has=false;
+  categories.forEach((cat,ci)=>{
+    const req=cat.items.filter((it,ii)=>{ const s=currentCase.checklist[clKey(ci,ii)]; return s&&(s.checked==='yes'||s.checked==='partial'); });
+    if(!req.length) return; has=true;
+    let li='';
+    req.forEach(it=>{ const ii=cat.items.indexOf(it); const s=currentCase.checklist[clKey(ci,ii)];
+      let badge=s.checked==='partial'?' <b style="color:#c00">【一部受領済】</b>':'';
+      let partial=s.checked==='partial'?'<div class="pmemo">▶受領済分：'+esc(s.receivedPart||'―')+'　▶未受領分：'+esc(s.unreceivedPart||'―')+'</div>':'';
+      let memo=s.memo?'<div class="pmemo">メモ：'+esc(s.memo)+'</div>':'';
+      li+='<div class="it"><span class="cb"></span><div><div class="nm">'+esc(it.id)+' '+esc(it.name)+badge+'</div><div class="ds">'+esc(it.desc).replace(/\n/g,'<br>')+'</div>'
+        +(it.howTo?'<div class="ht">取得方法：'+esc(it.howTo).replace(/\n/g,'<br>')+'</div>':'')+partial+memo+'</div></div>';
+    });
+    itemsHtml+='<div class="catbox"><div class="cat">'+esc(cat.name)+'</div><div class="catitems">'+li+'</div></div>';
+  });
+  if(!has){ toast('「必要」または「一部受領済」の資料がありません', true); return; }
+  let filing=''; if(d.deathDate){ const f=new Date(d.deathDate); f.setMonth(f.getMonth()+10); filing=formatJDate(f.toISOString().slice(0,10)); }
+  const styles=`*{margin:0;padding:0;box-sizing:border-box;}body{font-family:"Hiragino Sans","Yu Gothic UI",sans-serif;color:#000;padding:18px;font-size:12px;line-height:1.6;}
+    .ti{font-size:18px;font-weight:700;text-align:center;color:#0058b8;border-bottom:2px solid #0071e3;padding-bottom:8px;margin-bottom:12px;}
+    .info td{padding:2px 12px 2px 0;font-size:12px;}
+    .guide{font-weight:600;margin:10px 0 6px;}
+    .catbox{border:1.5px solid #0071e3;border-radius:6px;margin:10px 0;overflow:hidden;page-break-inside:avoid;}
+    .cat{background:#0071e3;color:#fff;font-weight:700;padding:5px 12px;}
+    .catitems{padding:4px 10px;}
+    .it{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid #eee;}
+    .it:last-child{border-bottom:none;}.cb{flex-shrink:0;width:15px;height:15px;border:1.5px solid #888;border-radius:3px;margin-top:2px;}
+    .nm{font-weight:700;font-size:12.5px;}.ds{color:#444;}.ht{color:#555;font-size:11px;margin-top:2px;background:#f5f5f5;padding:4px 8px;border-left:3px solid #bbb;}
+    .pmemo{color:#c00;font-size:11px;margin-top:2px;}
+    @media print{@page{margin:14mm;}}`;
+  const body='<div class="ti">相続税申告 必要資料チェックリスト</div>'
+    +'<table class="info"><tr><td><b>被相続人：</b>'+esc(d.name||'')+'</td><td>'+(d.deathDate?'<b>相続開始日：</b>'+formatJDate(d.deathDate):'')+'</td></tr>'
+    +'<tr><td>'+(filing?'<b>申告期限：</b>'+filing:'')+'</td><td>'+(currentCase.collectionDeadline?'<b>資料収集期限：</b>'+formatJDate(currentCase.collectionDeadline):'')+'</td></tr></table>'
+    +'<div class="guide">以下の資料をご用意ください。（揃った資料は□にチェックを入れてください）</div>'
+    +itemsHtml+'<div style="text-align:right;font-size:9px;color:#999;margin-top:12px;">出力日時：'+new Date().toLocaleString('ja-JP')+'</div>';
+  openPrintWindow('必要資料_'+d.name, body, styles);
+}
+
+// ============================================================
+//  Excel export (checklist + assets)
+// ============================================================
+async function downloadChecklistExcel(){
+  if(!currentCase){ toast('案件がありません', true); return; }
+  const d=currentCase.deceased;
+  const wb=new ExcelJS.Workbook();
+  // checklist sheet
+  const ws=wb.addWorksheet('必要資料');
+  ws.addRow(['No','カテゴリ','資料名','状態','メモ','受領済分','未受領分']).eachCell(c=>{c.font={bold:true,color:{argb:'FFFFFFFF'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF0071E3'}};});
+  let n=0;
+  categories.forEach((cat,ci)=>cat.items.forEach((it,ii)=>{ const s=currentCase.checklist[clKey(ci,ii)]||{};
+    let st='未選択'; if(s.checked==='yes')st='必要'; else if(s.checked==='no')st='不要'; else if(s.checked==='received')st='受領済'; else if(s.checked==='partial')st='一部受領済';
+    n++; ws.addRow([n,cat.name,it.name,st,s.memo||'',s.receivedPart||'',s.unreceivedPart||'']); }));
+  [5,20,40,12,24,20,20].forEach((w,i)=>ws.getColumn(i+1).width=w);
+  // assets sheet
+  const wa=wb.addWorksheet('財産一覧');
+  wa.addRow(['種別','区分','名称','明細','数量','評価額','符号','取得者','メモ']).eachCell(c=>{c.font={bold:true,color:{argb:'FFFFFFFF'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF34C759'}};});
+  currentCase.assets.forEach(a=>{ const t=ASSET_BY_KEY[a.category]; const h=currentCase.heirs.find(x=>x.id===a.acquirerId);
+    wa.addRow([t.name,a.subcategory||'',a.name||'',a.detail||'',a.quantity||'',Number(a.value)||0,t.sign<0?'控除':'加算',h?h.name:'',a.memo||'']); });
+  [16,16,24,28,10,16,8,14,24].forEach((w,i)=>wa.getColumn(i+1).width=w);
+  wa.getColumn(6).numFmt='#,##0';
+  // summary sheet
+  const s=calcSummary();
+  const wi=wb.addWorksheet('集計');
+  [['被相続人',d.name||''],['相続開始日',d.deathDate?formatJDate(d.deathDate):''],['法定相続人数(概算)',s.n],['',''],
+   ['プラス財産',s.plus],['みなし相続財産(課税分)',s.mfumi],['生前贈与加算',s.sum.gift],['債務・葬式費用',-s.minus],
+   ['課税価格(概算)',Math.max(0,s.taxableValue)],['基礎控除',s.basicDeduction],['課税遺産総額(概算)',s.netTaxable]
+  ].forEach(r=>wi.addRow(r));
+  wi.getColumn(1).width=24; wi.getColumn(2).width=20; wi.getColumn(2).numFmt='#,##0';
+  const buf=await wb.xlsx.writeBuffer();
+  saveAs(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}), '相続管理_'+(d.name||'案件')+'_'+todayISO()+'.xlsx');
+}
+
+// ============================================================
+//  Local JSON import/export
+// ============================================================
+function exportLocalJson(){
+  if(!currentCase){ toast('案件がありません', true); return; }
+  syncUIToCase();
+  const blob=new Blob([JSON.stringify(currentCase,null,2)],{type:'application/json'});
+  saveAs(blob, FILE_PREFIX+(currentCase.deceased.name||'案件')+'.json');
+}
+function importLocalJson(){ $('jsonFileInput').click(); }
+function handleJsonFile(input){
+  const file=input.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ const data=JSON.parse(r.result); currentCase=migrateCase(data); currentFileId=null; loadCaseIntoUI(); cacheCurrentCase(); switchView('basic'); renderCasesList(); toast('JSONを取り込みました'); }catch(e){ toast('読み込み失敗：'+e.message, true); } };
+  r.readAsText(file); input.value='';
+}
+
+// ============================================================
+//  Modals
+// ============================================================
+function openModal(id){ $(id).classList.add('active'); }
+function closeModal(id){ $(id).classList.remove('active'); }
+
+// ============================================================
+//  Init
+// ============================================================
+function tryRestoreCache(){
+  try{ const c=JSON.parse(localStorage.getItem(LS_CASE_CACHE)); if(c&&c.case){ currentCase=migrateCase(c.case); currentFileId=c.fileId||null; loadCaseIntoUI(); } }catch(e){}
+}
+window.addEventListener('load',()=>{
+  loadSettings();
+  initGis();
+  // GIS may load after; retry
+  let tries=0; const iv=setInterval(()=>{ if(!gisReady){ initGis(); } if(gisReady||tries++>20) clearInterval(iv); },400);
+  tryRestoreCache();
+  refreshNavLock();
+  renderCasesList();
+});
+</script>
+</body>
+</html>
