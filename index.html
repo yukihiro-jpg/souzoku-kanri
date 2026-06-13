@@ -174,6 +174,34 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 .asset-row .mini-lbl{font-size:11px;font-weight:600;color:var(--ink-2);margin-bottom:3px;display:block;}
 .asset-add{padding:12px 16px;}
 .val-input{text-align:right;font-variant-numeric:tabular-nums;}
+.asset-table{width:100%;border-collapse:collapse;font-size:13px;}
+.asset-table th{text-align:left;font-size:11px;font-weight:600;color:var(--ink-2);padding:8px 8px;border-bottom:1px solid var(--line);background:var(--surface-2);white-space:nowrap;}
+.asset-table td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:middle;}
+.asset-table tr:last-child td{border-bottom:none;}
+.asset-table input,.asset-table select{padding:6px 8px;border:1px solid var(--line-2);border-radius:8px;font-size:13px;}
+.asset-table input:focus,.asset-table select:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(0,113,227,.15);}
+.asset-table .num{text-align:right;font-variant-numeric:tabular-nums;}
+.asset-table .col-del{width:34px;text-align:center;}
+.asset-table .row-del{border:none;background:none;color:var(--ink-2);cursor:pointer;font-size:16px;border-radius:6px;padding:2px 6px;}
+.asset-table .row-del:hover{background:var(--red);color:#fff;}
+.asset-table .empty-row td{color:var(--ink-2);font-size:12.5px;padding:10px 8px;}
+.alloc-split{background:var(--surface-2);border-radius:8px;padding:8px 10px;margin-top:6px;}
+.alloc-split .as-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
+.alloc-split .as-row .nm{flex:1;font-size:12.5px;}
+.alloc-split .as-row input{width:140px;text-align:right;}
+.sim-table{width:100%;border-collapse:collapse;font-size:13px;}
+.sim-table th,.sim-table td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums;}
+.sim-table th{font-size:11.5px;color:var(--ink-2);font-weight:600;background:var(--surface-2);text-align:right;}
+.sim-table th:first-child,.sim-table td:first-child{text-align:left;}
+.sim-table tfoot td{font-weight:700;border-top:2px solid var(--line-2);}
+.sim-steps{counter-reset:step;}
+.sim-step{display:flex;gap:14px;padding:14px 0;border-bottom:1px solid var(--line);align-items:flex-start;}
+.sim-step:last-child{border-bottom:none;}
+.sim-step .no{flex:0 0 30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;}
+.sim-step .body{flex:1;}
+.sim-step .body .t{font-weight:600;font-size:14px;}
+.sim-step .body .v{font-size:20px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:2px;}
+.sim-step .body .sub{font-size:12px;color:var(--ink-2);margin-top:2px;}
 
 .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;}
 .sum-box{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px;}
@@ -237,7 +265,8 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
       <button class="nav-item needs-case" data-view="basic"><span class="nav-ico">📝</span>基本情報・打合せ<span class="step-no">1</span></button>
       <button class="nav-item needs-case" data-view="checklist"><span class="nav-ico">✅</span>必要資料<span class="step-no">2</span></button>
       <button class="nav-item needs-case" data-view="assets"><span class="nav-ico">💰</span>財産一覧<span class="step-no">3</span></button>
-      <button class="nav-item needs-case" data-view="agreement"><span class="nav-ico">📜</span>遺産分割協議書<span class="step-no">4</span></button>
+      <button class="nav-item needs-case" data-view="agreement"><span class="nav-ico">🤝</span>遺産分割<span class="step-no">4</span></button>
+      <button class="nav-item needs-case" data-view="simulation"><span class="nav-ico">🧮</span>相続税試算<span class="step-no">5</span></button>
       <div class="nav-section">その他</div>
       <button class="nav-item" data-view="settings"><span class="nav-ico">⚙️</span>設定</button>
     </nav>
@@ -345,7 +374,7 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 
     <!-- ===== Agreement ===== -->
     <section class="view" id="view-agreement">
-      <div class="view-head"><h1>遺産分割協議書</h1><p>各財産を取得する相続人を割り当て、遺産分割協議書を作成します。</p></div>
+      <div class="view-head"><h1>遺産分割</h1><p>各財産を取得する相続人を割り当てます（1財産を複数人で分割することも可能）。割り当て内容は相続税試算に反映されます。</p></div>
 
       <div class="card">
         <h2>取得者の割り当て</h2>
@@ -371,6 +400,30 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
           <button class="btn primary lg" onclick="downloadAgreement()">📜 遺産分割協議書を作成</button>
         </div>
       </div>
+    </section>
+
+    <!-- ===== Simulation ===== -->
+    <section class="view" id="view-simulation">
+      <div class="view-head"><h1>相続税試算</h1><p>遺産分割の割り当てに基づき、相続税法の規定に従って相続税額を試算します。</p></div>
+
+      <div class="card">
+        <h2>① 課税価格と相続税の総額</h2>
+        <div class="card-sub">課税価格の合計額 → 基礎控除 → 課税遺産総額 → 法定相続分による按分 → 相続税の総額。</div>
+        <div class="sim-steps" id="simSteps"></div>
+      </div>
+
+      <div class="card">
+        <h2>② 各相続人の納付税額</h2>
+        <div class="card-sub">相続税の総額を各人の課税価格の割合で按分し、2割加算・各種税額控除を適用します。</div>
+        <div style="overflow-x:auto;"><table class="sim-table" id="simHeirTable"></table></div>
+      </div>
+
+      <div class="card">
+        <h2>適用した税額控除・加算の内訳</h2>
+        <div id="simCredits"></div>
+      </div>
+
+      <div class="disclaimer" id="simDisclaimer"></div>
     </section>
 
     <!-- ===== Settings ===== -->
@@ -741,11 +794,13 @@ function newCaseObject(name){
     collectionDeadline:'', meetingMemo:'',
     heirs:[ newHeir() ],
     checklist:{},   // key -> {checked,memo,receivedPart,unreceivedPart}
-    assets:[],      // {id,category,name,detail,quantity,value,subcategory,acquirerId,memo}
+    assets:[],      // {id,category,subcategory,name,location,quantity,unitPrice,value,memo,allocations:[{heirId,amount}]}
     agreement:{ date:'', notes:'', extraHeirId:'' }
   };
 }
-function newHeir(){ return { id:uid(), name:'', kana:'', relation:'', address:'', tel:'', job:'', isRepresentative:false, hideFromContract:false }; }
+function newHeir(){ return { id:uid(), name:'', kana:'', relationType:'child', address:'', tel:'', job:'', age:'', disabled:false, disabilityType:'general', surcharge:false, isRepresentative:false, hideFromContract:false }; }
+const RELATION_LABELS={spouse:'配偶者',child:'子',parent:'父母（直系尊属）',sibling:'兄弟姉妹',other:'その他'};
+function autoSurcharge(rt){ return rt==='sibling'||rt==='other'; }
 
 // ============================================================
 //  Navigation
@@ -755,6 +810,7 @@ function switchView(view){
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
   if(view==='assets'){ renderAssets(); renderSummary(); }
   if(view==='agreement'){ renderAgreement(); }
+  if(view==='simulation'){ renderSimulation(); }
   if(view==='checklist'){ renderChecklist(); }
   if(view==='basic'){ /* already rendered */ }
 }
@@ -854,8 +910,15 @@ function migrateCase(data){
   c.deceased=Object.assign(base.deceased, data.deceased||{});
   c.agreement=Object.assign(base.agreement, data.agreement||{});
   c.checklist=data.checklist||{};
-  c.assets=(data.assets||[]).map(a=>Object.assign({id:uid(),category:'other',subcategory:'',name:'',detail:'',quantity:'',value:0,acquirerId:'',memo:''},a));
-  c.heirs=(data.heirs||[]).map(h=>Object.assign(newHeir(),h));
+  c.assets=(data.assets||[]).map(a=>{
+    const na=Object.assign({id:uid(),category:'other',subcategory:'',name:'',location:'',quantity:'',unitPrice:'',value:0,memo:'',allocations:[]},a);
+    if(na.detail!==undefined && !na.location){ na.location=na.detail; } delete na.detail;
+    if((!na.allocations||!na.allocations.length) && na.acquirerId){ na.allocations=[{heirId:na.acquirerId,amount:Number(na.value)||0}]; }
+    if(!Array.isArray(na.allocations)) na.allocations=[];
+    delete na.acquirerId;
+    return na;
+  });
+  c.heirs=(data.heirs||[]).map(h=>{ const nh=Object.assign(newHeir(),h); if(h.relation&&!h.relationType){ nh.relationType= h.relation.includes('配偶')?'spouse':(h.relation.includes('子')||h.relation.includes('男')||h.relation.includes('女')?'child':'other'); } return nh; });
   if(!c.heirs.length) c.heirs=[newHeir()];
   return c;
 }
@@ -948,7 +1011,12 @@ function calcDeadlines(){
 // ============================================================
 function addHeir(){ if(!currentCase) return; currentCase.heirs.push(newHeir()); renderHeirs(); cacheCurrentCase(); }
 function removeHeir(id){ if(!currentCase) return; currentCase.heirs=currentCase.heirs.filter(h=>h.id!==id); if(!currentCase.heirs.length) currentCase.heirs.push(newHeir()); renderHeirs(); refreshAcquirerSelects(); cacheCurrentCase(); }
-function updateHeir(id,field,val){ const h=currentCase.heirs.find(x=>x.id===id); if(h){ h[field]=val; cacheCurrentCase(); if(field==='name') refreshAcquirerSelects(); } }
+function updateHeir(id,field,val){ const h=currentCase.heirs.find(x=>x.id===id); if(h){ h[field]=val; if(field==='relationType'){ h.surcharge=autoSurcharge(val); renderHeirs(); } cacheCurrentCase(); if(field==='name'||field==='relationType') refreshAcquirerSelects(); } }
+function updateHeirBool(id,field,checked){ const h=currentCase.heirs.find(x=>x.id===id); if(h){ h[field]=checked; cacheCurrentCase(); } }
+function relTypeOptions(cur){ return Object.keys(RELATION_LABELS).map(k=>'<option value="'+k+'"'+(k===cur?' selected':'')+'>'+RELATION_LABELS[k]+'</option>').join(''); }
+function disabilityOptions(h){ const cur=h.disabled?(h.disabilityType||'general'):'none'; return [['none','なし'],['general','一般障害者'],['special','特別障害者']].map(o=>'<option value="'+o[0]+'"'+(o[0]===cur?' selected':'')+'>'+o[1]+'</option>').join(''); }
+function updateLegalShareLabels(){ if(!currentCase) return; const sh=legalShares(currentCase.heirs); currentCase.heirs.forEach(h=>{ const el=$('lshare-'+h.id); if(el) el.textContent=fracText(sh[h.id]); }); }
+function fracText(x){ if(!x) return '0'; const pct=Math.round(x*10000)/100; return pct+'%'; }
 function toggleRep(id){ currentCase.heirs.forEach(h=>h.isRepresentative=(h.id===id)?!h.isRepresentative:false); renderHeirs(); cacheCurrentCase(); }
 function toggleHide(id){ const h=currentCase.heirs.find(x=>x.id===id); if(h){ h.hideFromContract=!h.hideFromContract; renderHeirs(); cacheCurrentCase(); } }
 function renderHeirs(){
@@ -963,13 +1031,20 @@ function renderHeirs(){
       +'<button class="btn red sm" style="margin-left:auto;" onclick="removeHeir(\''+h.id+'\')">削除</button></div>'
       +'<div class="grid grid-3">'
       +'<div class="field"><label>氏名</label><input type="text" value="'+esc(h.name)+'" oninput="updateHeir(\''+h.id+'\',\'name\',this.value)"></div>'
-      +'<div class="field"><label>続柄</label><input type="text" value="'+esc(h.relation)+'" placeholder="例：長男 / 配偶者" oninput="updateHeir(\''+h.id+'\',\'relation\',this.value)"></div>'
+      +'<div class="field"><label>続柄区分（法定相続分の判定に使用）</label><select onchange="updateHeir(\''+h.id+'\',\'relationType\',this.value)">'+relTypeOptions(h.relationType)+'</select></div>'
       +'<div class="field"><label>電話番号</label><input type="tel" value="'+esc(h.tel)+'" oninput="updateHeir(\''+h.id+'\',\'tel\',this.value)"></div>'
       +'<div class="field" style="grid-column:1/3;"><label>住所</label><input type="text" value="'+esc(h.address)+'" oninput="updateHeir(\''+h.id+'\',\'address\',this.value)"></div>'
       +'<div class="field"><label>職業</label><input type="text" value="'+esc(h.job)+'" oninput="updateHeir(\''+h.id+'\',\'job\',this.value)"></div>'
+      +'</div>'
+      +'<div class="grid grid-4" style="margin-top:12px;align-items:end;">'
+      +'<div class="field"><label>年齢（未成年者/障害者控除）</label><input type="number" min="0" value="'+esc(h.age)+'" placeholder="例：45" oninput="updateHeir(\''+h.id+'\',\'age\',this.value)"></div>'
+      +'<div class="field"><label>障害者控除</label><select onchange="updateHeir(\''+h.id+'\',\'disabilityType\',this.value);updateHeirBool(\''+h.id+'\',\'disabled\',this.value!==\'none\')">'+disabilityOptions(h)+'</select></div>'
+      +'<label class="field" style="flex-direction:row;align-items:center;gap:8px;"><input type="checkbox" style="width:auto;" '+(h.surcharge?'checked':'')+' onchange="updateHeirBool(\''+h.id+'\',\'surcharge\',this.checked)"> <span class="lbl">相続税額の2割加算</span></label>'
+      +'<div class="muted" style="font-size:11.5px;">法定相続分：<b id="lshare-'+h.id+'">—</b></div>'
       +'</div>';
     c.appendChild(div);
   });
+  updateLegalShareLabels();
 }
 
 // ============================================================
@@ -1038,52 +1113,61 @@ function updateClProgress(total){
 // ============================================================
 function addAsset(catKey){
   if(!currentCase) return;
-  currentCase.assets.push({id:uid(),category:catKey,subcategory:'',name:'',detail:'',quantity:'',value:0,acquirerId:'',memo:''});
+  currentCase.assets.push({id:uid(),category:catKey,subcategory:'',name:'',location:'',quantity:'',unitPrice:'',value:0,memo:'',allocations:[]});
   renderAssets(); renderSummary(); cacheCurrentCase();
 }
 function removeAsset(id){ currentCase.assets=currentCase.assets.filter(a=>a.id!==id); renderAssets(); renderSummary(); cacheCurrentCase(); }
+function assetVal(a){ return Number(a.value)||0; }
 function updateAsset(id,field,val){
   const a=currentCase.assets.find(x=>x.id===id); if(!a) return;
-  a[field]=(field==='value')? (Number(String(val).replace(/[^0-9.-]/g,''))||0) : val;
-  if(field==='value') renderSummary();
-  cacheCurrentCase();
+  if(field==='value'||field==='unitPrice'){ a[field]=Number(String(val).replace(/[^0-9.\-]/g,''))||0; }
+  else a[field]=val;
+  // 単価×数量＝価額 の自動計算（単価が入力されている場合のみ）
+  if(field==='unitPrice'||field==='quantity'){
+    const up=Number(a.unitPrice)||0; const q=Number(String(a.quantity).replace(/[^0-9.\-]/g,''))||0;
+    if(up>0){ a.value=Math.round(up*q); const vi=$('val-'+a.id); if(vi) vi.value=a.value?a.value.toLocaleString('ja-JP'):''; }
+  }
+  updateSubtotal(a.category); renderSummary(); cacheCurrentCase();
+}
+function updateSubtotal(catKey){
+  const t=ASSET_BY_KEY[catKey];
+  const sub=currentCase.assets.filter(a=>a.category===catKey).reduce((s,a)=>s+assetVal(a),0);
+  const el=$('sub-'+catKey); if(el) el.textContent=(t.sign<0?'−':'')+yen(sub);
 }
 function renderAssets(){
   if(!currentCase) return;
   const c=$('assetsContainer'); c.innerHTML='';
-  const heirOpts=acquirerOptionsHtml();
   ASSET_TYPES.forEach(t=>{
     const items=currentCase.assets.filter(a=>a.category===t.key);
-    const subtotal=items.reduce((s,a)=>s+(Number(a.value)||0),0);
+    const subtotal=items.reduce((s,a)=>s+assetVal(a),0);
     const sec=document.createElement('div'); sec.className='asset-sec';
     let rows='';
-    items.forEach(a=>{ rows+=assetRowHtml(t,a,heirOpts); });
+    if(items.length){ items.forEach(a=>{ rows+=assetRowHtml(t,a); }); }
+    else { rows='<tr class="empty-row"><td colspan="7">未登録です。「＋ 追加」で入力してください。</td></tr>'; }
     sec.innerHTML=
       '<div class="asset-sec-head"><div class="ic" style="background:'+t.color+'">'+t.icon+'</div>'
       +'<h3>'+t.name+'</h3>'
-      +'<span class="subtotal'+(t.sign<0?' minus':'')+'">'+(t.sign<0?'−':'')+yen(subtotal)+'</span></div>'
-      +'<div>'+rows+'</div>'
+      +'<span class="subtotal'+(t.sign<0?' minus':'')+'" id="sub-'+t.key+'">'+(t.sign<0?'−':'')+yen(subtotal)+'</span></div>'
+      +'<table class="asset-table"><thead><tr>'
+      +'<th style="width:130px;">細目</th><th>'+esc(t.f1.label||'名称')+'</th><th>'+esc(t.f2.label||'所在場所等')+'</th>'
+      +'<th style="width:110px;">'+esc(t.f3&&t.f3.label?t.f3.label:'数量')+'</th><th style="width:120px;">単価(円)</th><th style="width:140px;">価額(円)</th><th class="col-del"></th>'
+      +'</tr></thead><tbody>'+rows+'</tbody></table>'
       +'<div class="asset-add"><button class="btn ghost sm" onclick="addAsset(\''+t.key+'\')">＋ '+t.name+'を追加</button></div>';
     c.appendChild(sec);
   });
 }
-function assetRowHtml(t,a,heirOpts){
-  const showQty=t.f3 && t.f3.label;
-  return '<div class="asset-row">'
-    +'<div class="r1">'
-    +'<div><span class="mini-lbl">区分</span><select onchange="updateAsset(\''+a.id+'\',\'subcategory\',this.value)">'+subOptions(t,a.subcategory)+'</select></div>'
-    +'<div><span class="mini-lbl">'+esc(t.f1.label)+'</span><input type="text" value="'+esc(a.name)+'" placeholder="'+esc(t.f1.ph)+'" oninput="updateAsset(\''+a.id+'\',\'name\',this.value)"></div>'
-    +'<div><span class="mini-lbl">'+(showQty?esc(t.f3.label):'数量')+'</span><input type="text" value="'+esc(a.quantity)+'" placeholder="'+(showQty?esc(t.f3.ph):'')+'" oninput="updateAsset(\''+a.id+'\',\'quantity\',this.value)" '+(showQty?'':'disabled style="opacity:.4"')+'></div>'
-    +'<div><span class="mini-lbl">評価額(円)</span><input type="text" class="val-input" value="'+(a.value?Number(a.value).toLocaleString('ja-JP'):'')+'" placeholder="0" oninput="updateAsset(\''+a.id+'\',\'value\',this.value)" onblur="renderAssets()"></div>'
-    +'</div>'
-    +'<div class="r2">'
-    +'<div><span class="mini-lbl">'+esc(t.f2.label)+'</span><input type="text" value="'+esc(a.detail)+'" placeholder="'+esc(t.f2.ph)+'" oninput="updateAsset(\''+a.id+'\',\'detail\',this.value)"></div>'
-    +'<div><span class="mini-lbl">メモ</span><input type="text" value="'+esc(a.memo)+'" oninput="updateAsset(\''+a.id+'\',\'memo\',this.value)"></div>'
-    +'<div><button class="btn red sm" onclick="removeAsset(\''+a.id+'\')">削除</button></div>'
-    +'</div></div>';
+function assetRowHtml(t,a){
+  return '<tr>'
+    +'<td><select onchange="updateAsset(\''+a.id+'\',\'subcategory\',this.value)">'+subOptions(t,a.subcategory)+'</select></td>'
+    +'<td><input type="text" style="width:100%" value="'+esc(a.name)+'" placeholder="'+esc(t.f1.ph||'')+'" oninput="updateAsset(\''+a.id+'\',\'name\',this.value)"></td>'
+    +'<td><input type="text" style="width:100%" value="'+esc(a.location)+'" placeholder="'+esc(t.f2.ph||'')+'" oninput="updateAsset(\''+a.id+'\',\'location\',this.value)"></td>'
+    +'<td><input type="text" class="num" style="width:100%" value="'+esc(a.quantity)+'" placeholder="'+esc(t.f3&&t.f3.ph?t.f3.ph:'')+'" oninput="updateAsset(\''+a.id+'\',\'quantity\',this.value)"></td>'
+    +'<td><input type="text" class="num" style="width:100%" value="'+(a.unitPrice?Number(a.unitPrice).toLocaleString('ja-JP'):'')+'" placeholder="—" oninput="updateAsset(\''+a.id+'\',\'unitPrice\',this.value)"></td>'
+    +'<td><input type="text" class="num val-input" id="val-'+a.id+'" style="width:100%" value="'+(a.value?Number(a.value).toLocaleString('ja-JP'):'')+'" placeholder="0" oninput="updateAsset(\''+a.id+'\',\'value\',this.value)" onblur="this.value=(Number(String(this.value).replace(/[^0-9.\\-]/g,\'\'))||0).toLocaleString(\'ja-JP\')"></td>'
+    +'<td class="col-del"><button class="row-del" title="削除" onclick="removeAsset(\''+a.id+'\')">×</button></td>'
+    +'</tr>';
 }
 function subOptions(t,cur){ return '<option value="">—</option>'+t.subs.map(s=>'<option value="'+esc(s)+'"'+(s===cur?' selected':'')+'>'+esc(s)+'</option>').join(''); }
-function acquirerOptionsHtml(){ return ''; }
 
 function calcSummary(){
   const n=currentCase? currentCase.heirs.filter(h=>h.name.trim()).length || currentCase.heirs.length : 0;
@@ -1117,52 +1201,232 @@ function box(l,v){ return '<div class="sum-box"><div class="sl">'+l+'</div><div 
 function boxAccent(l,v){ return '<div class="sum-box accent"><div class="sl">'+l+'</div><div class="sv">'+v+'</div></div>'; }
 
 // ============================================================
+//  相続税 計算エンジン（相続税法に基づく算出シミュレーション）
+// ============================================================
+// 法定相続分の判定（民法900条／配偶者と血族相続人の順位）
+function legalShares(heirs){
+  const shares={}; (heirs||[]).forEach(h=>shares[h.id]=0);
+  if(!heirs||!heirs.length) return shares;
+  const by={spouse:[],child:[],parent:[],sibling:[],other:[]};
+  heirs.forEach(h=>{ (by[h.relationType]||by.other).push(h); });
+  const spouse=by.spouse;
+  // 血族相続人の順位：子 > 直系尊属 > 兄弟姉妹
+  let group=null, spouseRate=1, groupRate=0;
+  if(by.child.length){ group=by.child; spouseRate=1/2; groupRate=1/2; }
+  else if(by.parent.length){ group=by.parent; spouseRate=2/3; groupRate=1/3; }
+  else if(by.sibling.length){ group=by.sibling; spouseRate=3/4; groupRate=1/4; }
+  else if(by.other.length){ group=by.other; spouseRate=1/2; groupRate=1/2; } // その他は子に準じて概算
+  if(spouse.length && group){
+    spouse.forEach(h=>shares[h.id]=spouseRate/spouse.length);
+    group.forEach(h=>shares[h.id]=groupRate/group.length);
+  } else if(spouse.length){
+    spouse.forEach(h=>shares[h.id]=1/spouse.length);
+  } else if(group){
+    group.forEach(h=>shares[h.id]=1/group.length);
+  } else {
+    heirs.forEach(h=>shares[h.id]=1/heirs.length);
+  }
+  return shares;
+}
+// 相続税の速算表
+function taxByTable(x){
+  const b=[[10000000,.10,0],[30000000,.15,500000],[50000000,.20,2000000],[100000000,.30,7000000],[200000000,.40,17000000],[300000000,.45,27000000],[600000000,.50,42000000],[Infinity,.55,72000000]];
+  if(x<=0) return 0;
+  for(const r of b){ if(x<=r[0]) return x*r[1]-r[2]; }
+  return 0;
+}
+function calcTax(){
+  const heirs=currentCase.heirs;
+  const n=heirs.length||1;
+  const shares=legalShares(heirs);
+  // 生命保険金・退職手当金の非課税限度額
+  let insTotal=0, retTotal=0;
+  currentCase.assets.forEach(a=>{ if(a.category==='insurance') insTotal+=assetVal(a); if(a.category==='retirement') retTotal+=assetVal(a); });
+  const insExemptTotal=Math.min(insTotal,5000000*n);
+  const retExemptTotal=Math.min(retTotal,5000000*n);
+  // 各人の取得内訳
+  const ph={}; heirs.forEach(h=>ph[h.id]={acquired:0,ins:0,ret:0,gift:0,debt:0,taxable:0,taxableR:0});
+  let unassigned=0;
+  currentCase.assets.forEach(a=>{
+    const t=ASSET_BY_KEY[a.category];
+    let allocs=(a.allocations&&a.allocations.length)?a.allocations:[];
+    if(!allocs.length && assetVal(a)) allocs=[{heirId:'',amount:assetVal(a)}];
+    allocs.forEach(al=>{
+      const amt=Number(al.amount)||0; const p=ph[al.heirId];
+      if(!p){ unassigned+=amt*(t.sign<0?-1:1); return; }
+      if(a.category==='insurance') p.ins+=amt;
+      else if(a.category==='retirement') p.ret+=amt;
+      else if(a.category==='gift') p.gift+=amt;
+      else if(t.sign<0) p.debt+=amt;
+      else p.acquired+=amt;
+    });
+  });
+  // 各人の課税価格
+  let totalTaxable=0;
+  heirs.forEach(h=>{
+    const p=ph[h.id];
+    const insEx=insTotal>0? insExemptTotal*(p.ins/insTotal):0;
+    const retEx=retTotal>0? retExemptTotal*(p.ret/retTotal):0;
+    let v=p.acquired + Math.max(0,p.ins-insEx) + Math.max(0,p.ret-retEx) + p.gift - p.debt;
+    if(v<0) v=0;
+    p.taxable=v; p.taxableR=Math.floor(v/1000)*1000; // 1,000円未満切捨て
+    totalTaxable+=p.taxableR;
+  });
+  const basic=30000000+6000000*n;
+  const netEstate=Math.max(0,totalTaxable-basic);
+  // 相続税の総額（法定相続分で按分→速算表→合算）
+  let totalTax=0; const portions={};
+  heirs.forEach(h=>{ const por=Math.floor(netEstate*shares[h.id]/1000)*1000; portions[h.id]=por; totalTax+=taxByTable(por); });
+  totalTax=Math.floor(totalTax/100)*100;
+  // 各人の算出税額・加算・控除
+  let grandTotal=0;
+  heirs.forEach(h=>{
+    const p=ph[h.id];
+    const ratio=totalTaxable>0? p.taxableR/totalTaxable : 0;
+    let tax=totalTax*ratio;
+    p.base=tax;
+    p.surchargeAmt=0;
+    if(h.surcharge){ p.surchargeAmt=tax*0.2; tax+=p.surchargeAmt; }
+    p.afterSurcharge=tax;
+    // 控除
+    let credits=0; const detail=[];
+    if(h.relationType==='spouse'){
+      const A=Math.max(totalTaxable*shares[h.id],160000000);
+      const relief=totalTax*Math.min(A,p.taxableR)/(totalTaxable||1);
+      const applied=Math.min(tax,relief);
+      credits+=applied; detail.push({k:'配偶者の税額軽減',v:applied});
+    }
+    const age=h.age!==''&&h.age!=null? Math.floor(Number(h.age)) : null;
+    if(age!=null && age<18){ const mc=(18-age)*100000; credits+=mc; detail.push({k:'未成年者控除',v:mc}); }
+    if(h.disabled){ const per=h.disabilityType==='special'?200000:100000; const dc=Math.max(0,(85-(age!=null?age:0)))*per; credits+=dc; detail.push({k:'障害者控除',v:dc}); }
+    p.credits=credits; p.creditDetail=detail;
+    p.final=Math.max(0,Math.floor((tax-credits)/100)*100);
+    grandTotal+=p.final;
+  });
+  return {n,shares,insTotal,retTotal,insExemptTotal,retExemptTotal,ph,unassigned,totalTaxable,basic,netEstate,totalTax,portions,grandTotal};
+}
+
+// ============================================================
 //  Agreement (遺産分割協議書)
 // ============================================================
 function onAgreementInput(){ if(!currentCase) return; currentCase.agreement.date=$('ag_date').value; currentCase.agreement.notes=$('ag_notes').value; currentCase.agreement.extraHeirId=$('ag_extraHeir').value; renderHeirTotals(); cacheCurrentCase(); }
 function refreshAcquirerSelects(){ if(document.getElementById('view-agreement').classList.contains('active')) renderAgreement(); }
-function heirSelectHtml(currentId, idAttr){
+function heirSelectHtml(currentId){
   let opts='<option value="">未定 / 共有</option>';
   currentCase.heirs.forEach(h=>{ const lbl=h.name||'(無名)'; opts+='<option value="'+h.id+'"'+(h.id===currentId?' selected':'')+'>'+esc(lbl)+'</option>'; });
   return opts;
 }
+// 取得者割り当て
+function allocPrimary(a){ return (a.allocations&&a.allocations.length===1)? a.allocations[0].heirId : ((a.allocations&&a.allocations.length>1)?'__split__':''); }
+function setAcquirer(assetId, heirId){
+  const a=currentCase.assets.find(x=>x.id===assetId); if(!a) return;
+  if(heirId==='__split__'){ // 分割モードへ：相続人ごとの行を用意
+    const cur={}; (a.allocations||[]).forEach(al=>cur[al.heirId]=Number(al.amount)||0);
+    a.allocations=currentCase.heirs.map(h=>({heirId:h.id,amount:cur[h.id]||0}));
+  } else if(heirId===''){ a.allocations=[]; }
+  else { a.allocations=[{heirId:heirId,amount:assetVal(a)}]; }
+  renderAllocations(); renderHeirTotals(); cacheCurrentCase();
+}
+function setSplitAmount(assetId,heirId,val){
+  const a=currentCase.assets.find(x=>x.id===assetId); if(!a) return;
+  const amt=Number(String(val).replace(/[^0-9.\-]/g,''))||0;
+  let e=a.allocations.find(x=>x.heirId===heirId); if(!e){ e={heirId,amount:0}; a.allocations.push(e); }
+  e.amount=amt;
+  // 残額表示更新
+  const used=a.allocations.reduce((s,x)=>s+(Number(x.amount)||0),0);
+  const rem=$('rem-'+assetId); if(rem){ const d=assetVal(a)-used; rem.textContent='残額 '+yen(d); rem.style.color=Math.abs(d)<1?'var(--green)':'var(--orange)'; }
+  renderHeirTotals(); cacheCurrentCase();
+}
 function renderAgreement(){
   if(!currentCase) return;
-  // alloc table grouped by category, only categories with positive-asset (exclude funeral? include debt as 承継)
-  const c=$('allocContainer');
-  const assets=currentCase.assets.filter(a=>a.category!=='gift'); // gifts are not divided
-  if(!assets.length){ c.innerHTML='<div class="center-msg">財産一覧で財産を登録すると、ここで取得者を割り当てられます。</div>'; }
-  else{
-    let html='<table class="alloc-table"><thead><tr><th>種別</th><th>内容</th><th class="v">評価額</th><th style="width:180px;">取得者</th></tr></thead><tbody>';
-    assets.forEach(a=>{
-      const t=ASSET_BY_KEY[a.category];
-      const label=(a.name||t.name)+(a.detail?'（'+a.detail+'）':'');
-      html+='<tr><td><span style="color:'+t.color+'">'+t.icon+'</span> '+esc(t.name)+'</td>'
-        +'<td>'+esc(label)+'</td>'
-        +'<td class="v">'+(t.sign<0?'−':'')+yen(a.value)+'</td>'
-        +'<td><select onchange="updateAsset(\''+a.id+'\',\'acquirerId\',this.value);renderHeirTotals();">'+heirSelectHtml(a.acquirerId)+'</select></td></tr>';
-    });
-    html+='</tbody></table>';
-    c.innerHTML=html;
-  }
-  // extra heir select
-  const ex=$('ag_extraHeir'); ex.innerHTML=heirSelectHtml(currentCase.agreement.extraHeirId);
+  renderAllocations();
+  $('ag_extraHeir').innerHTML=heirSelectHtml(currentCase.agreement.extraHeirId);
   $('ag_date').value=currentCase.agreement.date||'';
   $('ag_notes').value=currentCase.agreement.notes||'';
   renderHeirTotals();
 }
-function renderHeirTotals(){
-  if(!currentCase) return;
+function renderAllocations(){
+  const c=$('allocContainer');
+  const assets=currentCase.assets.filter(a=>a.category!=='gift'); // 生前贈与は分割対象外
+  if(!assets.length){ c.innerHTML='<div class="center-msg">財産一覧で財産を登録すると、ここで取得者を割り当てられます。</div>'; return; }
+  let html='<table class="alloc-table"><thead><tr><th>種別</th><th>内容</th><th class="v">評価額</th><th style="width:200px;">取得者</th></tr></thead><tbody>';
+  assets.forEach(a=>{
+    const t=ASSET_BY_KEY[a.category];
+    const label=(a.name||t.name)+(a.location?'（'+a.location+'）':'');
+    const prim=allocPrimary(a);
+    let sel='<select onchange="setAcquirer(\''+a.id+'\',this.value)"><option value="">未定 / 共有</option>';
+    currentCase.heirs.forEach(h=>{ sel+='<option value="'+h.id+'"'+(h.id===prim?' selected':'')+'>'+esc(h.name||'(無名)')+'</option>'; });
+    sel+='<option value="__split__"'+(prim==='__split__'?' selected':'')+'>― 分割して指定 ―</option></select>';
+    html+='<tr><td><span style="color:'+t.color+'">'+t.icon+'</span> '+esc(t.name)+'</td>'
+      +'<td>'+esc(label)+'</td><td class="v">'+(t.sign<0?'−':'')+yen(assetVal(a))+'</td><td>'+sel+'</td></tr>';
+    if(prim==='__split__'){
+      let used=a.allocations.reduce((s,x)=>s+(Number(x.amount)||0),0);
+      let editor='<tr><td colspan="4"><div class="alloc-split">';
+      currentCase.heirs.forEach(h=>{ const al=a.allocations.find(x=>x.heirId===h.id); const amt=al?al.amount:0;
+        editor+='<div class="as-row"><span class="nm">'+esc(h.name||'(無名)')+'</span><input type="text" class="num" value="'+(amt?Number(amt).toLocaleString('ja-JP'):'')+'" placeholder="0" oninput="setSplitAmount(\''+a.id+'\',\''+h.id+'\',this.value)"></div>'; });
+      editor+='<div class="as-row" style="justify-content:flex-end;"><span id="rem-'+a.id+'" style="font-size:12px;font-weight:700;color:'+(Math.abs(assetVal(a)-used)<1?'var(--green)':'var(--orange)')+'">残額 '+yen(assetVal(a)-used)+'</span></div>';
+      editor+='</div></td></tr>';
+      html+=editor;
+    }
+  });
+  html+='</tbody></table>';
+  c.innerHTML=html;
+}
+function heirAcquiredTotals(){
   const totals={}; currentCase.heirs.forEach(h=>totals[h.id]=0); let unassigned=0;
   currentCase.assets.filter(a=>a.category!=='gift').forEach(a=>{
-    const t=ASSET_BY_KEY[a.category]; const v=(Number(a.value)||0)*(t.sign<0?-1:1);
-    if(a.acquirerId && totals[a.acquirerId]!==undefined) totals[a.acquirerId]+=v; else unassigned+=v;
+    const t=ASSET_BY_KEY[a.category]; const sign=(t.sign<0?-1:1);
+    let allocs=(a.allocations&&a.allocations.length)?a.allocations:(assetVal(a)?[{heirId:'',amount:assetVal(a)}]:[]);
+    allocs.forEach(al=>{ const v=(Number(al.amount)||0)*sign; if(al.heirId&&totals[al.heirId]!==undefined) totals[al.heirId]+=v; else unassigned+=v; });
   });
+  return {totals,unassigned};
+}
+function renderHeirTotals(){
+  if(!currentCase) return;
+  const {totals,unassigned}=heirAcquiredTotals();
   let html='';
   currentCase.heirs.forEach(h=>{ html+='<span class="heir-total-chip">'+esc(h.name||'(無名)')+'：'+yen(totals[h.id])+'</span>'; });
   html+='<span class="heir-total-chip" style="background:#fff8e6;">未割当：'+yen(unassigned)+'</span>';
   $('heirTotals').innerHTML=html;
 }
+
+// ============================================================
+//  Simulation view
+// ============================================================
+function renderSimulation(){
+  if(!currentCase) return;
+  const r=calcTax();
+  // steps
+  const steps=$('simSteps');
+  steps.innerHTML=
+    simStep(1,'課税価格の合計額', yen(r.totalTaxable), '各相続人の課税価格（1,000円未満切捨て）の合計'+(r.unassigned!==0?' ／ <span style="color:var(--orange)">未割当 '+yen(r.unassigned)+'</span>':''))
+    +simStep(2,'基礎控除額', yen(r.basic), '3,000万円 ＋ 600万円 × 法定相続人 '+r.n+'人')
+    +simStep(3,'課税遺産総額', yen(r.netEstate), '課税価格の合計額 − 基礎控除額')
+    +simStep(4,'相続税の総額', yen(r.totalTax), '課税遺産総額を法定相続分で按分し、速算表を適用して合算（各人按分は下表）');
+  // heir table
+  const rows=currentCase.heirs.map(h=>{
+    const p=r.ph[h.id]; const ratio=r.totalTaxable>0?p.taxableR/r.totalTaxable:0;
+    return '<tr><td>'+esc(h.name||'(無名)')+'<div style="font-size:11px;color:var(--ink-2)">'+RELATION_LABELS[h.relationType]+'／法定相続分 '+fracText(r.shares[h.id])+(h.surcharge?'／2割加算':'')+'</div></td>'
+      +'<td>'+yen(p.taxableR)+'</td>'
+      +'<td>'+(Math.round(ratio*1000)/10)+'%</td>'
+      +'<td>'+yen(Math.floor(p.base))+'</td>'
+      +'<td>'+(p.surchargeAmt?'+'+yen(Math.floor(p.surchargeAmt)):'—')+'</td>'
+      +'<td>'+(p.credits?'−'+yen(Math.round(p.credits)):'—')+'</td>'
+      +'<td><b>'+yen(p.final)+'</b></td></tr>';
+  }).join('');
+  $('simHeirTable').innerHTML=
+    '<thead><tr><th>相続人</th><th>課税価格</th><th>按分割合</th><th>算出税額</th><th>2割加算</th><th>税額控除</th><th>納付税額</th></tr></thead>'
+    +'<tbody>'+rows+'</tbody>'
+    +'<tfoot><tr><td>合計</td><td>'+yen(r.totalTaxable)+'</td><td>100%</td><td>'+yen(r.totalTax)+'</td><td></td><td></td><td>'+yen(r.grandTotal)+'</td></tr></tfoot>';
+  // credits detail
+  let cd='';
+  currentCase.heirs.forEach(h=>{ const p=r.ph[h.id]; if(p.creditDetail&&p.creditDetail.length){
+    cd+='<div style="margin-bottom:8px;"><b>'+esc(h.name||'(無名)')+'</b>：'+p.creditDetail.map(d=>d.k+' '+yen(Math.round(d.v))).join('、')+'</div>'; } });
+  $('simCredits').innerHTML=cd||'<div class="muted">適用される税額控除はありません。（配偶者の税額軽減・未成年者控除・障害者控除は、相続人の続柄区分／年齢／障害者区分から自動判定します。）</div>';
+  $('simDisclaimer').innerHTML='※ 本試算は概算です。法定相続人数は登録された相続人数（'+r.n+'人）を用い、養子の数の制限・相続放棄・代襲相続・小規模宅地等の特例・各種非課税や端数処理の一部は反映していません。'
+    +'配偶者の税額軽減・未成年者控除・障害者控除は自動適用、贈与税額控除・相次相続控除・外国税額控除は未対応です。最終的な税額は必ず税理士がご確認ください。';
+}
+function simStep(no,t,v,sub){ return '<div class="sim-step"><div class="no">'+no+'</div><div class="body"><div class="t">'+t+'</div><div class="v">'+v+'</div><div class="sub">'+sub+'</div></div></div>'; }
 
 // ============================================================
 //  Print helper
@@ -1198,17 +1462,18 @@ function downloadAgreement(){
   let sections='';
   let secNo=0;
   heirs.forEach(h=>{
-    const mine=assets.filter(a=>a.acquirerId===h.id);
+    const mine=[];
+    assets.forEach(a=>{ const al=(a.allocations||[]).find(x=>x.heirId===h.id); if(al && (Number(al.amount)||0)!==0) mine.push({a,amount:Number(al.amount)||0}); });
     if(!mine.length) return;
     secNo++;
     let lines='';
     let n=0;
-    mine.forEach(a=>{
+    mine.forEach(({a,amount})=>{
       const t=ASSET_BY_KEY[a.category]; n++;
       const isDebt=t.sign<0;
-      const detail=[a.name,a.detail,a.quantity?('数量 '+a.quantity):''].filter(Boolean).join('　');
+      const detail=[a.subcategory,a.name,a.location,a.quantity?('数量 '+a.quantity):''].filter(Boolean).join('　');
       lines+='<div class="asset-line"><span class="an">('+n+')</span> <span class="at">【'+t.name+'】</span>'+esc(detail)
-        +' <span class="av">'+(isDebt?'（債務）':'')+yen(a.value)+'</span></div>';
+        +' <span class="av">'+(isDebt?'（債務）':'')+yen(amount)+'</span></div>';
     });
     sections+='<div class="agr-sec"><div class="agr-sec-title">第'+secNo+'条　次の財産は、相続人 '+esc(h.name)+' が取得（承継）する。</div>'
       +'<div class="agr-assets">'+lines+'</div></div>';
@@ -1379,11 +1644,13 @@ async function downloadChecklistExcel(){
   [5,20,40,12,24,20,20].forEach((w,i)=>ws.getColumn(i+1).width=w);
   // assets sheet
   const wa=wb.addWorksheet('財産一覧');
-  wa.addRow(['種別','区分','名称','明細','数量','評価額','符号','取得者','メモ']).eachCell(c=>{c.font={bold:true,color:{argb:'FFFFFFFF'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF34C759'}};});
-  currentCase.assets.forEach(a=>{ const t=ASSET_BY_KEY[a.category]; const h=currentCase.heirs.find(x=>x.id===a.acquirerId);
-    wa.addRow([t.name,a.subcategory||'',a.name||'',a.detail||'',a.quantity||'',Number(a.value)||0,t.sign<0?'控除':'加算',h?h.name:'',a.memo||'']); });
-  [16,16,24,28,10,16,8,14,24].forEach((w,i)=>wa.getColumn(i+1).width=w);
-  wa.getColumn(6).numFmt='#,##0';
+  wa.addRow(['種類','細目','利用区分・銘柄等','所在場所等','数量','単価','価額','符号','取得者','メモ']).eachCell(c=>{c.font={bold:true,color:{argb:'FFFFFFFF'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF34C759'}};});
+  const heirName=id=>{ const h=currentCase.heirs.find(x=>x.id===id); return h?(h.name||'(無名)'):''; };
+  currentCase.assets.forEach(a=>{ const t=ASSET_BY_KEY[a.category];
+    const acq=(a.allocations&&a.allocations.length)? a.allocations.filter(al=>Number(al.amount)).map(al=>heirName(al.heirId)+(a.allocations.length>1?'('+Number(al.amount).toLocaleString('ja-JP')+')':'')).join('、') : '';
+    wa.addRow([t.name,a.subcategory||'',a.name||'',a.location||'',a.quantity||'',Number(a.unitPrice)||0,Number(a.value)||0,t.sign<0?'控除':'加算',acq,a.memo||'']); });
+  [16,16,24,28,10,14,16,8,18,22].forEach((w,i)=>wa.getColumn(i+1).width=w);
+  wa.getColumn(6).numFmt='#,##0'; wa.getColumn(7).numFmt='#,##0';
   // summary sheet
   const s=calcSummary();
   const wi=wb.addWorksheet('集計');
