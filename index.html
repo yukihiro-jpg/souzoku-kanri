@@ -154,15 +154,38 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 .btn-row{display:flex;gap:10px;flex-wrap:wrap;}
 
 /* ---------- Cases list ---------- */
-.case-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;}
-.case-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px;cursor:pointer;transition:transform .15s,box-shadow .15s;position:relative;box-shadow:var(--shadow-sm);}
+.case-grid{display:flex;flex-direction:column;gap:12px;}
+.case-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 22px;cursor:pointer;transition:transform .15s,box-shadow .15s;position:relative;box-shadow:var(--shadow-sm);display:flex;align-items:center;gap:24px;flex-wrap:wrap;}
 .case-card:hover{transform:translateY(-2px);box-shadow:var(--shadow);}
 .case-card.active-case{border-color:var(--accent);box-shadow:0 0 0 2px rgba(0,113,227,.2);}
+.case-card .cc-left{flex:0 0 240px;min-width:200px;}
 .case-card .cc-name{font-size:18px;font-weight:700;letter-spacing:-.01em;}
 .case-card .cc-meta{font-size:12.5px;color:var(--ink-2);margin-top:6px;line-height:1.7;}
-.case-card .cc-badge{display:inline-block;font-size:11px;font-weight:600;color:var(--accent);background:rgba(0,113,227,.1);border-radius:6px;padding:2px 8px;margin-top:10px;}
-.case-card .cc-del{position:absolute;top:14px;right:14px;width:26px;height:26px;border-radius:50%;border:none;background:rgba(0,0,0,.04);color:var(--ink-2);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;}
+.case-card .cc-badge{display:inline-block;font-size:11px;font-weight:600;color:var(--accent);background:rgba(0,113,227,.1);border-radius:6px;padding:2px 8px;margin-top:8px;}
+.case-card .cc-del{position:absolute;top:12px;right:12px;width:26px;height:26px;border-radius:50%;border:none;background:rgba(0,0,0,.04);color:var(--ink-2);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;z-index:1;}
 .case-card .cc-del:hover{background:var(--red);color:#fff;}
+.case-card .cc-prog{flex:1;min-width:300px;}
+.cc-prog .ptop{display:flex;align-items:baseline;gap:10px;margin-bottom:7px;}
+.cc-prog .pct{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;}
+.cc-prog .stg{font-size:12.5px;color:var(--ink-2);}
+.cc-prog .stg b{color:var(--accent);font-weight:600;}
+.cc-prog .segs{display:flex;gap:4px;}
+.cc-prog .segs span{flex:1;height:9px;border-radius:4px;background:var(--line-2);transition:background .2s;}
+.cc-prog .segs span.doing{background:var(--orange);}
+.cc-prog .segs span.done{background:var(--green);}
+.cc-prog .seglbl{display:flex;justify-content:space-between;margin-top:5px;font-size:9.5px;color:var(--ink-2);}
+.cc-prog .nodata{font-size:12px;color:var(--ink-2);}
+/* per-asset evaluation sub-list in progress timeline */
+.eval-sub{margin-top:12px;border-top:1px dashed var(--line);padding-top:10px;}
+.eval-sub .es-title{font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:8px;}
+.eval-cat{font-size:11.5px;font-weight:700;color:var(--ink-2);margin:8px 0 4px;}
+.eval-row{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);}
+.eval-row:last-child{border-bottom:none;}
+.eval-row .en{flex:1;font-size:13px;}
+.eval-row .ev{font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums;min-width:110px;text-align:right;}
+.eval-row .est{font-size:11px;font-weight:600;padding:3px 10px;border-radius:980px;cursor:pointer;border:1px solid var(--line-2);background:#fff;color:var(--ink-2);min-width:64px;text-align:center;}
+.eval-row .est.doing{background:#fff4e5;color:#b25e00;border-color:#ffd9a8;}
+.eval-row .est.done{background:#e7f8ec;color:#1a7f37;border-color:#aee5bf;}
 .empty-state{text-align:center;padding:60px 20px;color:var(--ink-2);}
 .empty-state .em-ico{font-size:46px;margin-bottom:12px;}
 
@@ -880,9 +903,10 @@ async function driveFetch(url, opts){
   return r;
 }
 // Create or update a JSON file in the folder
-async function driveSaveJson(name, jsonStr, fileId){
+async function driveSaveJson(name, jsonStr, fileId, appProps){
   const boundary='-------souzoku'+Date.now();
   const meta = fileId ? {} : { name:name, mimeType:'application/json', parents: settings.folderId?[settings.folderId]:undefined };
+  if(appProps) meta.appProperties=appProps;
   const body =
     '--'+boundary+'\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n'+JSON.stringify(meta)+
     '\r\n--'+boundary+'\r\nContent-Type: application/json\r\n\r\n'+jsonStr+
@@ -895,7 +919,7 @@ async function driveSaveJson(name, jsonStr, fileId){
 async function driveListCases(){
   if(!settings.folderId) throw new Error('保存先フォルダが未設定です');
   const q=encodeURIComponent("'"+settings.folderId+"' in parents and trashed=false and mimeType='application/json'");
-  const url='https://www.googleapis.com/drive/v3/files?q='+q+'&orderBy=modifiedTime desc&pageSize=200&fields=files(id,name,modifiedTime)&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives';
+  const url='https://www.googleapis.com/drive/v3/files?q='+q+'&orderBy=modifiedTime desc&pageSize=200&fields=files(id,name,modifiedTime,appProperties)&supportsAllDrives=true&includeItemsFromAllDrives=true&corpora=allDrives';
   const r=await driveFetch(url); return (await r.json()).files||[];
 }
 async function driveDownloadJson(fileId){
@@ -948,32 +972,73 @@ const PROGRESS_STAGES=[
 function progState(key){ if(!currentCase.progress[key]) currentCase.progress[key]={status:'todo',due:'',done:'',memo:''}; return currentCase.progress[key]; }
 function cycleProg(key){ const s=progState(key); s.status=(s.status==='todo')?'doing':(s.status==='doing'?'done':'todo'); if(s.status==='done'&&!s.done) s.done=todayISO(); if(s.status!=='done') s.done=''; renderProgress(); cacheCurrentCase(); }
 function updProg(key,field,val){ progState(key)[field]=val; if(field==='done'&&val){ const s=progState(key); if(s.status!=='done'){ s.status='done'; renderProgress(); } } cacheCurrentCase(); }
+// 財産評価は各財産ごとに進捗管理（assetEval: assetId -> status）
+function assetEvalState(c,id){ if(!c.progress.assetEval) c.progress.assetEval={}; if(!c.progress.assetEval[id]) c.progress.assetEval[id]='todo'; return c.progress.assetEval[id]; }
+function cycleAssetEval(id){ const s=assetEvalState(currentCase,id); currentCase.progress.assetEval[id]=(s==='todo')?'doing':(s==='doing'?'done':'todo'); renderProgress(); cacheCurrentCase(); }
+// ある工程の実効ステータス（財産評価は各財産の評価状況から導出）
+function stageStatus(c, key){
+  if(key==='valuation'){
+    const assets=(c.assets||[]).filter(a=>a.category!=='gift');
+    if(assets.length){ const ev=(c.progress&&c.progress.assetEval)||{}; let d=0,doing=0; assets.forEach(a=>{ const s=ev[a.id]||'todo'; if(s==='done')d++; else if(s==='doing')doing++; }); return d===assets.length?'done':((d>0||doing>0)?'doing':'todo'); }
+  }
+  return ((c.progress||{})[key]||{}).status||'todo';
+}
+function progressSummary(c){
+  let codes='',done=0;
+  PROGRESS_STAGES.forEach(st=>{ const s=stageStatus(c,st.key); codes+=(s==='done'?'2':s==='doing'?'1':'0'); if(s==='done')done++; });
+  const pct=Math.round(done/PROGRESS_STAGES.length*100);
+  const cur=PROGRESS_STAGES.find(st=>stageStatus(c,st.key)!=='done');
+  return {pct,done,total:PROGRESS_STAGES.length,codes,stage:cur?cur.name:'完了'};
+}
 function renderProgress(){
   if(!currentCase) return; const c=$('progressContainer'); if(!c) return;
-  const done=PROGRESS_STAGES.filter(s=>progState(s.key).status==='done').length;
-  const pct=Math.round(done/PROGRESS_STAGES.length*100);
   const STAT={todo:['未着手',''],doing:['進行中','doing'],done:['完了','done']};
-  let head='<div class="prog-head"><div class="prog-ring" style="--p:'+pct+'"><div class="inner"><div class="pct">'+pct+'%</div><div class="lbl">完了</div></div></div>'
-    +'<div class="meta"><div class="t">'+done+' / '+PROGRESS_STAGES.length+' 工程が完了</div>'
-    +'<div class="d">各工程の状態をクリックで「未着手→進行中→完了」と切り替えできます。予定日・完了日・メモを記録できます。</div></div></div>';
+  const sum=progressSummary(currentCase);
+  let head='<div class="prog-head"><div class="prog-ring" style="--p:'+sum.pct+'"><div class="inner"><div class="pct">'+sum.pct+'%</div><div class="lbl">完了</div></div></div>'
+    +'<div class="meta"><div class="t">'+sum.done+' / '+sum.total+' 工程が完了</div>'
+    +'<div class="d">各工程の状態をクリックで「未着手→進行中→完了」と切り替えできます。財産評価は各財産ごとに管理します。</div></div></div>';
   let tl='<div class="timeline">';
   PROGRESS_STAGES.forEach((st,i)=>{
-    const s=progState(st.key); const sc=STAT[s.status][1]; const isDone=s.status==='done';
+    const eff=stageStatus(currentCase,st.key); const sc=STAT[eff][1]; const isDone=eff==='done';
+    const s=progState(st.key);
+    const isVal=st.key==='valuation';
+    const hasAssets=isVal && (currentCase.assets||[]).filter(a=>a.category!=='gift').length>0;
     const mark=isDone?'✓':(i+1);
+    const dotClick=hasAssets?'':' onclick="cycleProg(\''+st.key+'\')"';
     tl+='<div class="tl-item">'
-      +'<div class="tl-rail"><div class="tl-dot '+sc+'" onclick="cycleProg(\''+st.key+'\')" title="クリックで状態切替">'+mark+'</div><div class="tl-line"></div></div>'
+      +'<div class="tl-rail"><div class="tl-dot '+sc+'"'+dotClick+' title="'+(hasAssets?'各財産の評価状況から自動判定':'クリックで状態切替')+'">'+mark+'</div><div class="tl-line"></div></div>'
       +'<div class="tl-body '+(isDone?'done':'')+'">'
       +'<div class="tl-top"><span class="tl-name '+(isDone?'done':'')+'">'+st.name+'</span>'
-      +'<span class="tl-status '+sc+'" onclick="cycleProg(\''+st.key+'\')">'+STAT[s.status][0]+'</span>'
+      +'<span class="tl-status '+sc+'"'+dotClick+'>'+STAT[eff][0]+'</span>'
       +'<span class="muted" style="font-size:12px;margin-left:auto;">'+esc(st.desc)+'</span></div>'
       +'<div class="tl-fields">'
       +'<div><label>予定日</label><input type="date" value="'+esc(s.due||'')+'" oninput="updProg(\''+st.key+'\',\'due\',this.value)"></div>'
-      +'<div><label>完了日</label><input type="date" value="'+esc(s.done||'')+'" oninput="updProg(\''+st.key+'\',\'done\',this.value)"></div>'
+      +'<div><label>完了日</label><input type="date" value="'+esc(s.done||'')+'" '+(hasAssets?'readonly style="background:var(--surface-2)"':'oninput="updProg(\''+st.key+'\',\'done\',this.value)"')+'></div>'
       +'<div><label>メモ・担当</label><input type="text" value="'+esc(s.memo||'')+'" placeholder="担当者・特記事項" oninput="updProg(\''+st.key+'\',\'memo\',this.value)"></div>'
-      +'</div></div></div>';
+      +'</div>'
+      +(isVal? evalSubHtml():'')
+      +'</div></div>';
   });
   tl+='</div>';
   c.innerHTML=head+tl;
+}
+function evalSubHtml(){
+  const STAT={todo:['未評価',''],doing:['評価中','doing'],done:['完了','done']};
+  const assets=(currentCase.assets||[]).filter(a=>a.category!=='gift');
+  if(!assets.length) return '<div class="eval-sub"><div class="es-title">財産評価（財産ごと）</div><div class="muted" style="font-size:12px;">「財産一覧」で財産を登録すると、ここに財産ごとの評価進捗が表示されます。</div></div>';
+  let html='<div class="eval-sub"><div class="es-title">財産評価（財産ごと）</div>';
+  ASSET_TYPES.forEach(t=>{
+    const items=assets.filter(a=>a.category===t.key); if(!items.length) return;
+    html+='<div class="eval-cat">'+t.icon+' '+t.name+'</div>';
+    items.forEach(a=>{
+      const label=[a.subcategory,a.name,a.location].filter(Boolean).join('／')||t.name;
+      const s=assetEvalState(currentCase,a.id); const sc=STAT[s][1];
+      html+='<div class="eval-row"><span class="en">'+esc(label)+'</span><span class="ev">'+(t.sign<0?'−':'')+yen(assetVal(a))+'</span>'
+        +'<span class="est '+sc+'" onclick="cycleAssetEval(\''+a.id+'\')">'+STAT[s][0]+'</span></div>';
+    });
+  });
+  html+='</div>';
+  return html;
 }
 function newHeir(){ return { id:uid(), name:'', kana:'', relationType:'child', isAdopted:false, adoptedAsReal:false, isDaishu:false, daishuGroup:'', isRenounced:false, address:'', tel:'', job:'', birth:'', age:'', disabled:false, disabilityType:'general', surcharge:false, surchargeManual:false, isRepresentative:false, hideFromContract:false }; }
 function ageAt(birth, ref){ if(!birth||!ref) return ''; const b=new Date(birth), r=new Date(ref); if(isNaN(b)||isNaN(r)) return ''; let a=r.getFullYear()-b.getFullYear(); const m=r.getMonth()-b.getMonth(); if(m<0||(m===0&&r.getDate()<b.getDate())) a--; return a<0?'':a; }
@@ -1052,12 +1117,24 @@ function renderCasesList(){
 function caseCardHtml(f, isActive){
   const nm=f.name? f.name.replace(FILE_PREFIX,'').replace(/\.json$/,'') : '無題';
   const meta=f.modifiedTime? '最終更新: '+new Date(f.modifiedTime).toLocaleString('ja-JP') : '未保存';
+  // 進捗：作業中の案件は最新値、その他はDriveのappPropertiesから
+  let sum=null;
+  if(isActive && currentCase){ sum=progressSummary(currentCase); }
+  else if(f.appProperties && f.appProperties.pstat){ const codes=f.appProperties.pstat; let done=(codes.match(/2/g)||[]).length; sum={pct:Math.round(done/PROGRESS_STAGES.length*100),done,total:PROGRESS_STAGES.length,codes,stage:f.appProperties.stage||''}; }
   return '<div class="case-card'+(isActive?' active-case':'')+'" onclick="openCase(\''+(f.id||'')+'\')">'
     +(f.id?'<button class="cc-del" onclick="event.stopPropagation();deleteCase(\''+f.id+'\',\''+esc(nm)+'\')">×</button>':'')
-    +'<div class="cc-name">'+esc(nm)+'</div>'
-    +'<div class="cc-meta">'+esc(meta)+'</div>'
-    +(isActive?'<span class="cc-badge">作業中</span>':'')
+    +'<div class="cc-left"><div class="cc-name">'+esc(nm)+'</div><div class="cc-meta">'+esc(meta)+'</div>'
+    +(isActive?'<span class="cc-badge">作業中</span>':'')+'</div>'
+    +'<div class="cc-prog">'+miniProgHtml(sum)+'</div>'
     +'</div>';
+}
+function miniProgHtml(sum){
+  if(!sum){ return '<div class="nodata">進捗データなし（開いて保存すると表示されます）</div>'; }
+  const codes=sum.codes||'0000000000';
+  let segs=''; for(let i=0;i<PROGRESS_STAGES.length;i++){ const ch=codes[i]||'0'; segs+='<span class="'+(ch==='2'?'done':ch==='1'?'doing':'')+'" title="'+esc(PROGRESS_STAGES[i].name)+'"></span>'; }
+  return '<div class="ptop"><span class="pct">'+sum.pct+'%</span><span class="stg">'+sum.done+'/'+sum.total+' 完了 ・ 現在: <b>'+esc(sum.stage||'—')+'</b></span></div>'
+    +'<div class="segs">'+segs+'</div>'
+    +'<div class="seglbl"><span>初回面談</span><span>製本・納品</span></div>';
 }
 function openNewCaseModal(){ $('nc_name').value=''; openModal('newCaseModal'); setTimeout(()=>$('nc_name').focus(),100); }
 function createCase(){
@@ -1158,7 +1235,9 @@ async function saveCurrentCase(){
     try{
       const name=FILE_PREFIX+currentCase.deceased.name+'.json';
       const json=JSON.stringify(currentCase,null,2);
-      const res=await driveSaveJson(name, json, currentFileId);
+      const sum=progressSummary(currentCase);
+      const appProps={pct:String(sum.pct), pstat:sum.codes, stage:sum.stage};
+      const res=await driveSaveJson(name, json, currentFileId, appProps);
       if(!currentFileId){ currentFileId=res.id; }
       else { try{ await driveRename(currentFileId,name); }catch(e){} }
       toast('Driveに保存しました：'+name);
