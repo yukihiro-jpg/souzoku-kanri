@@ -697,17 +697,7 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
       <div class="card">
         <h2>株価の自動取得（有価証券）</h2>
         <div class="setting-row">
-          <div class="sr-info"><div class="t">取得方法</div><div class="d">ブラウザから外部APIを直接呼ぶとCORSで失敗するため、以下のいずれかで取得します。</div></div>
-          <div class="sr-control">
-            <select id="set_fetchMode" onchange="onFetchModeInput()">
-              <option value="stooq">Stooq（設定不要・株価のみ／配当なし）</option>
-              <option value="gas">Google Apps Script（推奨・配当も取得可）</option>
-              <option value="proxy">公開CORSプロキシ（簡易・不安定）</option>
-            </select>
-          </div>
-        </div>
-        <div class="setting-row" id="row_gas" style="display:none;">
-          <div class="sr-info"><div class="t">Apps Script ウェブアプリURL</div><div class="d">下のコードをGoogle Apps Scriptに貼り付け、「デプロイ→新しいデプロイ→ウェブアプリ（アクセス：全員）」で発行した /exec のURLを入力してください。配当データも取得できます。</div></div>
+          <div class="sr-info"><div class="t">Apps Script ウェブアプリURL</div><div class="d">下のコードをGoogle Apps Scriptに貼り付け、「デプロイ→新しいデプロイ→ウェブアプリ（アクセス：全員）」で発行した /exec のURLを入力してください。Yahoo!ファイナンスから株価4時点と配当を取得します。</div></div>
           <div class="sr-control">
             <input type="text" id="set_gasUrl" placeholder="https://script.google.com/macros/s/XXXX/exec" oninput="onGasUrlInput()">
             <div class="muted" style="font-size:12px;margin-top:8px;">Apps Script に貼り付けるコード：</div>
@@ -718,16 +708,9 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
   return ContentService.createTextOutput(res.getContentText())
     .setMimeType(ContentService.MimeType.JSON);
 }</pre>
+            <div class="muted" style="font-size:12px;margin-top:4px;">※ 自動取得が不調なときは4時点の価格・配当を手入力できます。</div>
           </div>
         </div>
-        <div class="setting-row" id="row_proxy" style="display:none;">
-          <div class="sr-info"><div class="t">CORSプロキシURL</div><div class="d">URLの末尾に取得先URLを連結して呼び出します。公開プロキシは混雑・仕様変更で失敗することがあります。</div></div>
-          <div class="sr-control">
-            <input type="text" id="set_corsProxy" placeholder="https://api.allorigins.win/raw?url=" oninput="onProxyInput()">
-            <div class="muted" style="font-size:12px;margin-top:6px;">※ 取得した銘柄コードはこのプロキシ事業者を経由します。</div>
-          </div>
-        </div>
-        <div class="muted" style="font-size:12px;margin-top:4px;">いずれの方法でも、自動取得が不調なときは4時点の価格・配当を手入力できます。Stooqは日本株を「7203.jp」形式で取得し、配当は取得しないため未収配当金等は手入力してください。</div>
       </div>
 
       <div class="card">
@@ -793,8 +776,7 @@ const LS_SETTINGS = 'souzoku_settings_v1';
 const LS_CASE_CACHE = 'souzoku_case_cache_v1';
 
 // ---------- App state ----------
-const DEFAULT_PROXY='https://api.allorigins.win/raw?url=';
-let settings = { folderUrl:'', folderId:'', clientId:DEFAULT_CLIENT_ID, corsProxy:DEFAULT_PROXY, fetchMode:'stooq', gasUrl:'' };
+let settings = { folderUrl:'', folderId:'', clientId:DEFAULT_CLIENT_ID, gasUrl:'' };
 let currentCase = null;       // the active case object
 let currentFileId = null;     // Drive file id of active case
 let accessToken = null;
@@ -957,20 +939,12 @@ function toWareki(val){
 function loadSettings(){
   try{ const s=JSON.parse(localStorage.getItem(LS_SETTINGS)); if(s) settings=Object.assign(settings,s); }catch(e){}
   if(!settings.clientId) settings.clientId=DEFAULT_CLIENT_ID;
-  if(settings.corsProxy===undefined) settings.corsProxy=DEFAULT_PROXY;
-  if(!settings.fetchMode) settings.fetchMode='stooq';
   $('set_folderUrl').value=settings.folderUrl||'';
   $('set_clientId').value=settings.clientId||'';
-  if($('set_corsProxy')) $('set_corsProxy').value=settings.corsProxy||'';
-  if($('set_fetchMode')) $('set_fetchMode').value=settings.fetchMode;
   if($('set_gasUrl')) $('set_gasUrl').value=settings.gasUrl||'';
-  if(typeof updateFetchModeUI==='function') updateFetchModeUI();
   updateFolderStatus();
 }
-function onProxyInput(){ settings.corsProxy=$('set_corsProxy').value.trim(); saveSettings(); }
-function onFetchModeInput(){ settings.fetchMode=$('set_fetchMode').value; saveSettings(); updateFetchModeUI(); }
 function onGasUrlInput(){ settings.gasUrl=$('set_gasUrl').value.trim(); saveSettings(); }
-function updateFetchModeUI(){ const m=settings.fetchMode; const g=$('row_gas'), p=$('row_proxy'); if(g) g.style.display=(m==='gas')?'':'none'; if(p) p.style.display=(m==='proxy')?'':'none'; }
 function saveSettings(){ localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); }
 function extractFolderId(url){
   if(!url) return '';
@@ -1788,27 +1762,13 @@ function securitiesTableHtml(items){
     +'</tr></thead><tbody>'+rows+'</tbody>'
     +'<tfoot><tr><td colspan="16" style="text-align:right;">計（株式＋配当）</td><td class="num" id="foot-securities">'+yen(sub)+'</td><td colspan="2"></td></tr></tfoot></table></div>';
 }
-// 株価データ取得（取得方法：Stooq＝プロキシ不要/Google Apps Script/公開プロキシ）
+// 株価データ取得（Google Apps Script ウェブアプリ経由でYahoo!ファイナンスを取得）
 // 返り値を {ts:[unix], close:[number], name, dividends:[{date,amount}]} に正規化
 async function fetchChart(symbol, period1, period2){
-  const mode=settings.fetchMode||'stooq';
-  if(mode==='stooq'){
-    const sym=symbol.replace(/\.T$/i,'.jp');
-    const fmt=sec=>{const x=new Date(sec*1000);return ''+x.getFullYear()+String(x.getMonth()+1).padStart(2,'0')+String(x.getDate()).padStart(2,'0');};
-    const u='https://stooq.com/q/d/l/?s='+encodeURIComponent(sym)+'&d1='+fmt(period1)+'&d2='+fmt(period2)+'&i=d';
-    const r=await fetch(u); if(!r.ok) throw new Error('Stooq HTTP '+r.status);
-    const txt=await r.text();
-    if(txt.indexOf('Date')<0||/No data|N\/D|<html/i.test(txt)) throw new Error('Stooqにデータがありません（銘柄コードをご確認ください。例:7203）');
-    const lines=txt.trim().split(/\r?\n/); const ts=[],close=[];
-    for(let i=1;i<lines.length;i++){ const c=lines[i].split(','); if(c.length<5) continue; const t=Math.floor(new Date(c[0]+'T12:00:00').getTime()/1000); const cl=parseFloat(c[4]); if(!isNaN(t)&&!isNaN(cl)){ ts.push(t); close.push(cl); } }
-    if(!ts.length) throw new Error('Stooqの価格データを取得できませんでした');
-    return {ts,close,name:'',dividends:[]};
-  }
+  if(!settings.gasUrl) throw new Error('設定でApps ScriptのURLを入力してください');
   const api='https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(symbol)
     +'?period1='+period1+'&period2='+period2+'&interval=1d&events=div';
-  let url;
-  if(mode==='gas'){ if(!settings.gasUrl) throw new Error('設定でApps ScriptのURLを入力してください'); url=settings.gasUrl+(settings.gasUrl.indexOf('?')<0?'?':'&')+'url='+encodeURIComponent(api); }
-  else { const proxy=(settings.corsProxy||'').trim(); url=proxy? proxy+encodeURIComponent(api):api; }
+  const url=settings.gasUrl+(settings.gasUrl.indexOf('?')<0?'?':'&')+'url='+encodeURIComponent(api);
   const r=await fetch(url); if(!r.ok) throw new Error('HTTP '+r.status);
   const j=await r.json();
   const res=j&&j.chart&&j.chart.result&&j.chart.result[0];
@@ -1855,8 +1815,7 @@ async function autoFetchStock(id){
       const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
       a.divBase=iso(baseD); a.divEffective=iso(effD); a.divPerShare=String(Math.round(cand.amount*100)/100); if(!a.divRate) a.divRate='20.315';
       const di=divInfo(a); divMsg = di.kind!=='なし'? '／'+di.kind+' '+yen(di.net):'／配当：対象外';
-    } else if(settings.fetchMode==='stooq'){ divMsg='／配当はStooqでは取得不可（手入力してください）'; }
-    else { a.divBase=''; a.divEffective=''; a.divPerShare=''; divMsg='／該当する未収配当金・配当期待権なし'; }
+    } else { a.divBase=''; a.divEffective=''; a.divPerShare=''; divMsg='／該当する未収配当金・配当期待権なし'; }
     renderAssetDetail(); renderAssetNav(); renderSummary(); cacheCurrentCase();
     toast('取得しました：'+(a.name||symbol)+'（採用単価 ¥'+secUnit(a).toLocaleString('ja-JP')+'）'+divMsg);
   }catch(e){
