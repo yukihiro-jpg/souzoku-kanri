@@ -1522,17 +1522,34 @@ const MANUAL_VAL=['cash','insurance','retirement','debt','funeral']; // 価額�
 const HAS_CALC=['land','building','securities','unlisted','other','gift'];   // 自動計算（計算チェック）あり
 function newAsset(cat){
   return {id:uid(),category:cat,subcategory:'',name:'',location:'',riyou:'',quantity:'',evalMethod:'rosen',unitPrice:'',koteiValue:'',baisu:'',ownNum:'1',ownDen:'1',adjust:'1.00',autoCalc:true,value:'',evalWay:'',companyType:'',branch:'',nominee:'',accountNo:'',memo:'',kobo:{type:'none',area:''},
-    code:'',p1:'',p2:'',p3:'',p4:'',
+    code:'',p1:'',p2:'',p3:'',p4:'',divBase:'',divEffective:'',divPerShare:'',divRate:'',
     giftTax:0,is4to7:false,regime:'koyo',giftRecipient:'',giftDate:'',gKind:'',gDetail:'',autoBasic:true,allocations:[]};
 }
 function secUnit(a){ const ps=[a.p1,a.p2,a.p3,a.p4].map(num).filter(x=>x>0); return ps.length? Math.min.apply(null,ps): num(a.unitPrice); }
+// 未収配当金／配当期待権の判定・評価（財基通168・193）
+function divInfo(a){
+  const per=num(a.divPerShare), qty=num(a.quantity);
+  const dd=(currentCase&&currentCase.deceased)?currentCase.deceased.deathDate:'';
+  if(per<=0||qty<=0||!a.divBase||!dd) return {kind:'なし',gross:0,tax:0,net:0};
+  const death=new Date(dd), base=new Date(a.divBase), eff=a.divEffective? new Date(a.divEffective):null;
+  if(isNaN(death)||isNaN(base)) return {kind:'なし',gross:0,tax:0,net:0};
+  let kind;
+  if(death<=base) kind='なし';                       // 基準日以前 → 株価に反映済み
+  else if(eff && death<=eff) kind='配当期待権';        // 基準日後〜効力発生日(株主総会決議日)
+  else kind='未収配当金';                             // 効力発生日後で未受領
+  if(kind==='なし') return {kind,gross:0,tax:0,net:0};
+  const gross=Math.round(per*qty);
+  const rate=(a.divRate!==''&&a.divRate!=null)? num(a.divRate):20.315; // 上場株式の源泉徴収（所得税・復興・住民税）
+  const tax=Math.floor(gross*rate/100);
+  return {kind,gross,tax,net:gross-tax,rate};
+}
 function computeAssetValue(a){
   if(a.autoCalc===false || MANUAL_VAL.includes(a.category)) return num(a.value);
   const own=(num(a.ownNum)||1)/((num(a.ownDen)||1)||1);
   const adj=(a.adjust===''||a.adjust==null)?1:num(a.adjust);
   if(a.category==='land'){ const base=(a.evalMethod==='baisu')? num(a.koteiValue)*num(a.baisu) : num(a.unitPrice)*num(a.quantity); return Math.round(base*own*adj); }
   if(a.category==='building'){ return Math.round(num(a.koteiValue)*own*adj); }
-  if(a.category==='securities'){ return Math.round(secUnit(a)*num(a.quantity)); }
+  if(a.category==='securities'){ return Math.round(secUnit(a)*num(a.quantity))+divInfo(a).net; }
   if(a.category==='unlisted'){ return Math.round(num(a.unitPrice)*num(a.quantity)); }
   if(a.category==='gift'){ return Math.round(num(a.unitPrice)*num(a.quantity)); }
   if(a.category==='other'){ const up=num(a.unitPrice),q=num(a.quantity); return up>0? Math.round(up*q):num(a.value); }
@@ -1547,6 +1564,11 @@ function updAssetBool(id,field,checked){ const a=currentCase.assets.find(x=>x.id
 function updKobo(id,field,val){ const a=currentCase.assets.find(x=>x.id===id); if(!a) return; if(!a.kobo) a.kobo={type:'none',area:''}; a.kobo[field]=val; const k=computeKobo(); const el=$('kobored-'+id); if(el) el.textContent='減額 '+yen(k.byAsset[id]||0); renderSummary(); cacheCurrentCase(); }
 function refreshAssetRow(a){
   const vc=$('val-'+a.id); if(vc && vc.readOnly){ const v=computeAssetValue(a); vc.value=v?v.toLocaleString('ja-JP'):'0'; }
+  if(a.category==='securities'){
+    const sv=$('secval-'+a.id); if(sv){ const s=Math.round(secUnit(a)*num(a.quantity)); sv.value=s?s.toLocaleString('ja-JP'):'0'; }
+    const di=divInfo(a); const dk=$('divkind-'+a.id); if(dk) dk.textContent=di.kind;
+    const dv=$('divval-'+a.id); if(dv){ dv.value=di.net?di.net.toLocaleString('ja-JP'):'0'; dv.title='配当総額 '+yen(di.gross)+' − 源泉 '+yen(di.tax); }
+  }
   updateCatSubtotal(a.category); renderAssetNav(); renderSummary(); cacheCurrentCase();
 }
 function updateCatSubtotal(cat){ const t=ASSET_BY_KEY[cat]; const items=currentCase.assets.filter(a=>a.category===cat); const sub=items.reduce((s,a)=>s+assetVal(a),0); const el=$('catSubtotal'); if(el && cat===currentAssetCat) el.textContent=(t.sign<0?'−':'')+yen(sub); const fc=$('foot-'+cat); if(fc) fc.textContent=yen(sub); }
@@ -1702,22 +1724,26 @@ function giftTableHtml(items){
 function securitiesTableHtml(items){
   const subs=ASSET_BY_KEY['securities'].subs;
   let rows='';
-  if(!items.length) rows='<tr><td colspan="13" class="muted" style="text-align:center;padding:16px;">未登録です。「＋ 行を追加」から入力してください。</td></tr>';
+  if(!items.length) rows='<tr><td colspan="18" class="muted" style="text-align:center;padding:16px;">未登録です。「＋ 行を追加」から入力してください。</td></tr>';
   items.forEach(a=>{
-    const unit=secUnit(a); const editable=a.autoCalc===false;
+    const unit=secUnit(a); const stockVal=Math.round(unit*num(a.quantity)); const di=divInfo(a); const editable=a.autoCalc===false;
     const valCell= editable
       ? '<input type="text" class="num" id="val-'+a.id+'" value="'+(num(a.value)?num(a.value).toLocaleString('ja-JP'):'')+'" placeholder="0" oninput="updAsset(\''+a.id+'\',\'value\',this.value)" onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')">'
       : '<input type="text" readonly class="num computed" id="val-'+a.id+'" value="'+(computeAssetValue(a)?computeAssetValue(a).toLocaleString('ja-JP'):'0')+'">';
+    const m=(f,ph)=>'<td><input type="text" class="num" value="'+(num(a[f])?num(a[f]).toLocaleString('ja-JP'):'')+'" placeholder="'+ph+'" oninput="updAsset(\''+a.id+'\',\''+f+'\',this.value)" onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"></td>';
     rows+='<tr>'
-      +'<td class="rowops"><button onclick="autoFetchStock(\''+a.id+'\')" title="銘柄コードから銘柄名と4時点株価を自動取得" style="background:#0071e3;color:#fff;">自動算出</button></td>'
+      +'<td class="rowops"><button onclick="autoFetchStock(\''+a.id+'\')" title="銘柄コードから銘柄名・4時点株価・配当を自動取得" style="background:#0071e3;color:#fff;">自動算出</button></td>'
       +'<td><select onchange="updAsset(\''+a.id+'\',\'subcategory\',this.value)"><option value="">—</option>'+subs.map(s=>'<option value="'+esc(s)+'"'+(s===a.subcategory?' selected':'')+'>'+esc(s)+'</option>').join('')+'</select></td>'
       +'<td><input type="text" value="'+esc(a.code||'')+'" placeholder="例：7203" oninput="updAsset(\''+a.id+'\',\'code\',this.value)"></td>'
       +'<td><input type="text" value="'+esc(a.name||'')+'" placeholder="銘柄名" oninput="updAsset(\''+a.id+'\',\'name\',this.value)"></td>'
-      +'<td><input type="text" class="num" value="'+(num(a.p1)?num(a.p1).toLocaleString('ja-JP'):'')+'" placeholder="終値" oninput="updAsset(\''+a.id+'\',\'p1\',this.value)" onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"></td>'
-      +'<td><input type="text" class="num" value="'+(num(a.p2)?num(a.p2).toLocaleString('ja-JP'):'')+'" placeholder="月平均" oninput="updAsset(\''+a.id+'\',\'p2\',this.value)" onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"></td>'
-      +'<td><input type="text" class="num" value="'+(num(a.p3)?num(a.p3).toLocaleString('ja-JP'):'')+'" placeholder="月平均" oninput="updAsset(\''+a.id+'\',\'p3\',this.value)" onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"></td>'
-      +'<td><input type="text" class="num" value="'+(num(a.p4)?num(a.p4).toLocaleString('ja-JP'):'')+'" placeholder="月平均" oninput="updAsset(\''+a.id+'\',\'p4\',this.value)" onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"></td>'
+      +m('p1','終値')+m('p2','月平均')+m('p3','月平均')+m('p4','月平均')
       +'<td><input type="text" class="num" value="'+esc(a.quantity||'')+'" placeholder="株/口" oninput="updAsset(\''+a.id+'\',\'quantity\',this.value)"></td>'
+      +'<td><input type="text" readonly class="num computed" id="secval-'+a.id+'" value="'+(stockVal?stockVal.toLocaleString('ja-JP'):'0')+'"></td>'
+      +'<td><input type="date" value="'+esc(a.divBase||'')+'" oninput="updAsset(\''+a.id+'\',\'divBase\',this.value)"></td>'
+      +'<td><input type="date" value="'+esc(a.divEffective||'')+'" oninput="updAsset(\''+a.id+'\',\'divEffective\',this.value)"></td>'
+      +m('divPerShare','1株配当')
+      +'<td style="text-align:center;font-size:11px;"><span id="divkind-'+a.id+'">'+di.kind+'</span></td>'
+      +'<td><input type="text" readonly class="num computed" id="divval-'+a.id+'" value="'+(di.net?di.net.toLocaleString('ja-JP'):'0')+'" title="配当総額 '+yen(di.gross)+' − 源泉 '+yen(di.tax)+'"></td>'
       +'<td class="chk-cell"><input type="checkbox" '+(a.autoCalc!==false?'checked':'')+' onchange="updAssetBool(\''+a.id+'\',\'autoCalc\',this.checked)"></td>'
       +'<td>'+valCell+'<div class="muted" style="font-size:10px;text-align:right;">採用単価 '+(unit?'¥'+unit.toLocaleString('ja-JP'):'—')+'</div></td>'
       +'<td><input type="text" value="'+esc(a.memo||'')+'" oninput="updAsset(\''+a.id+'\',\'memo\',this.value)"></td>'
@@ -1725,10 +1751,10 @@ function securitiesTableHtml(items){
       +'</tr>';
   });
   const sub=items.reduce((s,a)=>s+assetVal(a),0);
-  return '<div class="dtbl-wrap"><table class="dtbl" style="min-width:1320px;"><thead><tr>'
-    +'<th>自動</th><th>種類</th><th>銘柄コード</th><th>銘柄</th><th>①相続開始日終値</th><th>②当月平均</th><th>③前月平均</th><th>④前々月平均</th><th>株数/口数</th><th>計算</th><th>評価額(円)</th><th>注記</th><th></th>'
+  return '<div class="dtbl-wrap"><table class="dtbl" style="min-width:1860px;"><thead><tr>'
+    +'<th>自動</th><th>種類</th><th>銘柄コード</th><th>銘柄</th><th>①相続開始日終値</th><th>②当月平均</th><th>③前月平均</th><th>④前々月平均</th><th>株数/口数</th><th>株式評価額(円)</th><th>配当基準日</th><th>効力発生日<br>(株主総会決議日)</th><th>1株配当</th><th>配当区分</th><th>配当評価額<br>(源泉控除後)</th><th>計算</th><th>評価額合計(円)</th><th>注記</th><th></th>'
     +'</tr></thead><tbody>'+rows+'</tbody>'
-    +'<tfoot><tr><td colspan="10" style="text-align:right;">計</td><td class="num" id="foot-securities">'+yen(sub)+'</td><td colspan="2"></td></tr></tfoot></table></div>';
+    +'<tfoot><tr><td colspan="16" style="text-align:right;">計（株式＋配当）</td><td class="num" id="foot-securities">'+yen(sub)+'</td><td colspan="2"></td></tr></tfoot></table></div>';
 }
 // Yahoo Finance から銘柄名・4時点株価を取得（上場株式の評価：①課税時期の終値、②当月・③前月・④前々月の終値の月平均）
 async function autoFetchStock(id){
@@ -1742,8 +1768,10 @@ async function autoFetchStock(id){
   const death=new Date(dd);
   const start=new Date(death.getFullYear(), death.getMonth()-2, 1);
   const end=new Date(death.getFullYear(), death.getMonth()+1, 1);
+  // 配当判定のため過去1年強もカバーし、配当イベント(events=div)も取得
+  const divStart=new Date(death.getFullYear()-1, death.getMonth()-1, 1);
   const api='https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(symbol)
-    +'?period1='+Math.floor(start.getTime()/1000)+'&period2='+Math.floor(end.getTime()/1000)+'&interval=1d';
+    +'?period1='+Math.floor(divStart.getTime()/1000)+'&period2='+Math.floor(end.getTime()/1000)+'&interval=1d&events=div';
   const proxy=(settings.corsProxy||'').trim();
   const url=proxy? proxy+encodeURIComponent(api) : api;
   toast('株価を取得中…');
@@ -1767,8 +1795,21 @@ async function autoFetchStock(id){
     a.p2= monthly[cur]? String(Math.round(avg(monthly[cur]))):'';
     a.p3= monthly[prev]? String(Math.round(avg(monthly[prev]))):'';
     a.p4= monthly[prev2]? String(Math.round(avg(monthly[prev2]))):'';
+    // 配当：相続開始日以前で最も近い基準日(目安：配当落ち日)を持つ配当を抽出。受領済みと思われる古い配当(基準日が200日超前)は対象外。
+    let divMsg='';
+    const divs=res.events&&res.events.dividends? Object.values(res.events.dividends):[];
+    let cand=null;
+    divs.forEach(dv=>{ if(dv&&dv.date!=null && dv.date<=deathDayEnd && (deathTs<0||deathTs-dv.date<=200*86400)){ if(!cand||dv.date>cand.date) cand=dv; } });
+    if(cand){
+      const exd=new Date(cand.date*1000);
+      const baseD=new Date(exd.getFullYear(),exd.getMonth(),exd.getDate()+1); // 基準日(目安)=配当落ち日の翌営業日近似
+      const effD=new Date(baseD.getFullYear(),baseD.getMonth()+3,Math.min(baseD.getDate(),28)); // 効力発生日(目安)=基準日+3ヶ月(定時株主総会)
+      const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      a.divBase=iso(baseD); a.divEffective=iso(effD); a.divPerShare=String(Math.round(cand.amount*100)/100); if(!a.divRate) a.divRate='20.315';
+      const di=divInfo(a); divMsg = di.kind!=='なし'? '／'+di.kind+' '+yen(di.net)+'（1株配当¥'+a.divPerShare+'）' : '／配当：基準日が相続開始日以前のため対象外';
+    } else { a.divBase=''; a.divEffective=''; a.divPerShare=''; divMsg='／該当する未収配当金・配当期待権なし'; }
     renderAssetDetail(); renderAssetNav(); renderSummary(); cacheCurrentCase();
-    toast('取得しました：'+(a.name||symbol)+'（採用単価 ¥'+secUnit(a).toLocaleString('ja-JP')+'）');
+    toast('取得しました：'+(a.name||symbol)+'（採用単価 ¥'+secUnit(a).toLocaleString('ja-JP')+'）'+divMsg);
   }catch(e){
     console.error(e);
     toast('株価の自動取得に失敗しました：'+e.message+' ／ 設定のCORSプロキシをご確認ください（手入力も可能です）', true);
@@ -1778,7 +1819,7 @@ function detailNote(cat){
   const notes={
     land:'価額 ＝（路線価方式：㎡単価×面積／倍率方式：固定資産税評価額×倍率）×所有権割合×調整。小規模宅地等の特例は区分と適用面積を入力すると減額を自動計算します（端数四捨五入）。',
     building:'価額 ＝ 固定資産税評価額 × 所有権割合 × 調整（四捨五入）。価額を直接入力する場合は「計算」のチェックを外してください。',
-    securities:'上場株式の評価額 ＝ ①相続開始日の終値、②当月・③前月・④前々月の終値の月平均額 のうち最も低い価額（採用単価）× 株数。銘柄コードを入力し「自動算出」を押すと、銘柄名と4時点の株価をYahoo!ファイナンスから取得して自動計算します（要：設定のCORSプロキシ）。手入力も可能です。',
+    securities:'上場株式の評価額 ＝ ①相続開始日の終値、②当月・③前月・④前々月の終値の月平均額 のうち最も低い価額（採用単価）× 株数。「自動算出」で銘柄名・4時点株価・配当をYahoo!ファイナンスから取得します（要：設定のCORSプロキシ）。配当：相続開始日が配当基準日より後で効力発生日(株主総会決議日)までなら「配当期待権」、効力発生日後で未受領なら「未収配当金」と判定し、配当総額(1株配当×株数)から源泉所得税(20.315%)を控除した差引額を評価額合計に加算します。配当の基準日・効力発生日は目安を自動設定するため、必要に応じて手修正してください。',
     unlisted:'非上場株式は類似業種比準・純資産価額方式等で1株単価を算定し、単価×株数で価額を計算します。',
     cash:'相続開始日時点の残高を入力します。現金は「種類」で現金を選択してください。',
     insurance:'死亡保険金（みなし相続財産）。受取金額を入力します。非課税限度（500万円×法定相続人数）は試算で自動控除します。',
