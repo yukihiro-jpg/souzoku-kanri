@@ -1858,7 +1858,7 @@ function calcTax(){
   Object.keys(seisanGroup).forEach(k=>{ const g=seisanGroup[k]; ph[g.hid].giftSeisan+=Math.max(0,g.sum-(g.basic?1100000:0)); });
   // 代償金（支払う相続人の課税価格から控除、受け取る相続人の課税価格に加算）
   (currentCase.compensations||[]).forEach(cm=>{ const amt=num(cm.amount); if(cm.from&&ph[cm.from]) ph[cm.from].comp-=amt; if(cm.to&&ph[cm.to]) ph[cm.to].comp+=amt; });
-  // 各人の課税価格
+  // 各人の課税価格（相法13・第1表の計算順）
   let totalTaxable=0;
   heirs.forEach(h=>{
     const p=ph[h.id];
@@ -1866,8 +1866,13 @@ function calcTax(){
     const insEx=insTotal>0? insExemptTotal*(p.ins/insTotal):0;
     const retEx=retTotal>0? retExemptTotal*(p.ret/retTotal):0;
     p.insEx=insEx; p.retEx=retEx;
-    let v=(p.acquired-p.kobo)+Math.max(0,p.ins-insEx)+Math.max(0,p.ret-retEx)+p.giftKeiAdd+p.giftSeisan+p.comp-p.debt;
-    if(v<0) v=0;
+    // 純資産価額 ＝ 取得財産（小規模宅地減額後）＋みなし（非課税控除後）＋相続時精算課税財産＋代償金 −債務・葬式費用。
+    // マイナス（債務超過）のときは0とし、控除しきれない債務は他の相続人へ影響させない（相法13、申告書第1表④）。
+    let rawNet=(p.acquired-p.kobo)+Math.max(0,p.ins-insEx)+Math.max(0,p.ret-retEx)+p.giftSeisan+p.comp-p.debt;
+    let netAsset=rawNet<0?0:rawNet;
+    p.netAsset=netAsset; p.netDeficit=netAsset-rawNet; // 切り捨てられた債務超過額（正の値）
+    // 課税価格 ＝ 純資産価額(0未満は0) ＋ 暦年課税分の生前贈与加算（純資産が0でも加算する：第1表⑤⑥）。
+    let v=netAsset+p.giftKeiAdd;
     p.taxable=v; p.taxableR=Math.floor(v/1000)*1000;
     totalTaxable+=p.taxableR;
   });
@@ -2089,7 +2094,14 @@ function renderSimulation(){
   currentCase.heirs.forEach(h=>{ const p=r.ph[h.id]; if(p.detail&&p.detail.length){
     cd+='<div style="margin-bottom:8px;"><b>'+esc(h.name||'(無名)')+'</b>：'+p.detail.map(d=>d.k+' '+yen(Math.round(d.v))).join('、')+'</div>'; } });
   $('simCredits').innerHTML=cd||'<div class="muted">適用される税額控除はありません。</div>';
-  $('simDisclaimer').innerHTML='※ 法定相続人の数は養子の数の制限・相続放棄を放棄なかったものとして算入し、代襲相続（株分け）を反映しています。配偶者の税額軽減（1.6億円／法定相続分の上限調整）・未成年者控除・障害者控除（引ききれない額は扶養義務者へ移転）・贈与税額控除（暦年／精算課税）・相次相続控除・小規模宅地等の特例を反映します。'
+  // 債務超過（控除しきれない債務）の注意
+  const deficits=currentCase.heirs.filter(h=>(r.ph[h.id].netDeficit||0)>0);
+  if(deficits.length){
+    const lst=deficits.map(h=>esc(h.name||'(無名)')+'：'+yen(Math.round(r.ph[h.id].netDeficit))).join('、');
+    $('simCredits').innerHTML+='<div class="disclaimer" style="margin-top:10px;">控除しきれない債務・葬式費用（純資産価額がマイナスのため切り捨て、他の相続人には影響しません）：'+lst+'。このため、全体では債務超過でも相続税が発生する場合があります。</div>';
+  }
+  $('simDisclaimer').innerHTML='※ 各人の課税価格は、まず純資産価額（取得財産＋みなし財産−非課税−債務・葬式費用＋相続時精算課税財産±代償金）を求め、マイナスのときは0（控除しきれない債務は他の相続人に及びません）とした上で、暦年課税分の生前贈与加算を加えて算出しています（相続税法13条・申告書第1表）。'
+    +'法定相続人の数は養子の数の制限・相続放棄を放棄なかったものとして算入し、代襲相続（株分け）を反映。配偶者の税額軽減（1.6億円／法定相続分の上限調整）・未成年者控除・障害者控除（引ききれない額は扶養義務者へ移転）・贈与税額控除（暦年／精算課税）・相次相続控除・小規模宅地等の特例を反映します。'
     +'納税猶予、外国税額控除、半血兄弟姉妹の相続分調整、小規模宅地の限度面積の最適自動選択、特定の特例要件判定は対象外です。最終的な申告は必ず税理士がご確認ください。';
 }
 function simStep(no,t,v,sub){ return '<div class="sim-step"><div class="no">'+no+'</div><div class="body"><div class="t">'+t+'</div><div class="v">'+v+'</div><div class="sub">'+sub+'</div></div></div>'; }
