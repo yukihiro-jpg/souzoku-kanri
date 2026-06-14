@@ -51,7 +51,8 @@ input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink);}
 .nav-item:hover{background:rgba(0,0,0,.04);}
 .nav-item.active{background:var(--accent);color:#fff;}
 .nav-item.active .nav-ico{opacity:1;}
-.nav-ico{width:22px;text-align:center;font-size:16px;opacity:.85;flex-shrink:0;}
+.nav-ico{width:22px;text-align:center;font-size:16px;opacity:.85;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+.nav-ico svg{width:18px;height:18px;display:block;}
 .nav-item .step-no{position:absolute;right:10px;font-size:11px;opacity:.5;font-weight:600;}
 .nav-item.disabled{opacity:.4;pointer-events:none;}
 .sidebar-foot{margin-top:auto;padding:12px 10px 4px;font-size:11px;color:var(--ink-2);}
@@ -292,6 +293,7 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 .cat-switch{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;}
 .cat-pill{border:1px solid var(--line-2);background:#fff;border-radius:980px;padding:6px 13px;font-size:12.5px;font-weight:600;color:var(--ink-2);cursor:pointer;}
 .cat-pill.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+.cdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle;flex-shrink:0;}
 /* allocation grid grouped by category */
 .alloc-grid{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px;}
 .alloc-grid th{position:sticky;top:0;background:var(--surface-2);font-size:11px;font-weight:600;color:var(--ink-2);padding:9px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;z-index:1;}
@@ -382,18 +384,19 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
       <button class="sb-toggle" id="sbToggle" onclick="toggleSidebar()" title="サイドバーの折り畳み">‹</button>
     </div>
     <nav class="nav" id="nav">
-      <button class="nav-item active" data-view="cases"><span class="nav-ico">🗂</span>案件一覧</button>
+      <button class="nav-item active" data-view="cases"><span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a2 2 0 0 1 2-2h3l2 2h9a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>案件一覧</button>
       <div class="nav-section">案件の作業</div>
-      <button class="nav-item needs-case" data-view="progress"><span class="nav-ico">📊</span>進捗管理</button>
-      <button class="nav-item needs-case" data-view="basic"><span class="nav-ico">📝</span>基本情報・打合せ<span class="step-no">1</span></button>
-      <button class="nav-item needs-case" data-view="checklist"><span class="nav-ico">✅</span>必要資料<span class="step-no">2</span></button>
-      <button class="nav-item needs-case" data-view="assets" id="navAssets"><span class="nav-ico">💰</span>財産一覧<span class="step-no">3</span></button>
+      <button class="nav-item needs-case" data-view="progress"><span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18M6 20v-7M12 20V5M18 20v-10"/></svg></span>進捗管理</button>
+      <button class="nav-item needs-case" data-view="basic"><span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 4h7l5 5v10a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"/><path d="M13 4v5h5M9 13h6M9 16h6"/></svg></span>基本情報・打合せ<span class="step-no">1</span></button>
+      <button class="nav-item needs-case" data-view="checklist"><span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8.5 12l2.2 2.2L16 9"/></svg></span>必要資料<span class="step-no">2</span></button>
+      <button class="nav-item needs-case" data-view="assets" id="navAssets"><span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M9 9l3 4 3-4M12 13v4M9.5 14.5h5"/></svg></span>財産一覧<span class="step-no">3</span></button>
       <div class="nav-sub" id="assetSubNav"></div>
-      <button class="nav-item needs-case" data-view="plan"><span class="nav-ico">🤝</span>遺産分割＆相続税試算<span class="step-no">4</span></button>
-      <button class="nav-item needs-case" data-view="secondary"><span class="nav-ico">🔁</span>二次相続シミュレーション<span class="step-no">5</span></button>
-      <button class="nav-item needs-case" data-view="docs"><span class="nav-ico">📄</span>資料出力<span class="step-no">6</span></button>
+      <button class="nav-item needs-case" data-view="plan"><span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v16M5 8h14M7 8l-2 5a3 3 0 0 0 6 0zM17 8l-2 5a3 3 0 0 0 6 0z"/></svg></span>遺産分割＆相続税試算<span class="step-no">4</span></button>
+      <button class="nav-item needs-case" data-view="secondary"><span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9a8 8 0 0 1 13-3l3 3M20 15a8 8 0 0 1-13 3l-3-3"/><path d="M20 4v5h-5M4 20v-5h5"/></svg></span>二次相続シミュレーション<span class="step-no">5</span></button>
+      <button class="nav-item needs-case" data-view="savings"><span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-7 7-4-4-6 6"/><path d="M15 8h6v6"/></svg></span>相続税節税シミュレーション<span class="step-no">6</span></button>
+      <button class="nav-item needs-case" data-view="docs"><span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M13 3v5h5M9 14h8M9 17h5"/></svg></span>資料出力<span class="step-no">7</span></button>
       <div class="nav-section">その他</div>
-      <button class="nav-item" data-view="settings"><span class="nav-ico">⚙️</span>設定</button>
+      <button class="nav-item" data-view="settings"><span class="nav-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2.2 2.2M16.8 16.8L19 19M19 5l-2.2 2.2M7.2 16.8L5 19"/></svg></span>設定</button>
     </nav>
     <div class="sidebar-foot">データはGoogleドライブの<br>指定フォルダに保存されます。</div>
   </aside>
@@ -405,7 +408,7 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
     </div>
     <div class="topbar-right">
       <div class="drive-status" id="driveStatus"><span class="d"></span><span>未接続</span></div>
-      <button class="btn primary sm needs-case" id="btnSaveTop" onclick="saveCurrentCase()">💾 保存</button>
+      <button class="btn primary sm needs-case" id="btnSaveTop" onclick="saveCurrentCase()">保存</button>
       <button class="btn sm" id="btnLogin" onclick="googleLogin()">Googleでログイン</button>
       <button class="btn sm" id="btnLogout" onclick="googleLogout()" style="display:none;">ログアウト</button>
     </div>
@@ -420,10 +423,10 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
       <div class="card-head-row" style="max-width:none;">
         <div class="btn-row">
           <button class="btn primary" onclick="openNewCaseModal()">＋ 新規案件</button>
-          <button class="btn" onclick="refreshDriveCases()">🔄 Driveから一覧取得</button>
+          <button class="btn" onclick="refreshDriveCases()">Driveから一覧取得</button>
         </div>
         <div class="btn-row">
-          <button class="btn sm" onclick="importLocalJson()">⬆️ JSONを取り込み</button>
+          <button class="btn sm" onclick="importLocalJson()">JSONを取り込み</button>
         </div>
       </div>
       <div id="casesContainer"></div>
@@ -474,7 +477,7 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
       </div>
 
       <div class="btn-row">
-        <button class="btn contract" onclick="downloadContract()" style="background:#3a2a52;color:#fff;border-color:#3a2a52;">📄 委任契約書を作成</button>
+        <button class="btn contract" onclick="downloadContract()" style="background:#3a2a52;color:#fff;border-color:#3a2a52;">委任契約書を作成</button>
       </div>
     </section>
 
@@ -484,8 +487,8 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
       <div class="card-head-row" style="max-width:none;">
         <div class="muted" id="clProgress">チェック済み: 0 / 0 項目</div>
         <div class="btn-row">
-          <button class="btn sm pdf" onclick="downloadChecklistPDF()" style="background:#fff;color:var(--red);border-color:#ffc4c0;">🖨 必要資料をPDF出力</button>
-          <button class="btn sm" onclick="downloadChecklistExcel()">📊 Excel出力</button>
+          <button class="btn sm pdf" onclick="downloadChecklistPDF()" style="background:#fff;color:var(--red);border-color:#ffc4c0;">必要資料をPDF出力</button>
+          <button class="btn sm" onclick="downloadChecklistExcel()">Excel出力</button>
         </div>
       </div>
       <div id="checklistContainer"></div>
@@ -541,14 +544,14 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
         </div>
         <div class="field" style="margin-top:14px;"><label>特記事項（任意）</label><textarea id="ag_notes" rows="3" placeholder="例：代償金の支払い、債務の負担、その他の取り決め等" oninput="onAgreementInput()"></textarea></div>
         <div class="btn-row" style="margin-top:18px;">
-          <button class="btn primary lg" onclick="downloadAgreement()">📜 遺産分割協議書を作成</button>
+          <button class="btn primary lg" onclick="downloadAgreement()">遺産分割協議書を作成</button>
         </div>
       </div>
     </section>
 
     <!-- ===== Simulation ===== -->
     <section class="view" id="view-simulation">
-      <div class="view-head"><h1>相続税試算</h1><p>遺産分割の割り当てに基づき、相続税法（現行法）の規定に従って相続税額を計算します。小規模宅地等の特例は財産一覧の各土地（⚙）で、贈与税額控除は各生前贈与（⚙）で設定します。</p></div>
+      <div class="view-head"><h1>相続税試算</h1><p>遺産分割の割り当てに基づき、相続税法（現行法）の規定に従って相続税額を計算します。小規模宅地等の特例は財産一覧の各土地の行で、贈与税額控除は各生前贈与の行で設定します。</p></div>
 
       <div class="card">
         <h2>詳細条件</h2>
@@ -557,7 +560,7 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
         <div class="grid grid-3" id="scFields">
           <div class="field"><label>前回の相続で被相続人が納めた相続税額 (A)</label><input type="text" class="num" id="sc_A" placeholder="円" oninput="onSuccessiveInput()"></div>
           <div class="field"><label>前回の相続で被相続人が取得した純資産価額 (B)</label><input type="text" class="num" id="sc_B" placeholder="円" oninput="onSuccessiveInput()"></div>
-          <div class="field"><label>前回の相続からの経過年数 (E)</label><input type="number" min="0" max="10" id="sc_years" placeholder="年（1年未満切捨て）" oninput="onSuccessiveInput()"></div>
+          <div class="field"><label>前回の相続開始日</label><input type="date" id="sc_prevDate" oninput="onSuccessiveInput()"><div class="muted" id="sc_yearsAuto" style="font-size:11px;margin-top:4px;">経過年数 (E)：—</div></div>
         </div>
         <div id="koboSummary" style="margin-top:14px;"></div>
       </div>
@@ -607,6 +610,36 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
       <div class="disclaimer" id="secDisclaimer"></div>
     </section>
 
+    <!-- ===== Savings simulation ===== -->
+    <section class="view" id="view-savings">
+      <div class="view-head"><h1>相続税節税シミュレーション</h1><p>一般的な相続税の節税対策をテンプレートから選び、金額・年数などを入力して節税効果を試算します。現在の課税価格・相続税の総額を基準に、対策後の税額と削減額を比較します。</p></div>
+
+      <div class="card">
+        <h2>現状（対策前）</h2>
+        <div class="summary-grid" id="savBase"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head-row">
+          <div><h2>節税対策</h2><div class="card-sub" style="margin:0;">テンプレートを選んで追加し、金額・人数・年数を設定してください。</div></div>
+        </div>
+        <div class="field" style="max-width:420px;margin-bottom:14px;">
+          <label>対策テンプレートを追加</label>
+          <select id="savTemplateSel"></select>
+        </div>
+        <div class="btn-row" style="margin-bottom:16px;"><button class="btn primary sm" onclick="addSaving()">＋ この対策を追加</button></div>
+        <div id="savingsContainer"></div>
+      </div>
+
+      <div class="card">
+        <h2>対策後の効果</h2>
+        <div class="summary-grid" id="savResult"></div>
+        <div id="savBreak"></div>
+      </div>
+
+      <div class="disclaimer" id="savDisclaimer"></div>
+    </section>
+
     <!-- ===== Documents output ===== -->
     <section class="view" id="view-docs">
       <div class="view-head"><h1>資料出力</h1><p>このアプリに登録したデータをもとに、各種書類をPDF・Excelで出力します。</p></div>
@@ -614,17 +647,24 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
         <h2>財産診断書</h2>
         <div class="card-sub">表紙・総括・親族関係・資産構成・相続税の概算・財産分割案・留意事項をまとめた報告書です。</div>
         <div class="btn-row">
-          <button class="btn primary" onclick="downloadShindanPDF()">🖨 財産診断書 PDF</button>
-          <button class="btn green" onclick="downloadShindanExcel()">📊 財産診断書 Excel</button>
+          <button class="btn primary" onclick="downloadShindanPDF()">財産診断書 PDF</button>
+          <button class="btn green" onclick="downloadShindanExcel()">財産診断書 Excel</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>相続税節税シミュレーション報告書</h2>
+        <div class="card-sub">選択した節税対策と、その節税効果をまとめた報告書です。</div>
+        <div class="btn-row">
+          <button class="btn primary" onclick="downloadSavingsPDF()">節税シミュレーション PDF</button>
         </div>
       </div>
       <div class="card">
         <h2>その他の書類</h2>
         <div class="btn-row">
-          <button class="btn" onclick="downloadChecklistPDF()">🖨 必要資料チェックリスト PDF</button>
-          <button class="btn" onclick="downloadChecklistExcel()">📊 必要資料 Excel</button>
-          <button class="btn" onclick="downloadAgreement()">📜 遺産分割協議書</button>
-          <button class="btn" onclick="downloadContract()">📄 委任契約書</button>
+          <button class="btn" onclick="downloadChecklistPDF()">必要資料チェックリスト PDF</button>
+          <button class="btn" onclick="downloadChecklistExcel()">必要資料 Excel</button>
+          <button class="btn" onclick="downloadAgreement()">遺産分割協議書</button>
+          <button class="btn" onclick="downloadContract()">委任契約書</button>
         </div>
       </div>
     </section>
@@ -658,8 +698,8 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
         <h2>ローカルバックアップ</h2>
         <div class="card-sub">現在の案件をJSONファイルとして書き出し／取り込みできます（Drive未接続時のバックアップにも利用できます）。</div>
         <div class="btn-row">
-          <button class="btn needs-case" onclick="exportLocalJson()">⬇️ 現在の案件をJSON出力</button>
-          <button class="btn" onclick="importLocalJson()">⬆️ JSONを取り込み</button>
+          <button class="btn needs-case" onclick="exportLocalJson()">現在の案件をJSON出力</button>
+          <button class="btn" onclick="importLocalJson()">JSONを取り込み</button>
         </div>
       </div>
 
@@ -728,37 +768,37 @@ let gisReady = false;
 //  Asset type definitions
 // ============================================================
 const ASSET_TYPES = [
-  { key:'land',       name:'土地',         color:'#34c759', icon:'🟩', sign:1, group:'plus',
+  { key:'land',       name:'土地',         color:'#34c759', icon:'', sign:1, group:'plus',
     subs:['宅地','田','畑','山林','原野','雑種地','その他'],
     f1:{label:'所在地',ph:'例：水戸市〇〇町1-2-3'}, f2:{label:'利用区分・備考',ph:'例：自用地／貸宅地'}, f3:{label:'地積(㎡)',ph:'例：150.25'} },
-  { key:'building',   name:'建物',         color:'#30b0c7', icon:'🏠', sign:1, group:'plus',
+  { key:'building',   name:'建物',         color:'#30b0c7', icon:'', sign:1, group:'plus',
     subs:['居宅','共同住宅','店舗','事務所','倉庫','その他'],
     f1:{label:'所在地',ph:'例：水戸市〇〇町1-2-3'}, f2:{label:'家屋番号・種類',ph:'例：1番2／木造2階建'}, f3:{label:'床面積(㎡)',ph:'例：95.40'} },
-  { key:'securities', name:'有価証券',     color:'#5e5ce6', icon:'📈', sign:1, group:'plus',
+  { key:'securities', name:'有価証券',     color:'#5e5ce6', icon:'', sign:1, group:'plus',
     subs:['上場株式','投資信託','公社債','その他'],
     f1:{label:'銘柄',ph:'例：〇〇株式会社'}, f2:{label:'取扱機関・口座',ph:'例：〇〇証券 〇〇支店'}, f3:{label:'数量(株/口)',ph:'例：1000'} },
-  { key:'unlisted',   name:'非上場株式',   color:'#7d4fe6', icon:'🏢', sign:1, group:'plus',
+  { key:'unlisted',   name:'非上場株式',   color:'#7d4fe6', icon:'', sign:1, group:'plus',
     subs:['非上場株式','出資金','その他'],
     f1:{label:'会社名',ph:'例：〇〇商事(株)'}, f2:{label:'所在地・備考',ph:'例：水戸市〇〇'}, f3:{label:'株数',ph:'例：200'} },
-  { key:'cash',       name:'現金・預貯金', color:'#0071e3', icon:'💴', sign:1, group:'plus',
+  { key:'cash',       name:'現金・預貯金', color:'#0071e3', icon:'', sign:1, group:'plus',
     subs:['普通預金','定期預金','当座預金','貯金','現金','出資金','その他'],
     f1:{label:'金融機関・支店',ph:'例：〇〇銀行 〇〇支店'}, f2:{label:'種別・口座番号',ph:'例：普通 1234567'}, f3:{label:'',ph:''} },
-  { key:'insurance',  name:'生命保険金等', color:'#ff2d55', icon:'🛡', sign:1, group:'mfumi',
+  { key:'insurance',  name:'生命保険金等', color:'#ff2d55', icon:'', sign:1, group:'mfumi',
     subs:['死亡保険金','その他'],
     f1:{label:'保険会社',ph:'例：〇〇生命'}, f2:{label:'証券番号・受取人',ph:'例：受取人 山田花子'}, f3:{label:'',ph:''} },
-  { key:'retirement', name:'退職手当金等', color:'#ff9500', icon:'🏛', sign:1, group:'mtaisho',
+  { key:'retirement', name:'退職手当金等', color:'#ff9500', icon:'', sign:1, group:'mtaisho',
     subs:['死亡退職金','功労金','その他'],
     f1:{label:'支給者',ph:'例：〇〇株式会社'}, f2:{label:'受取人',ph:'例：山田花子'}, f3:{label:'',ph:''} },
-  { key:'other',      name:'その他の財産', color:'#af52de', icon:'📦', sign:1, group:'plus',
+  { key:'other',      name:'その他の財産', color:'#af52de', icon:'', sign:1, group:'plus',
     subs:['自動車','会員権','貴金属・書画骨董','貸付金','家庭用財産','未収金','暗号資産','その他'],
     f1:{label:'内容',ph:'例：普通乗用車（〇〇）'}, f2:{label:'明細・所在',ph:'例：登録番号／所在地'}, f3:{label:'数量',ph:'例：1'} },
-  { key:'debt',       name:'債務',         color:'#ff3b30', icon:'➖', sign:-1, group:'minus',
+  { key:'debt',       name:'債務',         color:'#ff3b30', icon:'', sign:-1, group:'minus',
     subs:['借入金','未払租税公課','未払費用','預り敷金','その他'],
     f1:{label:'債権者・支払先',ph:'例：〇〇銀行'}, f2:{label:'内容',ph:'例：住宅ローン'}, f3:{label:'',ph:''} },
-  { key:'funeral',    name:'葬式費用',     color:'#8e8e93', icon:'🕯', sign:-1, group:'minus',
+  { key:'funeral',    name:'葬式費用',     color:'#8e8e93', icon:'', sign:-1, group:'minus',
     subs:['葬儀費用','飲食費','火葬料','お布施','その他'],
     f1:{label:'支払先',ph:'例：〇〇葬祭'}, f2:{label:'内容',ph:'例：通夜・告別式'}, f3:{label:'',ph:''} },
-  { key:'gift',       name:'生前贈与財産', color:'#a2845e', icon:'🎁', sign:1, group:'gift',
+  { key:'gift',       name:'生前贈与財産', color:'#a2845e', icon:'', sign:1, group:'gift',
     subs:['暦年課税(加算対象)','相続時精算課税'],
     f1:{label:'受贈者',ph:'例：山田一郎'}, f2:{label:'贈与日・内容',ph:'例：R5.6.1 現金'}, f3:{label:'',ph:''} }
 ];
@@ -999,11 +1039,12 @@ function newCaseObject(name){
     heirs:[ newHeir() ],
     checklist:{},   // key -> {checked,memo,receivedPart,unreceivedPart}
     assets:[],      // {id,category,subcategory,name,location,quantity,unitPrice,value,memo,allocations,kobo:{type,area},giftTax,is4to7}
-    successive:{ enabled:false, A:'', B:'', years:'' }, // 相次相続控除
+    successive:{ enabled:false, A:'', B:'', years:'', prevDate:'' }, // 相次相続控除
     compensations:[], // 代償金 {id,from,to,amount}
     agreement:{ date:'', notes:'', extraHeirId:'' },
     progress:{}, // stageKey -> {status,due,done,memo}
-    secondary:{ spouseOwn:'', consume:'', years:'', nChildren:'' } // 二次相続シミュレーション
+    secondary:{ spouseOwn:'', consume:'', years:'', nChildren:'' }, // 二次相続シミュレーション
+    savings:[] // 節税対策 {id,key,params{}}
   };
 }
 const PROGRESS_STAGES=[
@@ -1078,7 +1119,7 @@ function evalSubHtml(){
   let html='<div class="eval-sub"><div class="es-title">財産評価（財産ごと）</div>';
   ASSET_TYPES.forEach(t=>{
     const items=assets.filter(a=>a.category===t.key); if(!items.length) return;
-    html+='<div class="eval-cat">'+t.icon+' '+t.name+'</div>';
+    html+='<div class="eval-cat">'+t.name+'</div>';
     items.forEach(a=>{
       const label=[a.subcategory,a.name,a.location].filter(Boolean).join('／')||t.name;
       const s=assetEvalState(currentCase,a.id); const sc=STAT[s][1];
@@ -1114,6 +1155,7 @@ function switchView(view){
   if(view==='assets'){ renderAssetNav(); renderAssetDetail(); renderSummary(); }
   if(view==='plan'){ renderAgreement(); renderSimulation(); }
   if(view==='secondary'){ renderSecondary(); }
+  if(view==='savings'){ renderSavings(); }
   if(view==='docs'){ renderDocs(); }
   if(view==='checklist'){ renderChecklist(); }
   if(view==='progress'){ renderProgress(); }
@@ -1149,7 +1191,7 @@ let driveCaseFiles=[]; // [{id,name,modifiedTime}]
 function renderCasesList(){
   const c=$('casesContainer');
   if(!driveCaseFiles.length && !currentCase){
-    c.innerHTML='<div class="empty-state"><div class="em-ico">🗂</div><div style="font-size:17px;font-weight:600;color:var(--ink);">案件がありません</div><p style="margin-top:6px;">「＋ 新規案件」で作成するか、Driveから読み込んでください。</p></div>';
+    c.innerHTML='<div class="empty-state"><div class="em-ico"></div><div style="font-size:17px;font-weight:600;color:var(--ink);">案件がありません</div><p style="margin-top:6px;">「＋ 新規案件」で作成するか、Driveから読み込んでください。</p></div>';
     return;
   }
   let html='<div class="case-grid">';
@@ -1236,8 +1278,9 @@ function migrateCase(data){
   c.deceased=Object.assign(base.deceased, data.deceased||{});
   c.agreement=Object.assign(base.agreement, data.agreement||{});
   c.checklist=data.checklist||{};
-  c.successive=Object.assign({enabled:false,A:'',B:'',years:''}, data.successive||{});
+  c.successive=Object.assign({enabled:false,A:'',B:'',years:'',prevDate:''}, data.successive||{});
   c.secondary=Object.assign({spouseOwn:'',consume:'',years:'',nChildren:''}, data.secondary||{});
+  c.savings=Array.isArray(data.savings)? data.savings : [];
   c.compensations=Array.isArray(data.compensations)? data.compensations : [];
   c.progress=(data.progress&&typeof data.progress==='object')? data.progress : {};
   c.assets=(data.assets||[]).map(a=>{
@@ -1496,9 +1539,9 @@ function renderAssetNav(){
   const subs={}; ASSET_TYPES.forEach(t=>subs[t.key]=0);
   currentCase.assets.forEach(a=>{ subs[a.category]=(subs[a.category]||0)+assetVal(a); });
   const sub=$('assetSubNav');
-  if(sub) sub.innerHTML=ASSET_TYPES.map(t=>'<button class="nav-subitem'+(t.key===currentAssetCat?' active':'')+'" onclick="gotoAssetCat(\''+t.key+'\')"><span class="si-ic">'+t.icon+'</span>'+t.name+'<span class="si-amt">'+(subs[t.key]?(t.sign<0?'−':'')+num(subs[t.key]).toLocaleString('ja-JP'):'')+'</span></button>').join('');
+  if(sub) sub.innerHTML=ASSET_TYPES.map(t=>'<button class="nav-subitem'+(t.key===currentAssetCat?' active':'')+'" onclick="gotoAssetCat(\''+t.key+'\')"><span class="si-ic"><i class="cdot" style="background:'+t.color+'"></i></span>'+t.name+'<span class="si-amt">'+(subs[t.key]?(t.sign<0?'−':'')+num(subs[t.key]).toLocaleString('ja-JP'):'')+'</span></button>').join('');
   const cs=$('catSwitch');
-  if(cs) cs.innerHTML=ASSET_TYPES.map(t=>'<button class="cat-pill'+(t.key===currentAssetCat?' active':'')+'" onclick="selectAssetCat(\''+t.key+'\')">'+t.icon+' '+t.name+'</button>').join('');
+  if(cs) cs.innerHTML=ASSET_TYPES.map(t=>'<button class="cat-pill'+(t.key===currentAssetCat?' active':'')+'" onclick="selectAssetCat(\''+t.key+'\')"><i class="cdot" style="background:'+t.color+'"></i>'+t.name+'</button>').join('');
 }
 function gotoAssetCat(key){ switchView('assets'); selectAssetCat(key); }
 function selectAssetCat(key){ currentAssetCat=key; renderAssetNav(); renderAssetDetail(); }
@@ -1510,7 +1553,7 @@ function renderAssetDetail(){
   const items=currentCase.assets.filter(a=>a.category===currentAssetCat);
   const subtotal=items.reduce((s,a)=>s+assetVal(a),0);
   const table=(currentAssetCat==='land')? landTableHtml(items) : (currentAssetCat==='gift')? giftTableHtml(items) : genericTableHtml(currentAssetCat,items);
-  c.innerHTML='<div class="detail-head"><div class="ic" style="background:'+t.color+'">'+t.icon+'</div><h2>'+t.name+'</h2>'
+  c.innerHTML='<div class="detail-head"><div class="ic" style="background:'+t.color+'"></div><h2>'+t.name+'</h2>'
     +'<div class="dsub'+(t.sign<0?' minus':'')+'" id="catSubtotal">'+(t.sign<0?'−':'')+yen(subtotal)+'</div></div>'
     +table
     +'<div class="detail-foot"><button class="btn primary sm" onclick="addAsset(\''+currentAssetCat+'\')">＋ 行を追加</button>'
@@ -1964,7 +2007,7 @@ function renderAllocations(){
     if(t.key==='gift') return; // 生前贈与は受贈者欄で管理（分割対象外）
     const items=currentCase.assets.filter(a=>a.category===t.key); if(!items.length) return;
     const sg=t.sign<0?-1:1;
-    body+='<tr class="cat-row"><td class="l"><span class="ic">'+t.icon+'</span>'+t.name+'</td><td></td>'+heirs.map(()=>'<td></td>').join('')+'</tr>';
+    body+='<tr class="cat-row"><td class="l"><i class="cdot" style="background:'+t.color+'"></i>'+t.name+'</td><td></td>'+heirs.map(()=>'<td></td>').join('')+'</tr>';
     items.forEach(a=>{
       const label=[a.subcategory,a.name,a.location].filter(Boolean).join('／')||t.name;
       let row='<tr><td class="l" style="padding-left:26px;">'+esc(label)+'</td><td class="evalcol">'+(t.sign<0?'−':'')+yen(assetVal(a))+'</td>';
@@ -2002,11 +2045,12 @@ function renderHeirTotals(){
 // ============================================================
 //  Simulation view
 // ============================================================
-function onSuccessiveInput(){ if(!currentCase) return; const sc=currentCase.successive; sc.enabled=$('sc_enabled').checked; sc.A=$('sc_A').value; sc.B=$('sc_B').value; sc.years=$('sc_years').value; renderSimulation(); cacheCurrentCase(); }
+function onSuccessiveInput(){ if(!currentCase) return; const sc=currentCase.successive; sc.enabled=$('sc_enabled').checked; sc.A=$('sc_A').value; sc.B=$('sc_B').value; sc.prevDate=$('sc_prevDate').value; sc.years=successiveYears(sc.prevDate); renderSimulation(); cacheCurrentCase(); }
+function successiveYears(prevDate){ const dd=currentCase&&currentCase.deceased?currentCase.deceased.deathDate:''; if(!prevDate||!dd) return ''; const d=daysBetween(prevDate,dd); if(d==null||d<0) return ''; return Math.floor(d/365.25); }
 function renderSimulation(){
   if(!currentCase) return;
   // sync 相次相続控除 inputs
-  const sc=currentCase.successive||{}; $('sc_enabled').checked=!!sc.enabled; $('sc_A').value=sc.A||''; $('sc_B').value=sc.B||''; $('sc_years').value=sc.years||'';
+  const sc=currentCase.successive||{}; $('sc_enabled').checked=!!sc.enabled; $('sc_A').value=sc.A||''; $('sc_B').value=sc.B||''; if($('sc_prevDate')) $('sc_prevDate').value=sc.prevDate||''; sc.years=successiveYears(sc.prevDate); if($('sc_yearsAuto')) $('sc_yearsAuto').textContent='経過年数 (E)：'+(sc.years!==''?sc.years+' 年（1年未満切捨て）':'前回相続開始日を入力')+'';
   $('scFields').style.opacity=sc.enabled?'1':'.4';
   const r=calcTax();
   // 小規模宅地サマリー
@@ -2125,6 +2169,92 @@ function renderSecondary(){
 function renderDocs(){ /* 静的ボタンのみ */ }
 
 // ============================================================
+//  相続税節税シミュレーション
+// ============================================================
+const SAVING_TEMPLATES=[
+  {key:'koyo',name:'暦年贈与（生前贈与）',desc:'毎年一定額を複数人へ贈与し、相続財産を圧縮します（年110万円まで贈与税非課税）。',
+    fields:[{k:'annual',label:'1人あたり年間贈与額(円)',type:'money',def:1100000},{k:'people',label:'贈与する人数',type:'num',def:1},{k:'years',label:'実行年数',type:'num',def:5}],
+    compute:(p)=>({dT:num(p.annual)*num(p.people)*num(p.years), dn:0, note:'相続開始前3〜7年以内の贈与は相続財産に加算されます。'})},
+  {key:'seimei',name:'生命保険の非課税枠の活用',desc:'死亡保険金は「500万円×法定相続人数」まで非課税。未使用枠まで一時払い終身保険等に加入します。',
+    fields:[{k:'amount',label:'追加加入する死亡保険金(円)',type:'money',def:5000000}],
+    compute:(p,ctx)=>{const remain=Math.max(0,5000000*ctx.n-ctx.insTotal); return {dT:Math.min(num(p.amount),remain), dn:0, note:'非課税枠の残り：'+yen(remain)};}},
+  {key:'shokibo',name:'小規模宅地等の特例の活用',desc:'居住用宅地等を同居親族等が取得することで評価額を最大80%減額します。',
+    fields:[{k:'amount',label:'減額見込額(円)',type:'money',def:0}],
+    compute:(p)=>({dT:num(p.amount), dn:0, note:'要件（同居・継続居住等）の充足が必要です。'})},
+  {key:'fudosan',name:'不動産購入による評価減',desc:'現金で不動産を購入すると、相続税評価額（路線価・固定資産税評価額）が時価より低くなり評価が下がります。',
+    fields:[{k:'amount',label:'購入額(時価, 円)',type:'money',def:0},{k:'rate',label:'評価減率(%)',type:'num',def:60}],
+    compute:(p)=>({dT:Math.round(num(p.amount)*num(p.rate)/100), dn:0, note:'評価減率は物件により異なります。過度な圧縮は否認リスクがあります。'})},
+  {key:'chintai',name:'賃貸建物の建築',desc:'更地に賃貸アパート等を建てると、貸家・貸家建付地として評価が下がります。',
+    fields:[{k:'amount',label:'建築費(円)',type:'money',def:0},{k:'rate',label:'評価減率(%)',type:'num',def:65}],
+    compute:(p)=>({dT:Math.round(num(p.amount)*num(p.rate)/100), dn:0, note:'借入併用時は債務控除も考慮します。'})},
+  {key:'hikazei',name:'非課税財産の生前購入（墓・仏壇等）',desc:'墓地・墓石・仏壇仏具等は非課税財産。生前に購入すると現金が非課税財産に変わります。',
+    fields:[{k:'amount',label:'購入額(円)',type:'money',def:0}],
+    compute:(p)=>({dT:num(p.amount), dn:0, note:'投資用の純金製品等は対象外です。'})},
+  {key:'yoshi',name:'養子縁組',desc:'孫等を養子にすると法定相続人が増え、基礎控除・生命保険等の非課税枠が増加し、税率も下がります。',
+    fields:[{k:'count',label:'養子の人数',type:'num',def:1}],
+    compute:(p)=>({dT:0, dn:num(p.count), note:'実子がいる場合1人、いない場合2人まで法定相続人に算入できます。孫養子は2割加算の対象です。'})},
+  {key:'kyoiku',name:'教育資金の一括贈与の非課税',desc:'30歳未満の子・孫へ教育資金を一括贈与すると1人1,500万円まで非課税です。',
+    fields:[{k:'amount',label:'1人あたり贈与額(円)',type:'money',def:0},{k:'people',label:'人数',type:'num',def:1}],
+    compute:(p)=>({dT:Math.min(num(p.amount),15000000)*num(p.people), dn:0, note:'使い残しは相続税の対象となる場合があります。'})},
+  {key:'seisan110',name:'相続時精算課税の年110万円基礎控除',desc:'2024年以降、相続時精算課税でも年110万円までは非課税で、相続財産に加算されません。',
+    fields:[{k:'people',label:'人数',type:'num',def:1},{k:'years',label:'実行年数',type:'num',def:5}],
+    compute:(p)=>({dT:1100000*num(p.people)*num(p.years), dn:0, note:'相続時精算課税を選択した受贈者ごとに年110万円が非課税です。'})}
+];
+const SAVING_BY_KEY=Object.fromEntries(SAVING_TEMPLATES.map(t=>[t.key,t]));
+function totalTaxScenario(T, heirsList){
+  const st=buildStatutory(heirsList);
+  const basic=30000000+6000000*st.count; const net=Math.max(0,T-basic);
+  let total=0; st.spouse.concat(st.group).forEach(h=>total+=taxByTable(Math.floor(net*st.shares[h.id]/1000)*1000));
+  return {tax:Math.floor(total/100)*100, count:st.count, basic, net};
+}
+function savingsCtx(){ const r=calcTax(); const insTotal=currentCase.assets.filter(a=>a.category==='insurance').reduce((s,a)=>s+assetVal(a),0); return {T0:r.totalTaxable, n:r.n, insTotal}; }
+function savingsCompute(){
+  const ctx=savingsCtx(); const T0=ctx.T0;
+  const rows=[]; let dTtotal=0, dnTotal=0;
+  (currentCase.savings||[]).forEach(s=>{ const t=SAVING_BY_KEY[s.key]; if(!t) return; const res=t.compute(s.params||{},ctx); rows.push({name:t.name, dT:res.dT||0, dn:res.dn||0, note:res.note||''}); dTtotal+=res.dT||0; dnTotal+=res.dn||0; });
+  const baseTax=totalTaxScenario(T0, currentCase.heirs).tax;
+  const dummies=[]; for(let i=0;i<dnTotal;i++) dummies.push({id:'sav-dummy-'+i, relationType:'child', isAdopted:true, adoptedAsReal:false, isDaishu:false, daishuGroup:''});
+  const afterHeirs=currentCase.heirs.concat(dummies);
+  const T1=Math.max(0, T0-dTtotal);
+  const afterTax=totalTaxScenario(T1, afterHeirs).tax;
+  return {T0,T1,baseTax,afterTax,dTtotal,dnTotal,rows,save:baseTax-afterTax};
+}
+function renderSavings(){
+  if(!currentCase) return;
+  const sel=$('savTemplateSel'); if(sel && !sel.options.length) sel.innerHTML=SAVING_TEMPLATES.map(t=>'<option value="'+t.key+'">'+esc(t.name)+'</option>').join('');
+  const R=savingsCompute();
+  $('savBase').innerHTML=box('課税価格の合計額',yen(R.T0))+box('相続税の総額（対策前）',yen(R.baseTax));
+  // measures
+  const c=$('savingsContainer');
+  if(!(currentCase.savings||[]).length){ c.innerHTML='<div class="muted" style="font-size:13px;">対策が未選択です。上のテンプレートから追加してください。</div>'; }
+  else{
+    c.innerHTML=(currentCase.savings).map(s=>{ const t=SAVING_BY_KEY[s.key]; if(!t) return ''; s.params=s.params||{};
+      const fields=t.fields.map(f=>{ const v=(s.params[f.k]!==undefined&&s.params[f.k]!=='')?s.params[f.k]:(f.def!==undefined?f.def:''); if(s.params[f.k]===undefined) s.params[f.k]=f.def;
+        const disp=f.type==='money'?(num(v)?num(v).toLocaleString('ja-JP'):''):v;
+        return '<div class="field"><label>'+esc(f.label)+'</label><input type="text" class="num" value="'+esc(disp)+'" oninput="updSaving(\''+s.id+'\',\''+f.k+'\',this.value)"'+(f.type==='money'?' onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"':'')+'></div>'; }).join('');
+      const res=t.compute(s.params,savingsCtx());
+      return '<div class="heir-card"><div class="heir-top"><span class="heir-no">'+esc(t.name)+'</span><button class="btn red sm" style="margin-left:auto;" onclick="removeSaving(\''+s.id+'\')">削除</button></div>'
+        +'<div class="muted" style="font-size:12px;margin-bottom:10px;">'+esc(t.desc)+'</div>'
+        +'<div class="grid grid-3">'+fields+'</div>'
+        +'<div style="margin-top:10px;font-size:13px;">この対策の効果：'+(res.dT?'課税価格 −'+yen(res.dT):'')+(res.dn?' 法定相続人 ＋'+res.dn+'人':'')+(res.note?'<span class="muted" style="font-size:11.5px;"> ／ '+esc(res.note)+'</span>':'')+'</div>'
+        +'</div>';
+    }).join('');
+  }
+  // result
+  $('savResult').innerHTML=box('対策後の課税価格',yen(R.T1))+box('対策後の相続税の総額',yen(R.afterTax))+boxAccent('節税効果（削減額）',yen(R.save));
+  let bk='';
+  if(R.rows.length){ bk='<table class="sim-table" style="margin-top:12px;"><thead><tr><th>対策</th><th>課税価格の削減</th><th>法定相続人の増加</th></tr></thead><tbody>'
+    +R.rows.map(x=>'<tr><td style="text-align:left;">'+esc(x.name)+'</td><td>'+(x.dT?'−'+yen(x.dT):'-')+'</td><td>'+(x.dn?'＋'+x.dn+'人':'-')+'</td></tr>').join('')
+    +'</tbody><tfoot><tr><td style="text-align:left;">合計</td><td>−'+yen(R.dTtotal)+'</td><td>'+(R.dnTotal?'＋'+R.dnTotal+'人':'-')+'</td></tr></tfoot></table>'; }
+  $('savBreak').innerHTML=bk;
+  $('savDisclaimer').innerHTML='※ 本シミュレーションは「相続税の総額」（課税価格の合計額・基礎控除・法定相続分による速算表）ベースの概算です。配偶者の税額軽減等の個別の税額控除は対策前後で同様に作用するため比較から除いています。各対策には適用要件・否認リスク・贈与税等の別途コストがあり、実行可否は必ず税理士にご相談ください。';
+}
+function addSaving(){ if(!currentCase) return; const key=$('savTemplateSel').value||SAVING_TEMPLATES[0].key; const t=SAVING_BY_KEY[key]; const params={}; t.fields.forEach(f=>params[f.k]=f.def!==undefined?f.def:''); currentCase.savings.push({id:uid(),key,params}); renderSavings(); cacheCurrentCase(); }
+function removeSaving(id){ currentCase.savings=(currentCase.savings||[]).filter(s=>s.id!==id); renderSavings(); cacheCurrentCase(); }
+function updSaving(id,field,val){ const s=(currentCase.savings||[]).find(x=>x.id===id); if(!s) return; s.params=s.params||{}; s.params[field]=val; // re-render result only (avoid losing focus): update result + breakdown
+  const R=savingsCompute(); $('savResult').innerHTML=box('対策後の課税価格',yen(R.T1))+box('対策後の相続税の総額',yen(R.afterTax))+boxAccent('節税効果（削減額）',yen(R.save)); cacheCurrentCase(); }
+
+// ============================================================
 //  財産診断書（PDF / Excel）
 // ============================================================
 const OFFICE={name:'日下部税理士事務所',addr:'茨城県水戸市姫子1丁目820-6 ヴィラエスポワールⅠ 1F',tel:'029-215-9400',fax:'029-311-4151'};
@@ -2192,10 +2322,12 @@ function downloadShindanPDF(){
   h3.blk{font-size:13px;font-weight:700;margin:16px 0 6px;padding-left:8px;border-left:4px solid #2980b9;}
   table.t{width:100%;border-collapse:collapse;margin-bottom:8px;}
   table.t th,table.t td{border:1px solid #ccc;padding:5px 8px;}
-  table.t th{background:#eef3fa;font-weight:700;text-align:left;}
+  table.t th{background:#1a3a6b;color:#fff;font-weight:700;text-align:left;border-color:#1a3a6b;}
+  table.t th.r{color:#fff;}
   table.t td.r,table.t th.r{text-align:right;font-variant-numeric:tabular-nums;}
-  table.t tr.sub td{color:#b00;background:#fcf7f7;}
-  table.t tr.tot td{font-weight:700;background:#eef3fa;}
+  table.t tr:nth-child(even) td{background:#f3f7fc;}
+  table.t tr.sub td{color:#b00;background:#fcf3f3 !important;}
+  table.t tr.tot td{font-weight:700;background:#dfe9f7 !important;color:#1a3a6b;}
   .kpis{display:flex;gap:10px;margin-bottom:14px;}
   .kpi{flex:1;border:1px solid #cfe;border-radius:8px;padding:10px 12px;background:#f3f9ff;}
   .kpi .l{font-size:10px;color:#567;}
@@ -2203,7 +2335,17 @@ function downloadShindanPDF(){
   .note{font-size:10.5px;color:#444;line-height:1.9;}
   .pgfoot{margin-top:18px;border-top:1px solid #ddd;padding-top:6px;font-size:9px;color:#999;display:flex;justify-content:space-between;}
   @media print{@page{size:A4;margin:0;}}`;
-  const foot=(n)=>'<div class="pgfoot"><span>'+esc(OFFICE.name)+'　'+esc(OFFICE.addr)+'　TEL '+OFFICE.tel+'</span><span>'+n+' / 6</span></div>';
+  const foot=(n)=>'<div class="pgfoot"><span>'+esc(OFFICE.name)+'　'+esc(OFFICE.addr)+'　TEL '+OFFICE.tel+'</span><span>'+n+' / 7</span></div>';
+  // 相続人別 取得財産明細
+  let heirDetail='';
+  heirs.forEach(h=>{
+    let rows='';
+    ASSET_TYPES.forEach(t=>{ if(t.key==='gift') return; currentCase.assets.filter(a=>a.category===t.key).forEach(a=>{ const amt=amtOf(a,h.id); if(!amt) return; const label=[a.subcategory,a.name,a.location,a.quantity?('数量'+a.quantity):''].filter(Boolean).join('　'); rows+='<tr><td>'+t.name+'</td><td>'+esc(label)+'</td><td class="r">'+(t.sign<0?'△'+yen(amt):yen(amt))+'</td></tr>'; }); });
+    currentCase.assets.filter(a=>a.category==='gift'&&a.giftRecipient===h.id).forEach(a=>{ rows+='<tr><td>生前贈与</td><td>'+esc([(a.regime==='seisan'?'相続時精算課税':'暦年課税'),a.gKind,a.gDetail,a.giftDate].filter(Boolean).join('　'))+'</td><td class="r">'+yen(assetVal(a))+'</td></tr>'; });
+    if(!rows) rows='<tr><td colspan="3" style="text-align:center;color:#888;">取得財産はありません</td></tr>';
+    heirDetail+='<h3 class="blk">'+esc(h.name||'')+' 様（'+RELATION_LABELS[h.relationType]+'）　純財産合計：'+yen(totals[h.id])+'</h3>'
+      +'<table class="t"><tr><th>種類</th><th>明細</th><th class="r">取得額</th></tr>'+rows+'</table>';
+  });
   const body=
     '<div class="page"><div class="cover"><div class="big">財産診断書</div><div class="sub">相続税 試算レポート</div>'
       +'<div class="nmlbl">被相続人</div><div class="nm">'+esc(d.name)+' 様</div>'
@@ -2229,14 +2371,18 @@ function downloadShindanPDF(){
       +'<table class="t">'+divHead+divBody+'</table>'
       +'<p class="note">※ 各相続人が取得する財産の純額と、それに対応する納付税額の概算です。</p>'
       +foot(5)+'</div>'
-    +'<div class="page"><div class="sec-title">5. 留意事項<span class="pno">NOTES</span></div>'
+    +'<div class="page"><div class="sec-title">5. 相続人別 取得財産明細<span class="pno">DETAIL</span></div>'
+      +heirDetail
+      +'<p class="note">※ 各相続人が取得する財産の明細です（生前贈与財産を含む）。</p>'
+      +foot(6)+'</div>'
+    +'<div class="page"><div class="sec-title">6. 留意事項<span class="pno">NOTES</span></div>'
       +'<p class="note">1. 本診断書は試算であり、実際の申告額を保証するものではありません。<br>'
       +'2. 財産評価は入力された金額に基づきます。土地等の評価は別途、財産評価基本通達に基づく精査が必要です。<br>'
       +'3. 法定相続人の数は、相続放棄を放棄がなかったものとして算入し、養子の数の制限を適用しています。<br>'
       +'4. 配偶者の税額軽減・未成年者控除・障害者控除・相次相続控除・贈与税額控除を反映しています。納税猶予・外国税額控除等は含みません。<br>'
       +'5. 二次相続を考慮した分割のご提案も可能です。詳しくは担当者までお問い合わせください。</p>'
       +'<div class="ofc" style="margin-top:30px;font-size:12px;line-height:1.9;">'+esc(OFFICE.name)+'<br>'+esc(OFFICE.addr)+'<br>TEL '+OFFICE.tel+'　FAX '+OFFICE.fax+'</div>'
-      +foot(6)+'</div>';
+      +foot(7)+'</div>';
   openPrintWindow('財産診断書_'+d.name, body, styles);
 }
 async function downloadShindanExcel(){
@@ -2278,6 +2424,53 @@ async function downloadShindanExcel(){
   ['本診断書は試算であり、実際の申告額を保証するものではありません。','財産評価は入力金額に基づきます。土地等は別途精査が必要です。','法定相続人の数は放棄を算入し養子の数の制限を適用しています。','配偶者の税額軽減・各種控除・相次相続控除・贈与税額控除を反映、納税猶予等は含みません。'].forEach((t,i)=>w5.addRow([(i+1)+'. '+t]));
   const buf=await wb.xlsx.writeBuffer();
   saveAs(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'財産診断書_'+(d.name||'案件')+'_'+todayISO()+'.xlsx');
+}
+function downloadSavingsPDF(){
+  if(!currentCase){ toast('案件がありません', true); return; }
+  syncUIToCase();
+  const d=currentCase.deceased;
+  if(!(currentCase.savings||[]).length){ toast('節税対策が登録されていません。節税シミュレーションで追加してください。', true); switchView('savings'); return; }
+  const R=savingsCompute();
+  let mrows=R.rows.map((x,i)=>{ const s=currentCase.savings[i]; const t=SAVING_BY_KEY[s.key];
+    const pdesc=t.fields.map(f=>f.label+'：'+(f.type==='money'?yen(num(s.params[f.k])):(s.params[f.k]||'-'))).join(' ／ ');
+    return '<tr><td>'+esc(x.name)+'<div style="font-size:10px;color:#666;">'+esc(pdesc)+'</div></td><td class="r">'+(x.dT?'−'+yen(x.dT):'-')+'</td><td class="r">'+(x.dn?'＋'+x.dn+'人':'-')+'</td></tr>';
+  }).join('');
+  const styles=`*{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:"Hiragino Sans","Yu Gothic UI","Meiryo",sans-serif;color:#1a1a1a;font-size:11px;line-height:1.6;}
+  .page{padding:18mm 16mm;}
+  .big{font-size:26px;font-weight:800;letter-spacing:3px;color:#1a6b3a;}
+  .sub{font-size:12px;color:#666;margin:4px 0 18px;}
+  .sec-title{font-size:15px;font-weight:700;color:#1a6b3a;border-bottom:2px solid #1a6b3a;padding-bottom:5px;margin:18px 0 12px;}
+  .kpis{display:flex;gap:10px;margin-bottom:14px;}
+  .kpi{flex:1;border:1px solid #cfe;border-radius:8px;padding:10px 12px;}
+  .kpi.a{background:#eafaf0;border-color:#bce8cd;}
+  .kpi .l{font-size:10px;color:#567;}.kpi .v{font-size:18px;font-weight:800;color:#1a6b3a;}
+  table.t{width:100%;border-collapse:collapse;margin-bottom:10px;}
+  table.t th,table.t td{border:1px solid #ccc;padding:6px 9px;}
+  table.t th{background:#1a6b3a;color:#fff;text-align:left;}
+  table.t td.r,table.t th.r{text-align:right;font-variant-numeric:tabular-nums;}
+  table.t tr:nth-child(even) td{background:#f2faf5;}
+  table.t tr.tot td{font-weight:700;background:#dff3e6 !important;color:#1a6b3a;}
+  .note{font-size:10.5px;color:#444;line-height:1.9;margin-top:10px;}
+  .pgfoot{margin-top:18px;border-top:1px solid #ddd;padding-top:6px;font-size:9px;color:#999;}
+  @media print{@page{size:A4;margin:0;}}`;
+  const body='<div class="page"><div class="big">相続税 節税シミュレーション報告書</div>'
+    +'<div class="sub">被相続人：'+esc(d.name)+' 様　／　基準日：'+esc(baseDateStr())+'　／　作成日：'+formatJDate(todayISO())+'</div>'
+    +'<div class="kpis"><div class="kpi"><div class="l">対策前 相続税の総額</div><div class="v">'+yen(R.baseTax)+'</div></div>'
+    +'<div class="kpi"><div class="l">対策後 相続税の総額</div><div class="v">'+yen(R.afterTax)+'</div></div>'
+    +'<div class="kpi a"><div class="l">節税効果（削減額）</div><div class="v">'+yen(R.save)+'</div></div></div>'
+    +'<div class="sec-title">課税価格の比較</div>'
+    +'<table class="t"><tr><th>項目</th><th class="r">対策前</th><th class="r">対策後</th></tr>'
+    +'<tr><td>課税価格の合計額</td><td class="r">'+yen(R.T0)+'</td><td class="r">'+yen(R.T1)+'</td></tr>'
+    +'<tr><td>課税価格の削減額</td><td class="r">-</td><td class="r">−'+yen(R.dTtotal)+'</td></tr>'
+    +'<tr class="tot"><td>相続税の総額</td><td class="r">'+yen(R.baseTax)+'</td><td class="r">'+yen(R.afterTax)+'</td></tr></table>'
+    +'<div class="sec-title">実施する節税対策</div>'
+    +'<table class="t"><tr><th>対策・条件</th><th class="r">課税価格の削減</th><th class="r">法定相続人の増加</th></tr>'+mrows
+    +'<tr class="tot"><td>合計</td><td class="r">−'+yen(R.dTtotal)+'</td><td class="r">'+(R.dnTotal?'＋'+R.dnTotal+'人':'-')+'</td></tr></table>'
+    +'<div class="note">※ 本書は「相続税の総額」ベースの概算です。各対策には適用要件・否認リスク・贈与税等の別途コストがあります。実行可否は必ず税理士にご相談ください。</div>'
+    +'<div class="note" style="margin-top:20px;">'+esc(OFFICE.name)+'　'+esc(OFFICE.addr)+'　TEL '+OFFICE.tel+'</div>'
+    +'<div class="pgfoot">'+esc(OFFICE.name)+'</div></div>';
+  openPrintWindow('節税シミュレーション_'+d.name, body, styles);
 }
 
 // ============================================================
