@@ -55,6 +55,48 @@ input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink);}
 .nav-item .step-no{position:absolute;right:10px;font-size:11px;opacity:.5;font-weight:600;}
 .nav-item.disabled{opacity:.4;pointer-events:none;}
 .sidebar-foot{margin-top:auto;padding:12px 10px 4px;font-size:11px;color:var(--ink-2);}
+.sb-toggle{margin-left:auto;width:28px;height:28px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink-2);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .12s;}
+.sb-toggle:hover{background:#ececf0;}
+/* collapsed sidebar */
+.app.sb-collapsed{grid-template-columns:66px 1fr;}
+.app.sb-collapsed .sidebar{padding:18px 8px;}
+.app.sb-collapsed .brand{justify-content:center;padding:6px 0 14px;}
+.app.sb-collapsed .brand .title,.app.sb-collapsed .brand .subtitle{display:none;}
+.app.sb-collapsed .nav-item{font-size:0;justify-content:center;padding:10px 0;}
+.app.sb-collapsed .nav-item .nav-ico{font-size:18px;}
+.app.sb-collapsed .nav-item .step-no{display:none;}
+.app.sb-collapsed .nav-section,.app.sb-collapsed .nav-sub,.app.sb-collapsed .sidebar-foot{display:none;}
+.app.sb-collapsed .sb-toggle{margin:0 auto;}
+.app.sb-collapsed .brand .sb-toggle{position:static;}
+/* progress management */
+.prog-head{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-bottom:18px;}
+.prog-ring{--p:0;width:84px;height:84px;border-radius:50%;flex-shrink:0;background:conic-gradient(var(--green) calc(var(--p)*1%), var(--line) 0);display:flex;align-items:center;justify-content:center;}
+.prog-ring .inner{width:64px;height:64px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+.prog-ring .pct{font-size:19px;font-weight:700;letter-spacing:-.02em;}
+.prog-ring .lbl{font-size:9px;color:var(--ink-2);}
+.prog-head .meta .t{font-size:15px;font-weight:600;}
+.prog-head .meta .d{font-size:13px;color:var(--ink-2);margin-top:2px;}
+.timeline{position:relative;}
+.tl-item{display:flex;gap:16px;padding:0 0 4px;}
+.tl-rail{display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:34px;}
+.tl-dot{width:30px;height:30px;border-radius:50%;border:2px solid var(--line-2);background:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--ink-2);cursor:pointer;transition:all .15s;flex-shrink:0;z-index:1;}
+.tl-dot:hover{border-color:var(--accent);}
+.tl-dot.doing{border-color:var(--orange);color:var(--orange);}
+.tl-dot.done{background:var(--green);border-color:var(--green);color:#fff;}
+.tl-line{width:2px;flex:1;background:var(--line);min-height:18px;}
+.tl-item:last-child .tl-line{display:none;}
+.tl-body{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:14px;transition:box-shadow .15s;}
+.tl-body:hover{box-shadow:var(--shadow-sm);}
+.tl-body.done{background:var(--surface-2);}
+.tl-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.tl-name{font-size:15px;font-weight:700;}
+.tl-name.done{color:var(--ink-2);}
+.tl-status{font-size:11px;font-weight:600;padding:3px 10px;border-radius:980px;cursor:pointer;border:1px solid var(--line-2);background:#fff;color:var(--ink-2);}
+.tl-status.doing{background:#fff4e5;color:#b25e00;border-color:#ffd9a8;}
+.tl-status.done{background:#e7f8ec;color:#1a7f37;border-color:#aee5bf;}
+.tl-fields{display:grid;grid-template-columns:1fr 1fr 2fr;gap:10px;margin-top:10px;}
+@media(max-width:760px){.tl-fields{grid-template-columns:1fr;}}
+.tl-fields label{font-size:11px;font-weight:600;color:var(--ink-2);display:block;margin-bottom:3px;}
 
 .topbar{grid-area:topbar;background:rgba(255,255,255,.8);backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line);padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:58px;}
 .topbar-left{display:flex;align-items:center;gap:14px;min-width:0;}
@@ -314,10 +356,12 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
         <div class="title">相続管理</div>
         <div class="subtitle">相続税申告サポート</div>
       </div>
+      <button class="sb-toggle" id="sbToggle" onclick="toggleSidebar()" title="サイドバーの折り畳み">‹</button>
     </div>
     <nav class="nav" id="nav">
       <button class="nav-item active" data-view="cases"><span class="nav-ico">🗂</span>案件一覧</button>
       <div class="nav-section">案件の作業</div>
+      <button class="nav-item needs-case" data-view="progress"><span class="nav-ico">📊</span>進捗管理</button>
       <button class="nav-item needs-case" data-view="basic"><span class="nav-ico">📝</span>基本情報・打合せ<span class="step-no">1</span></button>
       <button class="nav-item needs-case" data-view="checklist"><span class="nav-ico">✅</span>必要資料<span class="step-no">2</span></button>
       <button class="nav-item needs-case" data-view="assets" id="navAssets"><span class="nav-ico">💰</span>財産一覧<span class="step-no">3</span></button>
@@ -359,6 +403,14 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
         </div>
       </div>
       <div id="casesContainer"></div>
+    </section>
+
+    <!-- ===== Progress ===== -->
+    <section class="view" id="view-progress">
+      <div class="view-head"><h1>進捗管理</h1><p>初回面談から申告書の製本・納品までの進捗を管理します。各工程の状態・予定日・完了日を記録できます。</p></div>
+      <div class="card">
+        <div id="progressContainer"></div>
+      </div>
     </section>
 
     <!-- ===== Basic ===== -->
@@ -877,10 +929,57 @@ function newCaseObject(name){
     assets:[],      // {id,category,subcategory,name,location,quantity,unitPrice,value,memo,allocations,kobo:{type,area},giftTax,is4to7}
     successive:{ enabled:false, A:'', B:'', years:'' }, // 相次相続控除
     compensations:[], // 代償金 {id,from,to,amount}
-    agreement:{ date:'', notes:'', extraHeirId:'' }
+    agreement:{ date:'', notes:'', extraHeirId:'' },
+    progress:{} // stageKey -> {status,due,done,memo}
   };
 }
-function newHeir(){ return { id:uid(), name:'', kana:'', relationType:'child', isAdopted:false, adoptedAsReal:false, isDaishu:false, daishuGroup:'', isRenounced:false, address:'', tel:'', job:'', age:'', disabled:false, disabilityType:'general', surcharge:false, surchargeManual:false, isRepresentative:false, hideFromContract:false }; }
+const PROGRESS_STAGES=[
+  {key:'meeting',name:'初回面談',desc:'相続人との初回打合せ・ヒアリング'},
+  {key:'contract',name:'受任・委任契約',desc:'委任契約の締結・報酬説明'},
+  {key:'collect',name:'資料収集',desc:'必要資料の依頼・受領'},
+  {key:'valuation',name:'財産評価',desc:'不動産・有価証券等の評価、財産一覧の確定'},
+  {key:'division',name:'遺産分割協議',desc:'分割案の作成・相続人間の協議・協議書作成'},
+  {key:'draft',name:'申告書作成',desc:'相続税申告書の作成'},
+  {key:'review',name:'申告書チェック・承認',desc:'社内レビュー・相続人への内容説明と承認'},
+  {key:'seal',name:'押印・申告',desc:'押印書類の回収・電子申告（e-Tax）',},
+  {key:'payment',name:'納税',desc:'納付書の交付・納税の確認'},
+  {key:'delivery',name:'製本・納品',desc:'申告書控えの製本・納品・アフターフォロー'}
+];
+function progState(key){ if(!currentCase.progress[key]) currentCase.progress[key]={status:'todo',due:'',done:'',memo:''}; return currentCase.progress[key]; }
+function cycleProg(key){ const s=progState(key); s.status=(s.status==='todo')?'doing':(s.status==='doing'?'done':'todo'); if(s.status==='done'&&!s.done) s.done=todayISO(); if(s.status!=='done') s.done=''; renderProgress(); cacheCurrentCase(); }
+function updProg(key,field,val){ progState(key)[field]=val; if(field==='done'&&val){ const s=progState(key); if(s.status!=='done'){ s.status='done'; renderProgress(); } } cacheCurrentCase(); }
+function renderProgress(){
+  if(!currentCase) return; const c=$('progressContainer'); if(!c) return;
+  const done=PROGRESS_STAGES.filter(s=>progState(s.key).status==='done').length;
+  const pct=Math.round(done/PROGRESS_STAGES.length*100);
+  const STAT={todo:['未着手',''],doing:['進行中','doing'],done:['完了','done']};
+  let head='<div class="prog-head"><div class="prog-ring" style="--p:'+pct+'"><div class="inner"><div class="pct">'+pct+'%</div><div class="lbl">完了</div></div></div>'
+    +'<div class="meta"><div class="t">'+done+' / '+PROGRESS_STAGES.length+' 工程が完了</div>'
+    +'<div class="d">各工程の状態をクリックで「未着手→進行中→完了」と切り替えできます。予定日・完了日・メモを記録できます。</div></div></div>';
+  let tl='<div class="timeline">';
+  PROGRESS_STAGES.forEach((st,i)=>{
+    const s=progState(st.key); const sc=STAT[s.status][1]; const isDone=s.status==='done';
+    const mark=isDone?'✓':(i+1);
+    tl+='<div class="tl-item">'
+      +'<div class="tl-rail"><div class="tl-dot '+sc+'" onclick="cycleProg(\''+st.key+'\')" title="クリックで状態切替">'+mark+'</div><div class="tl-line"></div></div>'
+      +'<div class="tl-body '+(isDone?'done':'')+'">'
+      +'<div class="tl-top"><span class="tl-name '+(isDone?'done':'')+'">'+st.name+'</span>'
+      +'<span class="tl-status '+sc+'" onclick="cycleProg(\''+st.key+'\')">'+STAT[s.status][0]+'</span>'
+      +'<span class="muted" style="font-size:12px;margin-left:auto;">'+esc(st.desc)+'</span></div>'
+      +'<div class="tl-fields">'
+      +'<div><label>予定日</label><input type="date" value="'+esc(s.due||'')+'" oninput="updProg(\''+st.key+'\',\'due\',this.value)"></div>'
+      +'<div><label>完了日</label><input type="date" value="'+esc(s.done||'')+'" oninput="updProg(\''+st.key+'\',\'done\',this.value)"></div>'
+      +'<div><label>メモ・担当</label><input type="text" value="'+esc(s.memo||'')+'" placeholder="担当者・特記事項" oninput="updProg(\''+st.key+'\',\'memo\',this.value)"></div>'
+      +'</div></div></div>';
+  });
+  tl+='</div>';
+  c.innerHTML=head+tl;
+}
+function newHeir(){ return { id:uid(), name:'', kana:'', relationType:'child', isAdopted:false, adoptedAsReal:false, isDaishu:false, daishuGroup:'', isRenounced:false, address:'', tel:'', job:'', birth:'', age:'', disabled:false, disabilityType:'general', surcharge:false, surchargeManual:false, isRepresentative:false, hideFromContract:false }; }
+function ageAt(birth, ref){ if(!birth||!ref) return ''; const b=new Date(birth), r=new Date(ref); if(isNaN(b)||isNaN(r)) return ''; let a=r.getFullYear()-b.getFullYear(); const m=r.getMonth()-b.getMonth(); if(m<0||(m===0&&r.getDate()<b.getDate())) a--; return a<0?'':a; }
+function daysBetween(from, to){ if(!from||!to) return null; const a=new Date(from), b=new Date(to); if(isNaN(a)||isNaN(b)) return null; return Math.round((b-a)/864e5); }
+function heirDaysText(h){ const d=daysBetween(h.birth, currentCase&&currentCase.deceased?currentCase.deceased.deathDate:''); if(d==null) return ''; return d.toLocaleString('ja-JP')+' 日（満'+ageAt(h.birth,currentCase.deceased.deathDate)+'歳）'; }
+function recomputeHeirAges(){ if(!currentCase) return; const dd=currentCase.deceased.deathDate; currentCase.heirs.forEach(h=>{ if(h.birth){ const a=ageAt(h.birth,dd); h.age=a===''?'':a; } }); }
 const RELATION_LABELS={spouse:'配偶者',child:'子',grandchild:'孫（代襲）',parent:'父母（直系尊属）',sibling:'兄弟姉妹',nephew:'甥姪（代襲）',other:'その他'};
 function autoSurcharge(h){
   if(h.relationType==='spouse'||h.relationType==='parent') return false;
@@ -902,7 +1001,17 @@ function switchView(view){
   if(view==='agreement'){ renderAgreement(); }
   if(view==='simulation'){ renderSimulation(); }
   if(view==='checklist'){ renderChecklist(); }
+  if(view==='progress'){ renderProgress(); }
   if(view==='basic'){ /* already rendered */ }
+}
+function toggleSidebar(){
+  const app=document.querySelector('.app'); const col=app.classList.toggle('sb-collapsed');
+  const b=$('sbToggle'); if(b) b.textContent=col?'›':'‹';
+  try{ localStorage.setItem('sb_collapsed', col?'1':'0'); }catch(e){}
+}
+function restoreSidebar(){
+  let col=false; try{ col=localStorage.getItem('sb_collapsed')==='1'; }catch(e){}
+  if(col){ document.querySelector('.app').classList.add('sb-collapsed'); const b=$('sbToggle'); if(b) b.textContent='›'; }
 }
 document.querySelectorAll('.nav-item').forEach(b=>{
   b.addEventListener('click',()=>{
@@ -1002,6 +1111,7 @@ function migrateCase(data){
   c.checklist=data.checklist||{};
   c.successive=Object.assign({enabled:false,A:'',B:'',years:''}, data.successive||{});
   c.compensations=Array.isArray(data.compensations)? data.compensations : [];
+  c.progress=(data.progress&&typeof data.progress==='object')? data.progress : {};
   c.assets=(data.assets||[]).map(a=>{
     const na=Object.assign(newAsset(a.category||'other'),a);
     if(!na.kobo) na.kobo={type:'none',area:''};
@@ -1078,6 +1188,7 @@ function loadCaseIntoUI(){
   renderChecklist();
   renderAssetNav(); renderAssetDetail(); renderSummary();
   renderAgreement();
+  renderProgress();
 }
 function updateCaseChip(){
   const chip=$('caseChip');
@@ -1092,6 +1203,7 @@ function onBasicInput(){ if(!currentCase) return; syncUIToCase(); updateCaseChip
 // ============================================================
 function calcDeadlines(){
   const v=$('d_death').value;
+  if(currentCase){ currentCase.deceased.deathDate=v; recomputeHeirAges(); if($('heirsContainer')) renderHeirs(); }
   if(!v){ $('filingDeadline').textContent='—'; $('junkakuDeadline').textContent='—'; return; }
   const f=new Date(v); f.setMonth(f.getMonth()+10);
   $('filingDeadline').textContent=formatJDate(f.toISOString().slice(0,10));
@@ -1104,7 +1216,7 @@ function calcDeadlines(){
 // ============================================================
 function addHeir(){ if(!currentCase) return; currentCase.heirs.push(newHeir()); renderHeirs(); cacheCurrentCase(); }
 function removeHeir(id){ if(!currentCase) return; currentCase.heirs=currentCase.heirs.filter(h=>h.id!==id); if(!currentCase.heirs.length) currentCase.heirs.push(newHeir()); renderHeirs(); refreshAcquirerSelects(); cacheCurrentCase(); }
-function updateHeir(id,field,val){ const h=currentCase.heirs.find(x=>x.id===id); if(h){ h[field]=val; if(field==='relationType'){ if(!h.surchargeManual) h.surcharge=autoSurcharge(h); renderHeirs(); } cacheCurrentCase(); if(field==='name'||field==='relationType') refreshAcquirerSelects(); } }
+function updateHeir(id,field,val){ const h=currentCase.heirs.find(x=>x.id===id); if(h){ h[field]=val; if(field==='relationType'){ if(!h.surchargeManual) h.surcharge=autoSurcharge(h); renderHeirs(); } if(field==='birth'){ h.age=ageAt(val,currentCase.deceased.deathDate); renderHeirs(); } cacheCurrentCase(); if(field==='name'||field==='relationType') refreshAcquirerSelects(); } }
 function updateHeirBool(id,field,checked){ const h=currentCase.heirs.find(x=>x.id===id); if(h){ h[field]=checked;
   if(field==='surcharge') h.surchargeManual=true;
   if(field==='isAdopted'||field==='isDaishu'){ if(!h.surchargeManual) h.surcharge=autoSurcharge(h); renderHeirs(); }
@@ -1131,6 +1243,8 @@ function renderHeirs(){
       +'<div class="field"><label>電話番号</label><input type="tel" value="'+esc(h.tel)+'" oninput="updateHeir(\''+h.id+'\',\'tel\',this.value)"></div>'
       +'<div class="field" style="grid-column:1/3;"><label>住所</label><input type="text" value="'+esc(h.address)+'" oninput="updateHeir(\''+h.id+'\',\'address\',this.value)"></div>'
       +'<div class="field"><label>職業</label><input type="text" value="'+esc(h.job)+'" oninput="updateHeir(\''+h.id+'\',\'job\',this.value)"></div>'
+      +'<div class="field"><label>生年月日</label><input type="date" value="'+esc(h.birth||'')+'" oninput="updateHeir(\''+h.id+'\',\'birth\',this.value)"></div>'
+      +'<div class="field"><label>相続開始日までの日数</label><input type="text" readonly value="'+heirDaysText(h)+'" style="background:var(--surface-2);"></div>'
       +'</div>'
       +'<div class="grid grid-4" style="margin-top:12px;align-items:end;">'
       +'<div class="field"><label>実子／養子</label><select onchange="updateHeirBool(\''+h.id+'\',\'isAdopted\',this.value===\'adopted\')"'+( (h.relationType==='child'||h.relationType==='grandchild')?'':' disabled style="opacity:.4"')+'><option value="real"'+(!h.isAdopted?' selected':'')+'>実子</option><option value="adopted"'+(h.isAdopted?' selected':'')+'>養子</option></select></div>'
@@ -1140,7 +1254,7 @@ function renderHeirs(){
       +'</div>'
       +'<div class="grid grid-4" style="margin-top:12px;align-items:end;">'
       +'<label class="field" style="flex-direction:row;align-items:center;gap:8px;"><input type="checkbox" style="width:auto;" '+(h.isRenounced?'checked':'')+' onchange="updateHeirBool(\''+h.id+'\',\'isRenounced\',this.checked)"> <span class="lbl">相続放棄</span></label>'
-      +'<div class="field"><label>年齢（未成年者/障害者控除）</label><input type="number" min="0" value="'+esc(h.age)+'" placeholder="例：45" oninput="updateHeir(\''+h.id+'\',\'age\',this.value)"></div>'
+      +'<div class="field"><label>年齢（相続開始日時点）'+(h.birth?'<span style="font-weight:400;font-size:10.5px;color:var(--accent);"> 自動</span>':'')+'</label><input type="number" min="0" value="'+esc(h.age)+'" placeholder="例：45" '+(h.birth?'readonly style="background:var(--surface-2);"':'oninput="updateHeir(\''+h.id+'\',\'age\',this.value)"')+'></div>'
       +'<div class="field"><label>障害者控除</label><select onchange="updateHeir(\''+h.id+'\',\'disabilityType\',this.value);updateHeirBool(\''+h.id+'\',\'disabled\',this.value!==\'none\')">'+disabilityOptions(h)+'</select></div>'
       +'<label class="field" style="flex-direction:row;align-items:center;gap:8px;"><input type="checkbox" style="width:auto;" '+(effSurcharge(h)?'checked':'')+' onchange="updateHeirBool(\''+h.id+'\',\'surcharge\',this.checked)"> <span class="lbl">相続税額の2割加算</span></label>'
       +'<div class="muted" style="font-size:11.5px;">法定相続分：<b id="lshare-'+h.id+'">—</b></div>'
@@ -2071,6 +2185,7 @@ function tryRestoreCache(){
   try{ const c=JSON.parse(localStorage.getItem(LS_CASE_CACHE)); if(c&&c.case){ currentCase=migrateCase(c.case); currentFileId=c.fileId||null; loadCaseIntoUI(); } }catch(e){}
 }
 window.addEventListener('load',()=>{
+  restoreSidebar();
   loadSettings();
   initGis();
   // GIS may load after; retry
