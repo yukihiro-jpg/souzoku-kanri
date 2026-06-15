@@ -2216,18 +2216,28 @@ function securitiesTableHtml(items){
     +'<tfoot><tr><td colspan="20" style="text-align:right;">計</td><td class="num" id="foot-securities">'+yen(sub)+'</td><td colspan="3"></td></tr></tfoot></table></div>';
 }
 // 株価データ取得（Google Apps Script ウェブアプリ経由でYahoo!ファイナンスを取得）
-// 返り値を {ts:[unix], close:[number], name, dividends:[{date,amount}]} に正規化
+// query1/query2 の両ホストを順に再試行し、{ts:[unix], close:[number], name, dividends:[{date,amount}]} に正規化
 async function fetchChart(symbol, period1, period2){
   if(!settings.gasUrl) throw new Error('設定でApps ScriptのURLを入力してください');
-  const api='https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(symbol)
-    +'?period1='+period1+'&period2='+period2+'&interval=1d&events=div';
-  const url=settings.gasUrl+(settings.gasUrl.indexOf('?')<0?'?':'&')+'url='+encodeURIComponent(api);
-  const r=await fetch(url); if(!r.ok) throw new Error('HTTP '+r.status);
-  const j=await r.json();
-  const res=j&&j.chart&&j.chart.result&&j.chart.result[0];
-  if(!res||!res.timestamp) throw new Error('データなし（銘柄コードをご確認ください）');
-  const divs=res.events&&res.events.dividends? Object.values(res.events.dividends).map(d=>({date:d.date,amount:d.amount})):[];
-  return {ts:res.timestamp, close:res.indicators.quote[0].close, name:(res.meta&&(res.meta.longName||res.meta.shortName))||'', dividends:divs};
+  const hosts=['query1.finance.yahoo.com','query2.finance.yahoo.com'];
+  let lastErr;
+  for(let attempt=0; attempt<hosts.length*2; attempt++){
+    const host=hosts[attempt%hosts.length];
+    const api='https://'+host+'/v8/finance/chart/'+encodeURIComponent(symbol)
+      +'?period1='+period1+'&period2='+period2+'&interval=1d&events=div';
+    const url=settings.gasUrl+(settings.gasUrl.indexOf('?')<0?'?':'&')+'url='+encodeURIComponent(api);
+    try{
+      const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status);
+      const txt=await r.text();
+      let j; try{ j=JSON.parse(txt); }catch(_){ throw new Error('JSON解析に失敗'); }
+      const res=j&&j.chart&&j.chart.result&&j.chart.result[0];
+      if(!res||!res.timestamp){ const em=j&&j.chart&&j.chart.error&&(j.chart.error.description||j.chart.error.code); throw new Error(em||'データなし（銘柄コードをご確認ください）'); }
+      const q=res.indicators&&res.indicators.quote&&res.indicators.quote[0];
+      const divs=res.events&&res.events.dividends? Object.values(res.events.dividends).map(d=>({date:d.date,amount:d.amount})):[];
+      return {ts:res.timestamp, close:(q&&q.close)||[], name:(res.meta&&(res.meta.longName||res.meta.shortName))||'', dividends:divs};
+    }catch(e){ lastErr=e; await delay(500*(attempt+1)); }
+  }
+  throw lastErr||new Error('株価データの取得に失敗しました');
 }
 // 投資信託の基準価額を投資信託協会（投信総合検索ライブラリー）CSVから取得（GAS経由）。相続開始日以前で最も近い日の基準価額を返す。
 function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
