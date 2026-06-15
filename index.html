@@ -218,15 +218,19 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 .riyo-cell{width:60px;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:2px;padding:6px 4px;border:1px solid var(--line-2);border-radius:8px;font-size:14px;}
 .riyo-cell:disabled{background:var(--surface-2);color:var(--ink-2);}
 .riyo-sep{color:var(--ink-2);font-weight:700;}
+.riyo-method{display:flex;align-items:center;gap:14px;flex-shrink:0;}
 .riyo-skip{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-2);white-space:nowrap;cursor:pointer;}
 .riyo-skip input{width:15px;height:15px;}
 .empty-state{text-align:center;padding:60px 20px;color:var(--ink-2);}
 .empty-state .em-ico{font-size:46px;margin-bottom:12px;}
 
 /* ---------- Heirs ---------- */
-.heir-card{border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px;margin-bottom:12px;background:var(--surface-2);}
-.heir-card .heir-top{display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+.heir-card{border:1px solid var(--line);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px;background:var(--surface-2);}
+.heir-card .heir-top{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
 .heir-card .heir-no{font-weight:700;font-size:14px;color:var(--ink-2);}
+.heir-card .grid{gap:8px 12px;}
+.heir-card .field label{font-size:11.5px;}
+.heir-card input,.heir-card select{padding:7px 10px;}
 .tag-btn{border:1px solid var(--line-2);background:#fff;border-radius:980px;padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--ink-2);}
 .tag-btn.active.rep{background:var(--orange);border-color:var(--orange);color:#fff;}
 .tag-btn.active.hide{background:#8e8e93;border-color:#8e8e93;color:#fff;}
@@ -1170,19 +1174,19 @@ function stageStatus(c, key){
   }
   if(key==='riyousha'){
     const heirs=(c.heirs||[]);
-    if(heirs.length){ const rm=(c.progress&&c.progress.riyousha)||{}; let d=0,any=0; heirs.forEach(h=>{ const v=rm[h.id]||{}; if(riyoHeirDone(v))d++; if(v.skip||['p1','p2','p3','p4'].some(p=>(v[p]||'').length>0))any++; }); return d===heirs.length?'done':(any>0?'doing':'todo'); }
+    if(heirs.length){ const rm=(c.progress&&c.progress.riyousha)||{}; let d=0,any=0; heirs.forEach(h=>{ const v=rm[h.id]||{}; if(riyoHeirDone(v))d++; if(v.method||['p1','p2','p3','p4'].some(p=>(v[p]||'').length>0))any++; }); return d===heirs.length?'done':(any>0?'doing':'todo'); }
   }
   return ((c.progress||{})[key]||{}).status||'todo';
 }
-// 利用者識別番号（相続人ごと）
-function riyoState(c,id){ if(!c.progress.riyousha) c.progress.riyousha={}; if(!c.progress.riyousha[id]) c.progress.riyousha[id]={p1:'',p2:'',p3:'',p4:'',skip:false}; return c.progress.riyousha[id]; }
-function riyoHeirDone(v){ return !!v.skip || ['p1','p2','p3','p4'].every(p=>(v[p]||'').length===4); }
+// 利用者識別番号（相続人ごと）。method: ''|'agent'(税理士代理取得)|'self'(本人取得済み)
+function riyoState(c,id){ if(!c.progress.riyousha) c.progress.riyousha={}; if(!c.progress.riyousha[id]) c.progress.riyousha[id]={p1:'',p2:'',p3:'',p4:'',method:''}; return c.progress.riyousha[id]; }
+function riyoHeirDone(v){ return ['p1','p2','p3','p4'].every(p=>(v[p]||'').length===4); }
 function updRiyoDigit(id,field,idx,el){
   const v=el.value.replace(/[^0-9]/g,'').slice(0,4); const s=riyoState(currentCase,id); s[field]=v;
   const advance=(v.length===4 && idx<3); cacheCurrentCase(); renderProgress();
   const nx=$('riyo-'+id+'-'+(advance?(idx+1):idx)); if(nx){ nx.focus(); const L=nx.value.length; try{nx.setSelectionRange(L,L);}catch(e){} }
 }
-function toggleRiyoSkip(id,checked){ const s=riyoState(currentCase,id); s.skip=checked; cacheCurrentCase(); renderProgress(); }
+function setRiyoMethod(id,method,checked){ const s=riyoState(currentCase,id); s.method=checked?method:''; cacheCurrentCase(); renderProgress(); }
 function progressSummary(c){
   let codes='',done=0;
   PROGRESS_STAGES.forEach(st=>{ const s=stageStatus(c,st.key); codes+=(s==='done'?'2':s==='doing'?'1':'0'); if(s==='done')done++; });
@@ -1253,12 +1257,15 @@ function riyoSubHtml(){
   let html='<div class="eval-sub"><div class="es-title">利用者識別番号（相続人ごと）</div>';
   heirs.forEach(h=>{
     const s=riyoState(currentCase,h.id);
-    const cells=['p1','p2','p3','p4'].map((p,i)=>'<input id="riyo-'+h.id+'-'+i+'" class="riyo-cell" type="text" inputmode="numeric" maxlength="4" value="'+esc(s[p]||'')+'" '+(s.skip?'disabled':'')+' oninput="updRiyoDigit(\''+h.id+'\',\''+p+'\','+i+',this)" placeholder="0000">').join('<span class="riyo-sep">-</span>');
+    const cells=['p1','p2','p3','p4'].map((p,i)=>'<input id="riyo-'+h.id+'-'+i+'" class="riyo-cell" type="text" inputmode="numeric" maxlength="4" value="'+esc(s[p]||'')+'" oninput="updRiyoDigit(\''+h.id+'\',\''+p+'\','+i+',this)" placeholder="0000">').join('<span class="riyo-sep">-</span>');
     const done=riyoHeirDone(s);
     html+='<div class="eval-row"><span class="en">'+esc(h.name||'(氏名未入力)')+'<span class="sub" style="margin-left:8px;">'+esc(relDisp(h))+'</span></span>'
       +'<span class="riyo-input">'+cells+'</span>'
-      +'<label class="riyo-skip"><input type="checkbox" '+(s.skip?'checked':'')+' onchange="toggleRiyoSkip(\''+h.id+'\',this.checked)">取得不要</label>'
-      +'<span class="est '+(done?'done':'')+'">'+(s.skip?'取得不要':(done?'取得済':'未取得'))+'</span></div>';
+      +'<span class="riyo-method">'
+      +'<label class="riyo-skip"><input type="checkbox" '+(s.method==='agent'?'checked':'')+' onchange="setRiyoMethod(\''+h.id+'\',\'agent\',this.checked)">税理士代理取得</label>'
+      +'<label class="riyo-skip"><input type="checkbox" '+(s.method==='self'?'checked':'')+' onchange="setRiyoMethod(\''+h.id+'\',\'self\',this.checked)">本人取得済み</label>'
+      +'</span>'
+      +'<span class="est '+(done?'done':'')+'">'+(done?'登録済':'未登録')+'</span></div>';
   });
   html+='</div>';
   return html;
@@ -1668,8 +1675,10 @@ function birthSelects(h){
     +'<select id="bd-'+h.id+'" onchange="updateHeirBirth(\''+h.id+'\')">'+dOpts+'</select></div>';
 }
 function updateHeirBirth(id){ const h=currentCase.heirs.find(x=>x.id===id); if(!h) return; const y=$('by-'+id).value,m=$('bm-'+id).value,d=$('bd-'+id).value;
-  if(y&&m&&d){ h.birth=y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0'); h.age=ageAt(h.birth,currentCase.deceased.deathDate); } else { h.birth=''; if(!h.birth) {} }
-  renderHeirs(); cacheCurrentCase(); }
+  if(y&&m&&d){ h.birth=y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0'); h.age=ageAt(h.birth,currentCase.deceased.deathDate); } else { h.birth=''; h.age=''; }
+  // 年/月/日を1つずつ選ぶ途中で再描画して選択が消えないよう、表示のみ部分更新する
+  const daysEl=$('hdays-'+id); if(daysEl) daysEl.value=heirDaysText(h);
+  cacheCurrentCase(); }
 // 被相続人の生年月日・相続開始日（年/月/日のセレクト。相続人と同じ入力方式）
 function deceasedDateSelects(kind, val){
   const parts=(val||'').split('-'); const vy=parts[0]||'', vm=parts[1]?String(+parts[1]):'', vd=parts[2]?String(+parts[2]):'';
@@ -1711,20 +1720,21 @@ function renderHeirs(){
       +'<button class="btn red sm" style="margin-left:auto;" onclick="removeHeir(\''+h.id+'\')">削除</button></div>'
       +'<div class="grid grid-3">'
       +'<div class="field"><label>氏名</label><input type="text" value="'+esc(h.name)+'" oninput="updateHeir(\''+h.id+'\',\'name\',this.value)"></div>'
+      +'<div class="field"><label>フリガナ</label><input type="text" value="'+esc(h.kana||'')+'" placeholder="例：ヤマダ ハナコ" oninput="updateHeir(\''+h.id+'\',\'kana\',this.value)"></div>'
       +'<div class="field"><label>続柄</label><select onchange="updateHeir(\''+h.id+'\',\'relationLabel\',this.value)">'+relTypeOptions(relDisp(h))+'</select></div>'
       +'<div class="field"><label>電話番号</label><input type="tel" value="'+esc(h.tel)+'" oninput="updateHeir(\''+h.id+'\',\'tel\',this.value)"></div>'
-      +'<div class="field" style="grid-column:1/3;"><label>住所</label><input type="text" value="'+esc(h.address)+'" oninput="updateHeir(\''+h.id+'\',\'address\',this.value)"></div>'
       +'<div class="field"><label>職業</label><input type="text" value="'+esc(h.job)+'" oninput="updateHeir(\''+h.id+'\',\'job\',this.value)"></div>'
+      +'<div class="field"><label>相続開始日までの日数</label><input type="text" id="hdays-'+h.id+'" readonly value="'+heirDaysText(h)+'" style="background:var(--surface-2);"></div>'
       +'<div class="field" style="grid-column:1/3;"><label>生年月日</label>'+birthSelects(h)+'</div>'
-      +'<div class="field"><label>相続開始日までの日数</label><input type="text" readonly value="'+heirDaysText(h)+'" style="background:var(--surface-2);"></div>'
+      +'<div class="field" style="grid-column:1/4;"><label>住所</label><input type="text" value="'+esc(h.address)+'" oninput="updateHeir(\''+h.id+'\',\'address\',this.value)"></div>'
       +'</div>'
-      +'<div class="grid grid-4" style="margin-top:12px;align-items:end;">'
+      +'<div class="grid grid-4" style="margin-top:8px;align-items:end;">'
       +'<label class="field" style="flex-direction:row;align-items:center;gap:8px;"><input type="checkbox" style="width:auto;" '+(h.isRenounced?'checked':'')+' onchange="updateHeirBool(\''+h.id+'\',\'isRenounced\',this.checked)"> <span class="lbl">相続放棄</span></label>'
       +'<div class="field"><label>障害者控除</label><select onchange="updateHeir(\''+h.id+'\',\'disabilityType\',this.value);updateHeirBool(\''+h.id+'\',\'disabled\',this.value!==\'none\')">'+disabilityOptions(h)+'</select></div>'
       +'<div class="field"><label>相続税額の2割加算<br><span style="font-weight:400;font-size:10.5px;">続柄から自動判定</span></label><div class="ro-badge '+(effSurcharge(h)?'on':'')+'">'+(effSurcharge(h)?'対象（2割加算）':'対象外')+'</div></div>'
       +'<div class="muted" style="font-size:11.5px;">法定相続分：<b id="lshare-'+h.id+'">—</b></div>'
       +'</div>'
-      +((h.isAdopted||h.isDaishu)?('<div class="grid grid-4" style="margin-top:12px;align-items:end;">'
+      +((h.isAdopted||h.isDaishu)?('<div class="grid grid-4" style="margin-top:8px;align-items:end;">'
         +(h.isAdopted?'<div class="field"><label>養子を実子とみなす<br><span style="font-weight:400;font-size:10.5px;">特別養子・連れ子養子・代襲</span></label><select onchange="updateHeirBool(\''+h.id+'\',\'adoptedAsReal\',this.value===\'yes\')"><option value="no"'+(!h.adoptedAsReal?' selected':'')+'>いいえ</option><option value="yes"'+(h.adoptedAsReal?' selected':'')+'>はい</option></select></div>':'')
         +(h.isDaishu?'<div class="field"><label>代襲元グループ<br><span style="font-weight:400;font-size:10.5px;">同じ被代襲者は同名に</span></label><input type="text" value="'+esc(h.daishuGroup)+'" placeholder="例：長男" oninput="updateHeir(\''+h.id+'\',\'daishuGroup\',this.value)"></div>':'')
         +'</div>'):'');
