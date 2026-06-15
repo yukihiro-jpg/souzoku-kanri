@@ -815,6 +815,20 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
   </div>
 </div>
 
+<!-- Mail modal -->
+<div class="modal-ov" id="mailModal">
+  <div class="modal" style="max-width:680px;">
+    <h2>確認事項のメール文</h2>
+    <div class="m-sub">確認リストの内容を財産種別ごとに整理したメール文です。コピーしてメールに貼り付けてご利用ください。</div>
+    <textarea id="mailBody" rows="18" style="width:100%;font-size:13px;line-height:1.7;"></textarea>
+    <div class="btn-row" style="margin-top:16px;justify-content:flex-end;">
+      <button class="btn" onclick="closeModal('mailModal')">閉じる</button>
+      <button class="btn" onclick="openMailClient()">メールソフトで開く</button>
+      <button class="btn primary" onclick="copyMailBody()">本文をコピー</button>
+    </div>
+  </div>
+</div>
+
 <input type="file" id="jsonFileInput" accept="application/json,.json" style="display:none;" onchange="handleJsonFile(this)">
 <div class="toast" id="toast"></div>
 
@@ -1283,7 +1297,7 @@ function renderCheckList(){
   const items=(currentCase.assets||[]).filter(a=>(a.checkNote||'').trim());
   if(!items.length){ c.innerHTML='<div class="muted" style="font-size:13px;">財産一覧で各財産・債務の「確認する事項」を入力すると、ここに自動で一覧表示され、どの財産から引用された確認項目かと確認事項が表示されます。結果はこの画面で入力できます。</div>'; return; }
   const doneN=items.filter(a=>(a.checkResult||'').trim()).length;
-  let html='<div class="card-sub" style="display:flex;align-items:center;gap:12px;"><span>財産一覧で入力した「確認する事項」が自動反映されます（'+doneN+' / '+items.length+' 件 結果入力済み）。各項目の確認結果を入力してください。</span><button class="btn" style="margin-left:auto;flex-shrink:0;white-space:nowrap;" onclick="printCheckList()">印刷 / PDF保存</button></div>'
+  let html='<div class="card-sub" style="display:flex;align-items:center;gap:12px;"><span>財産一覧で入力した「確認する事項」が自動反映されます（'+doneN+' / '+items.length+' 件 結果入力済み）。各項目の確認結果を入力してください。</span><button class="btn" style="margin-left:auto;flex-shrink:0;white-space:nowrap;" onclick="showCheckListMail()">メール文表示</button><button class="btn" style="flex-shrink:0;white-space:nowrap;" onclick="printCheckList()">印刷 / PDF保存</button></div>'
     +'<div class="dtbl-wrap"><table class="dtbl" style="min-width:900px;"><thead><tr><th style="min-width:110px;">種別</th><th style="min-width:240px;">対象の財産</th><th style="min-width:200px;">確認する事項</th><th style="min-width:300px;">確認結果</th></tr></thead><tbody>';
   ASSET_TYPES.forEach(t=>{ items.filter(a=>a.category===t.key).forEach(a=>{
     html+='<tr><td><i class="cdot" style="background:'+t.color+'"></i>'+t.name+'</td>'
@@ -1328,6 +1342,58 @@ function printCheckList(){
     +'<table class="t"><thead><tr><th style="width:110px;">種別</th><th style="width:32%;">対象の財産</th><th style="width:24%;">確認する事項</th><th>確認結果</th></tr></thead><tbody>'+rows+'</tbody></table>'
     +'<div class="foot">出力日時：'+new Date().toLocaleString('ja-JP')+'</div>';
   openPrintWindow('確認リスト_'+(d.name||'案件'), body, styles);
+}
+// 確認事項を依頼文（自然言語）に整える
+function naturalCheckSentence(note){
+  let s=(note||'').trim().replace(/[。．.\s]+$/,'');
+  if(!s) return 'ご確認をお願いいたします。';
+  // 末尾の「確認」系の言い回しを除去
+  s=s.replace(/(について)?(を|の)?(要)?確認(を)?(する|したい|してください|願います|お願いします|要|希望)?$/,'').replace(/[、,]+$/,'').trim();
+  if(!s) return 'ご確認をお願いいたします。';
+  // 理由・状況で終わる場合は「〜のため」、それ以外は「〜について」
+  if(/(なので|ので|ため|から|につき|未了|不明|未取得|未受領|要)$/.test(s)){
+    s=s.replace(/(なので|ので|から|につき)$/,'').trim();
+    return s+'のため、ご確認をお願いいたします。';
+  }
+  return s+'について、ご確認をお願いいたします。';
+}
+function buildCheckListMail(){
+  const d=currentCase.deceased;
+  const items=(currentCase.assets||[]).filter(a=>(a.checkNote||'').trim());
+  const rep=(currentCase.heirs||[]).find(h=>h.isRepresentative)||(currentCase.heirs||[])[0];
+  const toName=(rep&&rep.name)? rep.name+' 様' : 'ご依頼者 様';
+  let b=toName+'\n\n';
+  b+='いつもお世話になっております。'+OFFICE.name+'でございます。\n';
+  b+='被相続人 '+(d.name||'')+' 様の相続税申告につきまして、下記の点のご確認をお願いいたします。お手数をおかけいたしますが、ご回答のほどよろしくお願い申し上げます。\n';
+  ASSET_TYPES.forEach(t=>{
+    const its=items.filter(a=>a.category===t.key);
+    if(!its.length) return;
+    b+='\n■ '+t.name+'\n';
+    its.forEach(a=>{ b+='・'+assetDesc(a)+'\n　'+naturalCheckSentence(a.checkNote)+'\n'; });
+  });
+  b+='\n以上、ご確認のほどよろしくお願い申し上げます。\n';
+  b+='\n――――――――――\n'+OFFICE.name+'\n'+OFFICE.addr+'\nTEL '+OFFICE.tel+'　FAX '+OFFICE.fax+'\n';
+  return b;
+}
+function showCheckListMail(){
+  if(!currentCase){ toast('案件がありません', true); return; }
+  syncUIToCase&&syncUIToCase();
+  const items=(currentCase.assets||[]).filter(a=>(a.checkNote||'').trim());
+  if(!items.length){ toast('確認する事項が登録されていません', true); return; }
+  $('mailBody').value=buildCheckListMail();
+  openModal('mailModal');
+}
+function copyMailBody(){
+  const ta=$('mailBody');
+  const done=()=>toast('メール文をコピーしました');
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(ta.value).then(done,()=>{ ta.select(); document.execCommand('copy'); done(); }); }
+  else { ta.select(); document.execCommand('copy'); done(); }
+}
+function openMailClient(){
+  const d=currentCase.deceased;
+  const subject='【相続税申告】'+(d.name||'')+' 様　確認事項のお願い';
+  const href='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent($('mailBody').value);
+  window.location.href=href;
 }
 function newHeir(){ return { id:uid(), name:'', kana:'', relationLabel:'長男', relationType:'child', isAdopted:false, adoptedAsReal:false, grandAdopted:false, isDaishu:false, daishuGroup:'', isRenounced:false, address:'', tel:'', job:'', birth:'', age:'', disabled:false, disabilityType:'general', isRepresentative:false, hideFromContract:false }; }
 // 続柄（表示名）→ 計算用の続柄区分・養子・代襲のマッピング
@@ -2185,14 +2251,21 @@ async function fetchJpName(x){
   if(!settings.gasUrl||!x) return '';
   const page='https://finance.yahoo.co.jp/quote/'+encodeURIComponent(x);
   const url=settings.gasUrl+(settings.gasUrl.indexOf('?')<0?'?':'&')+'url='+encodeURIComponent(page);
+  const clean=s=>{ if(!s) return ''; let t=String(s).replace(/<[^>]+>/g,'')
+      .replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#0?39;/g,"'").replace(/&nbsp;/g,' ');
+    t=t.split('【')[0].split('［')[0].split('｜')[0].split('|')[0].split('：')[0].split(':')[0].split(' - ')[0].trim();
+    if(/yahoo/i.test(t)||t.length<2) return '';
+    return t; };
   try{
     const r=await fetch(url); if(!r.ok) return '';
     const html=await r.text();
-    const m=html.match(/<title>([\s\S]*?)<\/title>/i); if(!m) return '';
-    let t=m[1].replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
-    t=t.split('【')[0].split('｜')[0].split('|')[0].split('：')[0].split(':')[0].trim();
-    if(/yahoo/i.test(t)||t.length<2) return '';
-    return t;
+    // og:title が最も確実（属性の順序が逆のパターンも考慮）
+    let m=html.match(/<meta[^>]+(?:property|name)=["']og:title["'][^>]*content=["']([^"']+)["']/i)
+        || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["']og:title["']/i);
+    let nm=m?clean(m[1]):'';
+    if(!nm){ m=html.match(/<title>([\s\S]*?)<\/title>/i); nm=m?clean(m[1]):''; }
+    if(!nm){ m=html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i); nm=m?clean(m[1]):''; }
+    return nm;
   }catch(e){ return ''; }
 }
 // 自動取得：株式＝株価4時点＋配当／投資信託＝基準価額
@@ -2208,7 +2281,12 @@ async function autoFetchStock(id){
   if(isFund(a)){
     if(!(a.assoc||'').trim()){ toast('協会コードを入力してください（投資信託協会の検索で確認できます）', true); return; }
     toast('基準価額を取得中…');
-    try{ const nav=await fetchFundNav(code, a.assoc.trim(), deathDayEnd0); a.p1=String(Math.round(nav)); let jp=''; try{ jp=await fetchJpName(code); }catch(e){} if(jp) a.name=jp; renderAssetDetail(); renderAssetNav(); renderSummary(); cacheCurrentCase(); toast('基準価額を取得：¥'+Math.round(nav).toLocaleString('ja-JP')+'（1万口）'+(jp?'／'+jp:'')); }
+    try{ const nav=await fetchFundNav(code, a.assoc.trim(), deathDayEnd0); a.p1=String(Math.round(nav));
+      // ファンド名：Yahoo!ファイナンスの投資信託ページは「協会コード」をキーにしているため、協会コード→ISINの順に試す
+      let jp=''; try{ jp=await fetchJpName(a.assoc.trim()); }catch(e){}
+      if(!jp){ try{ jp=await fetchJpName(code); }catch(e){} }
+      if(jp) a.name=jp;
+      renderAssetDetail(); renderAssetNav(); renderSummary(); cacheCurrentCase(); toast('基準価額を取得：¥'+Math.round(nav).toLocaleString('ja-JP')+'（1万口）'+(jp?'／'+jp:'')); }
     catch(e){ console.error(e); toast('基準価額の自動取得に失敗：'+e.message+'（手入力も可能です）', true); }
     return;
   }
@@ -2227,7 +2305,9 @@ async function autoFetchStock(id){
     const avg=arr=>arr&&arr.length? arr.reduce((s,x)=>s+x,0)/arr.length : null;
     const cur=dKey(death), prev=dKey(new Date(death.getFullYear(),death.getMonth()-1,1)), prev2=dKey(new Date(death.getFullYear(),death.getMonth()-2,1));
     a.code=code;
+    // 日本語の銘柄名：Yahoo!ファイナンス(日本版)を「7203.T」→「7203」の順に試し、取れなければ英語名にフォールバック
     let jp=''; try{ jp=await fetchJpName(symbol); }catch(e){}
+    if(!jp){ const bare=code.replace(/\.[A-Za-z]+$/,''); if(bare!==symbol){ try{ jp=await fetchJpName(bare); }catch(e){} } }
     if(jp) a.name=jp; else if(data.name) a.name=data.name;
     a.p1= deathClose!=null? String(Math.round(deathClose)):'';
     a.p2= monthly[cur]? String(Math.round(avg(monthly[cur]))):'';
