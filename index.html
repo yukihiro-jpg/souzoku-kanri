@@ -788,6 +788,8 @@ let settings = { folderUrl:'', folderId:'', clientId:DEFAULT_CLIENT_ID, gasUrl:'
 let currentCase = null;       // the active case object
 let currentFileId = null;     // Drive file id of active case
 let accessToken = null;
+let tokenExpiry = 0;          // アクセストークンの有効期限(ms)
+let hasConsented = false;     // 一度でも同意済みか（再取得をサイレントにできる）
 let tokenClient = null;
 let gisReady = false;
 
@@ -983,24 +985,41 @@ function initGis(){
       client_id: settings.clientId,
       scope: DRIVE_SCOPE,
       callback:(resp)=>{
-        if(resp.error){ toast('認証エラー: '+resp.error, true); return; }
+        if(resp.error){ const rej=window.__tokenRej; window.__tokenRej=null; window.__tokenRes=null; if(rej) rej(new Error(resp.error)); else toast('認証エラー: '+resp.error, true); return; }
         accessToken=resp.access_token;
+        tokenExpiry=Date.now()+(((+resp.expires_in)||3600)*1000)-120000; // 2分の余裕
+        hasConsented=true;
         setDriveStatus(true);
-        if(window.__afterLogin){ const cb=window.__afterLogin; window.__afterLogin=null; cb(); }
+        const res=window.__tokenRes; window.__tokenRes=null; window.__tokenRej=null; if(res) res(accessToken);
       }
     });
     gisReady=true;
   }catch(e){ console.error(e); }
 }
+// 有効なアクセストークンをPromiseで返す（失効・未取得なら再取得）
+function requestToken(interactive){
+  return new Promise((resolve,reject)=>{
+    if(!settings.clientId){ reject(new Error('設定でクライアントIDを入力してください')); return; }
+    if(!gisReady) initGis();
+    if(!gisReady){ reject(new Error('Google APIの読み込み中です。少々お待ちください')); return; }
+    window.__tokenRes=resolve; window.__tokenRej=reject;
+    try{ tokenClient.requestAccessToken({ prompt: interactive?'consent':'' }); }
+    catch(e){ window.__tokenRes=null; window.__tokenRej=null; reject(e); }
+  });
+}
+function ensureToken(){
+  if(accessToken && Date.now()<tokenExpiry) return Promise.resolve(accessToken);
+  // 一度同意済みならサイレント更新を試み、ダメなら同意画面
+  return requestToken(!hasConsented).catch(()=> requestToken(true));
+}
 function googleLogin(){
   if(!settings.clientId){ toast('設定でクライアントIDを入力してください', true); switchView('settings'); return; }
-  if(!gisReady) initGis();
-  if(!gisReady){ toast('Google APIの読み込み中です。少々お待ちください', true); return; }
-  tokenClient.requestAccessToken({ prompt: accessToken?'':'consent' });
+  requestToken(!hasConsented).then(()=>{ if(window.__afterLogin){ const cb=window.__afterLogin; window.__afterLogin=null; cb(); } })
+    .catch(e=>toast('ログインに失敗しました：'+e.message, true));
 }
 function googleLogout(){
   if(accessToken){ try{ google.accounts.oauth2.revoke(accessToken,()=>{}); }catch(e){} }
-  accessToken=null; setDriveStatus(false);
+  accessToken=null; tokenExpiry=0; setDriveStatus(false);
 }
 function setDriveStatus(on){
   const el=$('driveStatus');
@@ -1009,13 +1028,12 @@ function setDriveStatus(on){
   $('btnLogin').style.display=on?'none':'';
   $('btnLogout').style.display=on?'':'none';
 }
-function ensureLogin(cb){
-  if(accessToken){ cb(); return; }
-  window.__afterLogin=cb; googleLogin();
-}
+function ensureLogin(cb){ ensureToken().then(cb).catch(e=>toast('Google認証に失敗しました：'+e.message+'（設定とログインをご確認ください）', true)); }
 async function driveFetch(url, opts){
-  opts=opts||{}; opts.headers=Object.assign({Authorization:'Bearer '+accessToken}, opts.headers||{});
-  const r=await fetch(url, opts);
+  opts=opts||{};
+  const attempt=async()=>{ await ensureToken(); const headers=Object.assign({}, opts.headers||{}, {Authorization:'Bearer '+accessToken}); return fetch(url, Object.assign({}, opts, {headers})); };
+  let r=await attempt();
+  if(r.status===401){ accessToken=null; tokenExpiry=0; r=await attempt(); } // 失効時は再取得して1回リトライ
   if(!r.ok){ const t=await r.text(); throw new Error('Drive API '+r.status+': '+t); }
   return r;
 }
