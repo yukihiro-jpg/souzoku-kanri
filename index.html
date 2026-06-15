@@ -241,6 +241,7 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 .cl-chk.no{background:#8e8e93;border-color:#8e8e93;color:#fff;}
 .cl-chk.received{background:var(--accent);border-color:var(--accent);color:#fff;}
 .cl-chk.partial{background:var(--orange);border-color:var(--orange);color:#fff;}
+.cl-chk.unreceived{background:#c0392b;border-color:#c0392b;color:#fff;}
 .cl-desc{font-size:13px;color:var(--ink-2);white-space:pre-line;margin-bottom:6px;}
 .cl-howto{font-size:12.5px;color:var(--ink-2);background:var(--surface-2);border-left:3px solid var(--line-2);border-radius:6px;padding:8px 10px;white-space:pre-line;margin-bottom:8px;}
 .cl-howto b{color:var(--accent);}
@@ -807,7 +808,7 @@ const LS_SETTINGS = 'souzoku_settings_v1';
 const LS_CASE_CACHE = 'souzoku_case_cache_v1';
 
 // ---------- App state ----------
-let settings = { folderUrl:'', folderId:'', clientId:DEFAULT_CLIENT_ID, gasUrl:'' };
+let settings = { folderUrl:'', folderId:'', clientId:DEFAULT_CLIENT_ID, gasUrl:'', accountHint:'' };
 let currentCase = null;       // the active case object
 let currentFileId = null;     // Drive file id of active case
 let accessToken = null;
@@ -1013,6 +1014,7 @@ function initGis(){
         tokenExpiry=Date.now()+(((+resp.expires_in)||3600)*1000)-120000; // 2分の余裕
         hasConsented=true;
         setDriveStatus(true);
+        if(!settings.accountHint) fetchAccountEmail(); // 次回以降のサイレント更新用にアカウントを記憶
         const res=window.__tokenRes; window.__tokenRes=null; window.__tokenRej=null; if(res) res(accessToken);
       }
     });
@@ -1026,7 +1028,7 @@ function requestToken(interactive){
     if(!gisReady) initGis();
     if(!gisReady){ reject(new Error('Google APIの読み込み中です。少々お待ちください')); return; }
     window.__tokenRes=resolve; window.__tokenRej=reject;
-    try{ tokenClient.requestAccessToken({ prompt: interactive?'consent':'' }); }
+    try{ const opt={ prompt: interactive?'consent':'' }; if(settings.accountHint) opt.hint=settings.accountHint; tokenClient.requestAccessToken(opt); }
     catch(e){ window.__tokenRes=null; window.__tokenRej=null; reject(e); }
   });
 }
@@ -1035,6 +1037,8 @@ function ensureToken(){
   // 一度同意済みならサイレント更新を試み、ダメなら同意画面
   return requestToken(!hasConsented).catch(()=> requestToken(true));
 }
+// ログイン中アカウントのメールを取得し、次回以降のサイレント更新（アカウント選択を出さない）に使う
+async function fetchAccountEmail(){ try{ const r=await driveFetch('https://www.googleapis.com/drive/v3/about?fields=user'); const j=await r.json(); if(j&&j.user&&j.user.emailAddress){ settings.accountHint=j.user.emailAddress; saveSettings(); } }catch(e){} }
 function googleLogin(){
   if(!settings.clientId){ toast('設定でクライアントIDを入力してください', true); switchView('settings'); return; }
   requestToken(!hasConsented).then(()=>{ if(window.__afterLogin){ const cb=window.__afterLogin; window.__afterLogin=null; cb(); } })
@@ -1042,7 +1046,7 @@ function googleLogin(){
 }
 function googleLogout(){
   if(accessToken){ try{ google.accounts.oauth2.revoke(accessToken,()=>{}); }catch(e){} }
-  accessToken=null; tokenExpiry=0; setDriveStatus(false);
+  accessToken=null; tokenExpiry=0; hasConsented=false; settings.accountHint=''; saveSettings(); setDriveStatus(false);
 }
 function setDriveStatus(on){
   const el=$('driveStatus');
@@ -1631,7 +1635,7 @@ function renderChecklist(){
       const howto=item.howTo? '<div class="cl-howto"><b>取得方法：</b>'+esc(item.howTo)+'</div>':'';
       itemsHtml+='<div class="cl-item" id="cl-item-'+key+'">'
         +'<div class="cl-btns">'
-        +clBtn(key,'yes','必要',s.checked)+clBtn(key,'no','不要',s.checked)+clBtn(key,'received','受領済',s.checked)+clBtn(key,'partial','一部受領済',s.checked)
+        +clBtn(key,'yes','必要',s.checked)+clBtn(key,'no','不要',s.checked)+clBtn(key,'received','受領済',s.checked)+clBtn(key,'partial','一部受領済',s.checked)+clBtn(key,'unreceived','未受領',s.checked)
         +'</div>'
         +'<div class="cl-item-name"><span class="num">'+esc(item.id)+'</span>'+esc(item.name)+'</div>'
         +'<div class="cl-partial '+(s.checked==='partial'?'show':'')+'" id="cl-partial-'+key+'">'
@@ -1657,7 +1661,7 @@ function toggleCl(key,val){
   if(s.checked!=='partial'){ s.receivedPart=''; s.unreceivedPart=''; }
   const item=$('cl-item-'+key);
   item.querySelectorAll('.cl-chk').forEach(b=>{ b.className='cl-chk'; });
-  if(s.checked){ const idx={yes:0,no:1,received:2,partial:3}[s.checked]; item.querySelectorAll('.cl-chk')[idx].classList.add(s.checked); }
+  if(s.checked){ const idx={yes:0,no:1,received:2,partial:3,unreceived:4}[s.checked]; item.querySelectorAll('.cl-chk')[idx].classList.add(s.checked); }
   $('cl-partial-'+key).className='cl-partial'+(s.checked==='partial'?' show':'');
   if(s.checked==='partial'){ const ins=$('cl-partial-'+key).querySelectorAll('input'); ins[0].value=s.receivedPart; ins[1].value=s.unreceivedPart; }
   cacheCurrentCase(); updateClProgress();
@@ -1684,7 +1688,7 @@ const HAS_CALC=['land','building','securities','unlisted','other','gift'];   // 
 function newAsset(cat){
   return {id:uid(),category:cat,subcategory:'',name:'',location:'',riyou:'',quantity:'',evalMethod:'rosen',unitPrice:'',koteiValue:'',baisu:'',ownNum:'1',ownDen:'1',adjust:'1.00',autoCalc:true,value:'',evalWay:'',companyType:'',branch:'',nominee:'',accountNo:'',memo:'',kobo:{type:'none',area:''},
     code:'',p1:'',p2:'',p3:'',p4:'',divBase:'',divEffective:'',divPerShare:'',divRate:'',
-    assoc:'',ritio:'',redeemFee:'',creditorAddr:'',debtStart:'',debtDue:'',payerAddr:'',payDate:'',claimAmount:'',excludeAmount:'',checkNote:'',checkResult:'',
+    assoc:'',ritio:'',redeemFee:'',creditorAddr:'',debtStart:'',debtDue:'',payerAddr:'',payDate:'',claimAmount:'',excludeAmount:'',checkNote:'',checkResult:'',interest:'',
     giftTax:0,is4to7:false,regime:'koyo',giftRecipient:'',giftDate:'',gKind:'',gDetail:'',autoBasic:true,allocations:[]};
 }
 function isFund(a){ return a.category==='securities' && a.subcategory==='投資信託'; }
@@ -1711,6 +1715,7 @@ function divInfo(a){
   return {kind,gross,tax,net:gross-tax,rate};
 }
 function computeAssetValue(a){
+  if(a.category==='cash') return num(a.value)+num(a.interest); // 預貯金残高＋既経過利息
   if(a.autoCalc===false || MANUAL_VAL.includes(a.category)) return num(a.value);
   const own=(num(a.ownNum)||1)/((num(a.ownDen)||1)||1);
   const adj=(a.adjust===''||a.adjust==null)?1:num(a.adjust);
@@ -1892,7 +1897,7 @@ const ASSET_COLS={
   building:[['subcategory','細目','sel'],['riyou','利用状況','text'],['location','所在場所','text'],['quantity','床面積(㎡)','num'],['koteiValue','固定資産税評価額','money'],['_frac','所有権割合','frac'],['adjust','調整','num'],['_calc','計算','calc'],['_value','価額(円)','value'],['memo','注記','text']],
   securities:[['subcategory','種類','sel'],['evalWay','評価方法','text'],['companyType','会社区分','selopt',['大会社','中会社','小会社','特定の評価会社','配当還元']],['name','銘柄','text'],['unitPrice','単価','money'],['quantity','数量','num'],['_calc','計算','calc'],['_value','価額(円)','value'],['memo','注記','text']],
   unlisted:[['subcategory','種類','sel'],['evalWay','評価方法','text'],['companyType','会社区分','selopt',['大会社','中会社','小会社','特定の評価会社','配当還元']],['name','会社名（銘柄）','text'],['unitPrice','単価','money'],['quantity','株数','num'],['_calc','計算','calc'],['_value','価額(円)','value'],['memo','注記','text']],
-  cash:[['name','金融機関','text'],['branch','支店','text'],['subcategory','預金種類','text'],['accountNo','口座番号','text'],['nominee','名義人','nameSel'],['_value','金額(円)','value'],['memo','注記','text']],
+  cash:[['nominee','名義','nameSel'],['subcategory','種類','text'],['name','金融機関','text'],['branch','支店','text'],['accountNo','口座番号','text'],['_value','金額(円)','value'],['interest','既経過利息','money'],['memo','注記','text']],
   insurance:[['subcategory','区分','selopt',['死亡保険金（非課税枠の対象）','定期金に関する権利','その他']],['name','保険会社','text'],['accountNo','証券番号','text'],['nominee','受取人','nameSel'],['_value','金額(円)','value'],['memo','注記','text']],
   retirement:[['subcategory','種類','sel'],['name','支給者','text'],['nominee','受取人','nameSel'],['_value','金額(円)','value'],['memo','注記','text']],
   other:[['subcategory','細目','sel'],['name','内容','text'],['location','所在・明細','text'],['quantity','数量','num'],['unitPrice','単価','money'],['_calc','計算','calc'],['_value','価額(円)','value'],['memo','注記','text']],
@@ -3104,11 +3109,11 @@ function downloadChecklistPDF(){
   const d=currentCase.deceased;
   let itemsHtml=''; let has=false;
   categories.forEach((cat,ci)=>{
-    const req=cat.items.filter((it,ii)=>{ const s=currentCase.checklist[clKey(ci,ii)]; return s&&(s.checked==='yes'||s.checked==='partial'); });
+    const req=cat.items.filter((it,ii)=>{ const s=currentCase.checklist[clKey(ci,ii)]; return s&&(s.checked==='yes'||s.checked==='partial'||s.checked==='unreceived'); });
     if(!req.length) return; has=true;
     let li='';
     req.forEach(it=>{ const ii=cat.items.indexOf(it); const s=currentCase.checklist[clKey(ci,ii)];
-      let badge=s.checked==='partial'?' <b style="color:#c00">【一部受領済】</b>':'';
+      let badge=s.checked==='partial'?' <b style="color:#c00">【一部受領済】</b>':(s.checked==='unreceived'?' <b style="color:#c00">【未受領】</b>':'');
       let partial=s.checked==='partial'?'<div class="pmemo">▶受領済分：'+esc(s.receivedPart||'―')+'　▶未受領分：'+esc(s.unreceivedPart||'―')+'</div>':'';
       let memo=s.memo?'<div class="pmemo">メモ：'+esc(s.memo)+'</div>':'';
       li+='<div class="it"><span class="cb"></span><div><div class="nm">'+esc(it.id)+' '+esc(it.name)+badge+'</div><div class="ds">'+esc(it.desc).replace(/\n/g,'<br>')+'</div>'
@@ -3150,7 +3155,7 @@ async function downloadChecklistExcel(){
   ws.addRow(['No','カテゴリ','資料名','状態','メモ','受領済分','未受領分']).eachCell(c=>{c.font={bold:true,color:{argb:'FFFFFFFF'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF0071E3'}};});
   let n=0;
   categories.forEach((cat,ci)=>cat.items.forEach((it,ii)=>{ const s=currentCase.checklist[clKey(ci,ii)]||{};
-    let st='未選択'; if(s.checked==='yes')st='必要'; else if(s.checked==='no')st='不要'; else if(s.checked==='received')st='受領済'; else if(s.checked==='partial')st='一部受領済';
+    let st='未選択'; if(s.checked==='yes')st='必要'; else if(s.checked==='no')st='不要'; else if(s.checked==='received')st='受領済'; else if(s.checked==='partial')st='一部受領済'; else if(s.checked==='unreceived')st='未受領';
     n++; ws.addRow([n,cat.name,it.name,st,s.memo||'',s.receivedPart||'',s.unreceivedPart||'']); }));
   [5,20,40,12,24,20,20].forEach((w,i)=>ws.getColumn(i+1).width=w);
   // assets sheet
