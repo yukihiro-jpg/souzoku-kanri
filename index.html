@@ -121,6 +121,8 @@ input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink);}
 .main{grid-area:main;overflow-y:auto;padding:30px 36px 80px;}
 .view{display:none;max-width:1040px;margin:0 auto;animation:fade .25s ease;}
 .view.active{display:block;}
+/* データ量の多い画面は全幅で表示 */
+#view-assets,#view-plan,#view-agreement,#view-simulation,#view-secondary,#view-savings,#view-progress,#view-cases{max-width:none;}
 @keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
 .view-head{margin-bottom:22px;}
 .view-head h1{font-size:28px;font-weight:700;letter-spacing:-.02em;}
@@ -210,6 +212,10 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 .tag-btn{border:1px solid var(--line-2);background:#fff;border-radius:980px;padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--ink-2);}
 .tag-btn.active.rep{background:var(--orange);border-color:var(--orange);color:#fff;}
 .tag-btn.active.hide{background:#8e8e93;border-color:#8e8e93;color:#fff;}
+.birth-sel{display:flex;gap:6px;}
+.birth-sel select{flex:1;min-width:0;}
+.ro-badge{padding:8px 10px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line-2);font-weight:600;font-size:13px;color:var(--ink-2);text-align:center;}
+.ro-badge.on{background:#fff4e5;color:#b25e00;border-color:#ffd9a8;}
 
 /* ---------- Checklist ---------- */
 .cl-cat{border:1px solid var(--line);border-radius:var(--radius-sm);margin-bottom:12px;overflow:hidden;background:#fff;}
@@ -1190,19 +1196,34 @@ function evalSubHtml(){
   html+='</div>';
   return html;
 }
-function newHeir(){ return { id:uid(), name:'', kana:'', relationType:'child', isAdopted:false, adoptedAsReal:false, isDaishu:false, daishuGroup:'', isRenounced:false, address:'', tel:'', job:'', birth:'', age:'', disabled:false, disabilityType:'general', surcharge:false, surchargeManual:false, isRepresentative:false, hideFromContract:false }; }
+function newHeir(){ return { id:uid(), name:'', kana:'', relationLabel:'長男', relationType:'child', isAdopted:false, adoptedAsReal:false, grandAdopted:false, isDaishu:false, daishuGroup:'', isRenounced:false, address:'', tel:'', job:'', birth:'', age:'', disabled:false, disabilityType:'general', isRepresentative:false, hideFromContract:false }; }
+// 続柄（表示名）→ 計算用の続柄区分・養子・代襲のマッピング
+const RELATION_OPTIONS=[
+  {l:'配偶者',t:'spouse'},
+  {l:'父',t:'parent'},{l:'母',t:'parent'},{l:'祖父',t:'parent'},{l:'祖母',t:'parent'},
+  {l:'長男',t:'child'},{l:'二男',t:'child'},{l:'三男',t:'child'},{l:'四男',t:'child'},{l:'五男',t:'child'},
+  {l:'長女',t:'child'},{l:'二女',t:'child'},{l:'三女',t:'child'},{l:'四女',t:'child'},{l:'五女',t:'child'},
+  {l:'養子',t:'child',adopted:true},{l:'養女',t:'child',adopted:true},
+  {l:'孫（代襲）',t:'grandchild',daishu:true},{l:'孫養子',t:'child',adopted:true,grandAdopted:true},
+  {l:'兄',t:'sibling'},{l:'弟',t:'sibling'},{l:'姉',t:'sibling'},{l:'妹',t:'sibling'},
+  {l:'甥（代襲）',t:'nephew',daishu:true},{l:'姪（代襲）',t:'nephew',daishu:true},
+  {l:'その他',t:'other'}
+];
+const RELATION_BY_LABEL=Object.fromEntries(RELATION_OPTIONS.map(o=>[o.l,o]));
+function relDisp(h){ return h.relationLabel || RELATION_LABELS[h.relationType] || ''; }
 function ageAt(birth, ref){ if(!birth||!ref) return ''; const b=new Date(birth), r=new Date(ref); if(isNaN(b)||isNaN(r)) return ''; let a=r.getFullYear()-b.getFullYear(); const m=r.getMonth()-b.getMonth(); if(m<0||(m===0&&r.getDate()<b.getDate())) a--; return a<0?'':a; }
 function daysBetween(from, to){ if(!from||!to) return null; const a=new Date(from), b=new Date(to); if(isNaN(a)||isNaN(b)) return null; return Math.round((b-a)/864e5); }
 function heirDaysText(h){ const d=daysBetween(h.birth, currentCase&&currentCase.deceased?currentCase.deceased.deathDate:''); if(d==null) return ''; return d.toLocaleString('ja-JP')+' 日（満'+ageAt(h.birth,currentCase.deceased.deathDate)+'歳）'; }
 function recomputeHeirAges(){ if(!currentCase) return; const dd=currentCase.deceased.deathDate; currentCase.heirs.forEach(h=>{ if(h.birth){ const a=ageAt(h.birth,dd); h.age=a===''?'':a; } }); }
 const RELATION_LABELS={spouse:'配偶者',child:'子',grandchild:'孫（代襲）',parent:'父母（直系尊属）',sibling:'兄弟姉妹',nephew:'甥姪（代襲）',other:'その他'};
+// 相続税額の2割加算：配偶者・一親等の血族(子・父母)・代襲相続人である孫 以外は対象。孫養子は対象。
 function autoSurcharge(h){
   if(h.relationType==='spouse'||h.relationType==='parent') return false;
-  if(h.relationType==='child') return h.isAdopted && h.isGrandAdopted===true; // 孫養子のみ2割加算（通常はfalse）
-  if(h.relationType==='grandchild') return !h.isDaishu; // 代襲孫は対象外、非代襲(孫養子)は対象
-  return true; // 兄弟姉妹・甥姪・その他
+  if(h.relationType==='child') return !!h.grandAdopted;     // 孫養子のみ対象
+  if(h.relationType==='grandchild') return !h.isDaishu;     // 代襲孫は対象外
+  return true; // 兄弟姉妹・甥姪・その他は対象
 }
-function effSurcharge(h){ return h.surchargeManual? !!h.surcharge : autoSurcharge(h); }
+function effSurcharge(h){ return autoSurcharge(h); }
 
 // ============================================================
 //  Navigation
@@ -1361,7 +1382,9 @@ function migrateCase(data){
     delete na.acquirerId;
     return na;
   });
-  c.heirs=(data.heirs||[]).map(h=>{ const nh=Object.assign(newHeir(),h); if(h.relation&&!h.relationType){ nh.relationType= h.relation.includes('配偶')?'spouse':(h.relation.includes('子')||h.relation.includes('男')||h.relation.includes('女')?'child':'other'); } return nh; });
+  c.heirs=(data.heirs||[]).map(h=>{ const nh=Object.assign(newHeir(),h); if(h.relation&&!h.relationType){ nh.relationType= h.relation.includes('配偶')?'spouse':(h.relation.includes('子')||h.relation.includes('男')||h.relation.includes('女')?'child':'other'); }
+    if(!nh.relationLabel || !RELATION_BY_LABEL[nh.relationLabel]){ const def={spouse:'配偶者',parent:'父',child:(nh.isAdopted?'養子':'長男'),grandchild:'孫（代襲）',sibling:'兄',nephew:'甥（代襲）',other:'その他'}; nh.relationLabel=def[nh.relationType]||'その他'; }
+    return nh; });
   if(!c.heirs.length) c.heirs=[newHeir()];
   return c;
 }
@@ -1493,12 +1516,28 @@ function calcDeadlines(){
 // ============================================================
 function addHeir(){ if(!currentCase) return; currentCase.heirs.push(newHeir()); renderHeirs(); cacheCurrentCase(); }
 function removeHeir(id){ if(!currentCase) return; currentCase.heirs=currentCase.heirs.filter(h=>h.id!==id); if(!currentCase.heirs.length) currentCase.heirs.push(newHeir()); renderHeirs(); refreshAcquirerSelects(); cacheCurrentCase(); }
-function updateHeir(id,field,val){ const h=currentCase.heirs.find(x=>x.id===id); if(h){ h[field]=val; if(field==='relationType'){ if(!h.surchargeManual) h.surcharge=autoSurcharge(h); renderHeirs(); } if(field==='birth'){ h.age=ageAt(val,currentCase.deceased.deathDate); renderHeirs(); } cacheCurrentCase(); if(field==='name'||field==='relationType') refreshAcquirerSelects(); } }
+function updateHeir(id,field,val){ const h=currentCase.heirs.find(x=>x.id===id); if(h){ h[field]=val;
+  if(field==='relationLabel'){ const o=RELATION_BY_LABEL[val]; if(o){ h.relationType=o.t; h.isAdopted=!!o.adopted; h.isDaishu=!!o.daishu; h.grandAdopted=!!o.grandAdopted; } renderHeirs(); refreshAcquirerSelects(); }
+  cacheCurrentCase(); if(field==='name') refreshAcquirerSelects(); } }
 function updateHeirBool(id,field,checked){ const h=currentCase.heirs.find(x=>x.id===id); if(h){ h[field]=checked;
-  if(field==='surcharge') h.surchargeManual=true;
-  if(field==='isAdopted'||field==='isDaishu'){ if(!h.surchargeManual) h.surcharge=autoSurcharge(h); renderHeirs(); }
+  if(field==='isAdopted'||field==='isDaishu'){ renderHeirs(); }
   cacheCurrentCase(); } }
-function relTypeOptions(cur){ return Object.keys(RELATION_LABELS).map(k=>'<option value="'+k+'"'+(k===cur?' selected':'')+'>'+RELATION_LABELS[k]+'</option>').join(''); }
+// 生年月日（年/月/日のセレクト）
+function relTypeOptions(cur){ return RELATION_OPTIONS.map(o=>'<option value="'+esc(o.l)+'"'+(o.l===cur?' selected':'')+'>'+esc(o.l)+'</option>').join(''); }
+function warekiYear(y){ let era,ey; if(y>=2019){era='令和';ey=y-2018;} else if(y>=1989){era='平成';ey=y-1988;} else if(y>=1926){era='昭和';ey=y-1925;} else if(y>=1912){era='大正';ey=y-1911;} else {era='明治';ey=y-1867;} return era+(ey===1?'元':ey)+'年（'+y+'年）'; }
+function birthSelects(h){
+  const parts=(h.birth||'').split('-'); const by=parts[0]||'', bm=parts[1]?String(+parts[1]):'', bd=parts[2]?String(+parts[2]):'';
+  const nowY=new Date().getFullYear();
+  let yOpts='<option value="">年</option>'; for(let y=nowY;y>=1900;y--){ yOpts+='<option value="'+y+'"'+(String(y)===by?' selected':'')+'>'+warekiYear(y)+'</option>'; }
+  let mOpts='<option value="">月</option>'; for(let m=1;m<=12;m++){ mOpts+='<option value="'+m+'"'+(String(m)===bm?' selected':'')+'>'+m+'月</option>'; }
+  let dOpts='<option value="">日</option>'; for(let d=1;d<=31;d++){ dOpts+='<option value="'+d+'"'+(String(d)===bd?' selected':'')+'>'+d+'日</option>'; }
+  return '<div class="birth-sel"><select id="by-'+h.id+'" onchange="updateHeirBirth(\''+h.id+'\')">'+yOpts+'</select>'
+    +'<select id="bm-'+h.id+'" onchange="updateHeirBirth(\''+h.id+'\')">'+mOpts+'</select>'
+    +'<select id="bd-'+h.id+'" onchange="updateHeirBirth(\''+h.id+'\')">'+dOpts+'</select></div>';
+}
+function updateHeirBirth(id){ const h=currentCase.heirs.find(x=>x.id===id); if(!h) return; const y=$('by-'+id).value,m=$('bm-'+id).value,d=$('bd-'+id).value;
+  if(y&&m&&d){ h.birth=y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0'); h.age=ageAt(h.birth,currentCase.deceased.deathDate); } else { h.birth=''; if(!h.birth) {} }
+  renderHeirs(); cacheCurrentCase(); }
 function disabilityOptions(h){ const cur=h.disabled?(h.disabilityType||'general'):'none'; return [['none','なし'],['general','一般障害者'],['special','特別障害者']].map(o=>'<option value="'+o[0]+'"'+(o[0]===cur?' selected':'')+'>'+o[1]+'</option>').join(''); }
 function updateLegalShareLabels(){ if(!currentCase) return; const sh=legalShares(currentCase.heirs); currentCase.heirs.forEach(h=>{ const el=$('lshare-'+h.id); if(el) el.textContent=fracText(sh[h.id]); }); }
 function fracText(x){ if(!x) return '0'; const pct=Math.round(x*10000)/100; return pct+'%'; }
@@ -1516,26 +1555,23 @@ function renderHeirs(){
       +'<button class="btn red sm" style="margin-left:auto;" onclick="removeHeir(\''+h.id+'\')">削除</button></div>'
       +'<div class="grid grid-3">'
       +'<div class="field"><label>氏名</label><input type="text" value="'+esc(h.name)+'" oninput="updateHeir(\''+h.id+'\',\'name\',this.value)"></div>'
-      +'<div class="field"><label>続柄区分（法定相続分の判定に使用）</label><select onchange="updateHeir(\''+h.id+'\',\'relationType\',this.value)">'+relTypeOptions(h.relationType)+'</select></div>'
+      +'<div class="field"><label>続柄</label><select onchange="updateHeir(\''+h.id+'\',\'relationLabel\',this.value)">'+relTypeOptions(relDisp(h))+'</select></div>'
       +'<div class="field"><label>電話番号</label><input type="tel" value="'+esc(h.tel)+'" oninput="updateHeir(\''+h.id+'\',\'tel\',this.value)"></div>'
       +'<div class="field" style="grid-column:1/3;"><label>住所</label><input type="text" value="'+esc(h.address)+'" oninput="updateHeir(\''+h.id+'\',\'address\',this.value)"></div>'
       +'<div class="field"><label>職業</label><input type="text" value="'+esc(h.job)+'" oninput="updateHeir(\''+h.id+'\',\'job\',this.value)"></div>'
-      +'<div class="field"><label>生年月日</label><input type="date" value="'+esc(h.birth||'')+'" oninput="updateHeir(\''+h.id+'\',\'birth\',this.value)"></div>'
+      +'<div class="field" style="grid-column:1/3;"><label>生年月日</label>'+birthSelects(h)+'</div>'
       +'<div class="field"><label>相続開始日までの日数</label><input type="text" readonly value="'+heirDaysText(h)+'" style="background:var(--surface-2);"></div>'
       +'</div>'
       +'<div class="grid grid-4" style="margin-top:12px;align-items:end;">'
-      +'<div class="field"><label>実子／養子</label><select onchange="updateHeirBool(\''+h.id+'\',\'isAdopted\',this.value===\'adopted\')"'+( (h.relationType==='child'||h.relationType==='grandchild')?'':' disabled style="opacity:.4"')+'><option value="real"'+(!h.isAdopted?' selected':'')+'>実子</option><option value="adopted"'+(h.isAdopted?' selected':'')+'>養子</option></select></div>'
-      +'<div class="field"><label>養子を実子とみなす<br><span style="font-weight:400;font-size:10.5px;">特別養子・連れ子養子・代襲</span></label><select onchange="updateHeirBool(\''+h.id+'\',\'adoptedAsReal\',this.value===\'yes\')"'+(h.isAdopted?'':' disabled style="opacity:.4"')+'><option value="no"'+(!h.adoptedAsReal?' selected':'')+'>いいえ</option><option value="yes"'+(h.adoptedAsReal?' selected':'')+'>はい</option></select></div>'
-      +'<label class="field" style="flex-direction:row;align-items:center;gap:8px;"><input type="checkbox" style="width:auto;" '+(h.isDaishu?'checked':'')+' onchange="updateHeirBool(\''+h.id+'\',\'isDaishu\',this.checked)"> <span class="lbl">代襲相続人</span></label>'
-      +'<div class="field"><label>代襲元グループ<br><span style="font-weight:400;font-size:10.5px;">同じ被代襲者は同名に</span></label><input type="text" value="'+esc(h.daishuGroup)+'" placeholder="例：長男" oninput="updateHeir(\''+h.id+'\',\'daishuGroup\',this.value)"'+(h.isDaishu?'':' disabled style="opacity:.4"')+'></div>'
-      +'</div>'
-      +'<div class="grid grid-4" style="margin-top:12px;align-items:end;">'
       +'<label class="field" style="flex-direction:row;align-items:center;gap:8px;"><input type="checkbox" style="width:auto;" '+(h.isRenounced?'checked':'')+' onchange="updateHeirBool(\''+h.id+'\',\'isRenounced\',this.checked)"> <span class="lbl">相続放棄</span></label>'
-      +'<div class="field"><label>年齢（相続開始日時点）'+(h.birth?'<span style="font-weight:400;font-size:10.5px;color:var(--accent);"> 自動</span>':'')+'</label><input type="number" min="0" value="'+esc(h.age)+'" placeholder="例：45" '+(h.birth?'readonly style="background:var(--surface-2);"':'oninput="updateHeir(\''+h.id+'\',\'age\',this.value)"')+'></div>'
       +'<div class="field"><label>障害者控除</label><select onchange="updateHeir(\''+h.id+'\',\'disabilityType\',this.value);updateHeirBool(\''+h.id+'\',\'disabled\',this.value!==\'none\')">'+disabilityOptions(h)+'</select></div>'
-      +'<label class="field" style="flex-direction:row;align-items:center;gap:8px;"><input type="checkbox" style="width:auto;" '+(effSurcharge(h)?'checked':'')+' onchange="updateHeirBool(\''+h.id+'\',\'surcharge\',this.checked)"> <span class="lbl">相続税額の2割加算</span></label>'
+      +'<div class="field"><label>相続税額の2割加算<br><span style="font-weight:400;font-size:10.5px;">続柄から自動判定</span></label><div class="ro-badge '+(effSurcharge(h)?'on':'')+'">'+(effSurcharge(h)?'対象（2割加算）':'対象外')+'</div></div>'
       +'<div class="muted" style="font-size:11.5px;">法定相続分：<b id="lshare-'+h.id+'">—</b></div>'
-      +'</div>';
+      +'</div>'
+      +((h.isAdopted||h.isDaishu)?('<div class="grid grid-4" style="margin-top:12px;align-items:end;">'
+        +(h.isAdopted?'<div class="field"><label>養子を実子とみなす<br><span style="font-weight:400;font-size:10.5px;">特別養子・連れ子養子・代襲</span></label><select onchange="updateHeirBool(\''+h.id+'\',\'adoptedAsReal\',this.value===\'yes\')"><option value="no"'+(!h.adoptedAsReal?' selected':'')+'>いいえ</option><option value="yes"'+(h.adoptedAsReal?' selected':'')+'>はい</option></select></div>':'')
+        +(h.isDaishu?'<div class="field"><label>代襲元グループ<br><span style="font-weight:400;font-size:10.5px;">同じ被代襲者は同名に</span></label><input type="text" value="'+esc(h.daishuGroup)+'" placeholder="例：長男" oninput="updateHeir(\''+h.id+'\',\'daishuGroup\',this.value)"></div>':'')
+        +'</div>'):'');
     c.appendChild(div);
   });
   updateLegalShareLabels();
@@ -2351,7 +2387,7 @@ function renderSimulation(){
   // heir table
   const rows=currentCase.heirs.map(h=>{
     const p=r.ph[h.id]; const ratio=r.totalTaxable>0?p.taxableR/r.totalTaxable:0;
-    const tags=[RELATION_LABELS[h.relationType],'法定相続分 '+fracText(r.shares[h.id])]; if(h.isRenounced) tags.push('放棄'); if(effSurcharge(h)) tags.push('2割加算');
+    const tags=[relDisp(h),'法定相続分 '+fracText(r.shares[h.id])]; if(h.isRenounced) tags.push('放棄'); if(effSurcharge(h)) tags.push('2割加算');
     return '<tr><td>'+esc(h.name||'(無名)')+'<div style="font-size:11px;color:var(--ink-2)">'+tags.join('／')+'</div></td>'
       +'<td>'+yen(p.taxableR)+'</td>'
       +'<td>'+(Math.round(ratio*1000)/10)+'%</td>'
@@ -2564,7 +2600,7 @@ function downloadShindanPDF(){
   const R=buildReport(); const r=R.r;
   const heirs=currentCase.heirs;
   // 親族表
-  let famRows=heirs.map(h=>'<tr><td>'+esc(RELATION_LABELS[h.relationType])+'</td><td>'+esc(h.name||'')+'</td><td>'+(h.birth?formatJDate(h.birth):'')+'</td><td class="r">'+(h.age!==''&&h.age!=null?h.age+'歳':'')+'</td><td class="r">'+fracText(r.shares[h.id])+'</td></tr>').join('');
+  let famRows=heirs.map(h=>'<tr><td>'+esc(relDisp(h))+'</td><td>'+esc(h.name||'')+'</td><td>'+(h.birth?formatJDate(h.birth):'')+'</td><td class="r">'+(h.age!==''&&h.age!=null?h.age+'歳':'')+'</td><td class="r">'+fracText(r.shares[h.id])+'</td></tr>').join('');
   // 資産構成
   const arow=(n,v,sub)=>'<tr'+(sub?' class="sub"':'')+'><td>'+n+'</td><td class="r">'+(v<0?'△'+yen(-v):yen(v))+'</td></tr>';
   let assetRows=arow('土地',R.land)+arow('建物',R.building)+arow('有価証券',R.sec)+arow('非上場株式（自社株）',R.unl)+arow('現金・預貯金',R.cash)+arow('生命保険金等',R.ins)+arow('退職手当金等',R.ret)+arow('その他の財産',R.other)
@@ -2630,7 +2666,7 @@ function downloadShindanPDF(){
     ASSET_TYPES.forEach(t=>{ if(t.key==='gift') return; currentCase.assets.filter(a=>a.category===t.key).forEach(a=>{ const amt=amtOf(a,h.id); if(!amt) return; const label=[a.subcategory,a.name,a.location,a.quantity?('数量'+a.quantity):''].filter(Boolean).join('　'); rows+='<tr><td>'+t.name+'</td><td>'+esc(label)+'</td><td class="r">'+(t.sign<0?'△'+yen(amt):yen(amt))+'</td></tr>'; }); });
     currentCase.assets.filter(a=>a.category==='gift'&&a.giftRecipient===h.id).forEach(a=>{ rows+='<tr><td>生前贈与</td><td>'+esc([(a.regime==='seisan'?'相続時精算課税':'暦年課税'),a.gKind,a.gDetail,a.giftDate].filter(Boolean).join('　'))+'</td><td class="r">'+yen(assetVal(a))+'</td></tr>'; });
     if(!rows) rows='<tr><td colspan="3" style="text-align:center;color:#888;">取得財産はありません</td></tr>';
-    heirDetail+='<h3 class="blk">'+esc(h.name||'')+' 様（'+RELATION_LABELS[h.relationType]+'）　純財産合計：'+yen(totals[h.id])+'</h3>'
+    heirDetail+='<h3 class="blk">'+esc(h.name||'')+' 様（'+relDisp(h)+'）　純財産合計：'+yen(totals[h.id])+'</h3>'
       +'<table class="t"><tr><th>種類</th><th>明細</th><th class="r">取得額</th></tr>'+rows+'</table>';
   });
   const body=
@@ -2687,7 +2723,7 @@ async function downloadShindanExcel(){
   title(w1,'総括'); w1.addRow([]);
   [['財産総額（債務控除前）',R.grossEstate],['課税価格の合計額',r.totalTaxable],['基礎控除額',r.basic],['課税遺産総額',r.netEstate],['相続税の総額',r.totalTax],['納付すべき相続税額',r.grandTotal],['実効税率(%)',Number(R.effRate.toFixed(2))]].forEach(rw=>w1.addRow(rw));
   w1.addRow([]); hdr(w1.addRow(['続柄','氏名','生年月日','年齢','法定相続分']));
-  heirs.forEach(h=>w1.addRow([RELATION_LABELS[h.relationType],h.name||'',h.birth?formatJDate(h.birth):'',(h.age!==''&&h.age!=null)?h.age:'',fracText(r.shares[h.id])]));
+  heirs.forEach(h=>w1.addRow([relDisp(h),h.name||'',h.birth?formatJDate(h.birth):'',(h.age!==''&&h.age!=null)?h.age:'',fracText(r.shares[h.id])]));
   // 資産構成
   const w2=wb.addWorksheet('資産構成'); w2.getColumn(1).width=28; w2.getColumn(2).width=20; w2.getColumn(2).numFmt='#,##0';
   hdr(w2.addRow(['区分','金額']));
