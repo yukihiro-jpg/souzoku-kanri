@@ -214,6 +214,12 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 .eval-row .est{font-size:11px;font-weight:600;padding:4px 12px;border-radius:980px;cursor:pointer;border:1px solid var(--line-2);background:#fff;color:var(--ink-2);min-width:70px;text-align:center;flex-shrink:0;}
 .eval-row .est.doing{background:#fff4e5;color:#b25e00;border-color:#ffd9a8;}
 .eval-row .est.done{background:#e7f8ec;color:#1a7f37;border-color:#aee5bf;}
+.riyo-input{display:flex;align-items:center;gap:6px;}
+.riyo-cell{width:60px;text-align:center;font-variant-numeric:tabular-nums;letter-spacing:2px;padding:6px 4px;border:1px solid var(--line-2);border-radius:8px;font-size:14px;}
+.riyo-cell:disabled{background:var(--surface-2);color:var(--ink-2);}
+.riyo-sep{color:var(--ink-2);font-weight:700;}
+.riyo-skip{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--ink-2);white-space:nowrap;cursor:pointer;}
+.riyo-skip input{width:15px;height:15px;}
 .empty-state{text-align:center;padding:60px 20px;color:var(--ink-2);}
 .empty-state .em-ico{font-size:46px;margin-bottom:12px;}
 
@@ -1138,6 +1144,7 @@ const PROGRESS_STAGES=[
   {key:'meeting',name:'初回面談',short:'面談',desc:'相続人との初回打合せ・ヒアリング'},
   {key:'contract',name:'受任・委任契約',short:'受任',desc:'委任契約の締結・報酬説明'},
   {key:'collect',name:'資料収集',short:'資料収集',desc:'必要資料の依頼・受領'},
+  {key:'riyousha',name:'利用者識別番号の取得',short:'利用者識別番号',desc:'相続人ごとの利用者識別番号（e-Tax）の取得'},
   {key:'valuation',name:'財産評価',short:'財産評価',desc:'不動産・有価証券等の評価、財産一覧の確定'},
   {key:'division',name:'遺産分割協議',short:'遺産分割',desc:'分割案の作成・相続人間の協議・協議書作成'},
   {key:'draft',name:'申告書作成',short:'申告書作成',desc:'相続税申告書の作成'},
@@ -1160,8 +1167,21 @@ function stageStatus(c, key){
     const assets=(c.assets||[]).filter(a=>a.category!=='gift');
     if(assets.length){ const ev=(c.progress&&c.progress.assetEval)||{}; let d=0,doing=0; assets.forEach(a=>{ const s=ev[a.id]||'todo'; if(s==='done')d++; else if(s==='doing')doing++; }); return d===assets.length?'done':((d>0||doing>0)?'doing':'todo'); }
   }
+  if(key==='riyousha'){
+    const heirs=(c.heirs||[]);
+    if(heirs.length){ const rm=(c.progress&&c.progress.riyousha)||{}; let d=0,any=0; heirs.forEach(h=>{ const v=rm[h.id]||{}; if(riyoHeirDone(v))d++; if(v.skip||['p1','p2','p3','p4'].some(p=>(v[p]||'').length>0))any++; }); return d===heirs.length?'done':(any>0?'doing':'todo'); }
+  }
   return ((c.progress||{})[key]||{}).status||'todo';
 }
+// 利用者識別番号（相続人ごと）
+function riyoState(c,id){ if(!c.progress.riyousha) c.progress.riyousha={}; if(!c.progress.riyousha[id]) c.progress.riyousha[id]={p1:'',p2:'',p3:'',p4:'',skip:false}; return c.progress.riyousha[id]; }
+function riyoHeirDone(v){ return !!v.skip || ['p1','p2','p3','p4'].every(p=>(v[p]||'').length===4); }
+function updRiyoDigit(id,field,idx,el){
+  const v=el.value.replace(/[^0-9]/g,'').slice(0,4); const s=riyoState(currentCase,id); s[field]=v;
+  const advance=(v.length===4 && idx<3); cacheCurrentCase(); renderProgress();
+  const nx=$('riyo-'+id+'-'+(advance?(idx+1):idx)); if(nx){ nx.focus(); const L=nx.value.length; try{nx.setSelectionRange(L,L);}catch(e){} }
+}
+function toggleRiyoSkip(id,checked){ const s=riyoState(currentCase,id); s.skip=checked; cacheCurrentCase(); renderProgress(); }
 function progressSummary(c){
   let codes='',done=0;
   PROGRESS_STAGES.forEach(st=>{ const s=stageStatus(c,st.key); codes+=(s==='done'?'2':s==='doing'?'1':'0'); if(s==='done')done++; });
@@ -1181,7 +1201,9 @@ function renderProgress(){
     const eff=stageStatus(currentCase,st.key); const sc=STAT[eff][1]; const isDone=eff==='done';
     const s=progState(st.key);
     const isVal=st.key==='valuation';
-    const hasAssets=isVal && (currentCase.assets||[]).filter(a=>a.category!=='gift').length>0;
+    const isRiyo=st.key==='riyousha';
+    const hasAssets=(isVal && (currentCase.assets||[]).filter(a=>a.category!=='gift').length>0)
+      || (isRiyo && (currentCase.heirs||[]).length>0);
     const mark=isDone?'✓':(i+1);
     const dotClick=hasAssets?'':' onclick="cycleProg(\''+st.key+'\')"';
     tl+='<div class="tl-item">'
@@ -1195,7 +1217,7 @@ function renderProgress(){
       +'<div><label>完了日</label><input type="date" value="'+esc(s.done||'')+'" '+(hasAssets?'readonly style="background:var(--surface-2)"':'oninput="updProg(\''+st.key+'\',\'done\',this.value)"')+'></div>'
       +'<div><label>メモ・担当</label><input type="text" value="'+esc(s.memo||'')+'" placeholder="担当者・特記事項" oninput="updProg(\''+st.key+'\',\'memo\',this.value)"></div>'
       +'</div>'
-      +(isVal? evalSubHtml():'')
+      +(isVal? evalSubHtml() : (isRiyo? riyoSubHtml() : ''))
       +'</div></div>';
   });
   tl+='</div>';
@@ -1224,6 +1246,22 @@ function evalSubHtml(){
   html+='</div>';
   return html;
 }
+function riyoSubHtml(){
+  const heirs=(currentCase.heirs||[]);
+  if(!heirs.length) return '<div class="eval-sub"><div class="es-title">利用者識別番号（相続人ごと）</div><div class="muted" style="font-size:12px;">「基本情報」で相続人を登録すると、ここに相続人ごとの利用者識別番号の入力欄が表示されます。</div></div>';
+  let html='<div class="eval-sub"><div class="es-title">利用者識別番号（相続人ごと）</div>';
+  heirs.forEach(h=>{
+    const s=riyoState(currentCase,h.id);
+    const cells=['p1','p2','p3','p4'].map((p,i)=>'<input id="riyo-'+h.id+'-'+i+'" class="riyo-cell" type="text" inputmode="numeric" maxlength="4" value="'+esc(s[p]||'')+'" '+(s.skip?'disabled':'')+' oninput="updRiyoDigit(\''+h.id+'\',\''+p+'\','+i+',this)" placeholder="0000">').join('<span class="riyo-sep">-</span>');
+    const done=riyoHeirDone(s);
+    html+='<div class="eval-row"><span class="en">'+esc(h.name||'(氏名未入力)')+'<span class="sub" style="margin-left:8px;">'+esc(relDisp(h))+'</span></span>'
+      +'<span class="riyo-input">'+cells+'</span>'
+      +'<label class="riyo-skip"><input type="checkbox" '+(s.skip?'checked':'')+' onchange="toggleRiyoSkip(\''+h.id+'\',this.checked)">取得不要</label>'
+      +'<span class="est '+(done?'done':'')+'">'+(s.skip?'取得不要':(done?'取得済':'未取得'))+'</span></div>';
+  });
+  html+='</div>';
+  return html;
+}
 // 進捗管理・確認リストのタブ切替
 function progTab(which){
   const tp=$('tab-prog'), tc=$('tab-check'), pp=$('pane-prog'), pc=$('pane-check');
@@ -1237,7 +1275,7 @@ function renderCheckList(){
   const items=(currentCase.assets||[]).filter(a=>(a.checkNote||'').trim());
   if(!items.length){ c.innerHTML='<div class="muted" style="font-size:13px;">財産一覧で各財産・債務の「確認する事項」を入力すると、ここに自動で一覧表示され、どの財産から引用された確認項目かと確認事項が表示されます。結果はこの画面で入力できます。</div>'; return; }
   const doneN=items.filter(a=>(a.checkResult||'').trim()).length;
-  let html='<div class="card-sub">財産一覧で入力した「確認する事項」が自動反映されます（'+doneN+' / '+items.length+' 件 結果入力済み）。各項目の確認結果を入力してください。</div>'
+  let html='<div class="card-sub" style="display:flex;align-items:center;gap:12px;"><span>財産一覧で入力した「確認する事項」が自動反映されます（'+doneN+' / '+items.length+' 件 結果入力済み）。各項目の確認結果を入力してください。</span><button class="btn" style="margin-left:auto;flex-shrink:0;white-space:nowrap;" onclick="printCheckList()">印刷 / PDF保存</button></div>'
     +'<div class="dtbl-wrap"><table class="dtbl" style="min-width:900px;"><thead><tr><th style="min-width:110px;">種別</th><th style="min-width:240px;">対象の財産</th><th style="min-width:200px;">確認する事項</th><th style="min-width:300px;">確認結果</th></tr></thead><tbody>';
   ASSET_TYPES.forEach(t=>{ items.filter(a=>a.category===t.key).forEach(a=>{
     html+='<tr><td><i class="cdot" style="background:'+t.color+'"></i>'+t.name+'</td>'
@@ -1249,6 +1287,40 @@ function renderCheckList(){
   c.innerHTML=html;
 }
 function updAssetCheck(id,val){ const a=currentCase.assets.find(x=>x.id===id); if(!a) return; a.checkResult=val; cacheCurrentCase(); }
+function printCheckList(){
+  if(!currentCase){ toast('案件がありません', true); return; }
+  syncUIToCase&&syncUIToCase();
+  const d=currentCase.deceased;
+  const items=(currentCase.assets||[]).filter(a=>(a.checkNote||'').trim());
+  if(!items.length){ toast('確認する事項が登録されていません', true); return; }
+  const doneN=items.filter(a=>(a.checkResult||'').trim()).length;
+  let rows='';
+  ASSET_TYPES.forEach(t=>{ items.filter(a=>a.category===t.key).forEach(a=>{
+    rows+='<tr><td><span class="cd" style="background:'+t.color+'"></span>'+esc(t.name)+'</td>'
+      +'<td>'+esc(assetDesc(a))+'</td>'
+      +'<td>'+esc(a.checkNote)+'</td>'
+      +'<td>'+(esc(a.checkResult||'')||'<span class="np">（未入力）</span>')+'</td></tr>';
+  }); });
+  const styles=`*{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:"Hiragino Sans","Yu Gothic UI",sans-serif;color:#1a1a1a;padding:18px;font-size:12px;line-height:1.6;}
+    .ti{font-size:18px;font-weight:700;text-align:center;color:#0058b8;border-bottom:2px solid #0071e3;padding-bottom:8px;margin-bottom:12px;}
+    .info td{padding:2px 12px 2px 0;font-size:12px;}
+    .guide{font-weight:600;margin:10px 0 8px;}
+    table.t{width:100%;border-collapse:collapse;}
+    table.t th,table.t td{border:1px solid #b9c6d8;padding:6px 9px;vertical-align:top;text-align:left;}
+    table.t th{background:#0071e3;color:#fff;font-weight:700;}
+    table.t tr:nth-child(even) td{background:#f3f7fc;}
+    .cd{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;vertical-align:middle;}
+    .np{color:#b00;}
+    .foot{text-align:right;font-size:9px;color:#999;margin-top:12px;}
+    @media print{@page{size:A4;margin:14mm;}}`;
+  const body='<div class="ti">確認リスト</div>'
+    +'<table class="info"><tr><td><b>被相続人：</b>'+esc(d.name||'')+'</td><td>'+(d.deathDate?'<b>相続開始日：</b>'+formatJDate(d.deathDate):'')+'</td></tr></table>'
+    +'<div class="guide">財産一覧で入力した「確認する事項」の一覧です（'+doneN+' / '+items.length+' 件 結果入力済み）。</div>'
+    +'<table class="t"><thead><tr><th style="width:110px;">種別</th><th style="width:32%;">対象の財産</th><th style="width:24%;">確認する事項</th><th>確認結果</th></tr></thead><tbody>'+rows+'</tbody></table>'
+    +'<div class="foot">出力日時：'+new Date().toLocaleString('ja-JP')+'</div>';
+  openPrintWindow('確認リスト_'+(d.name||'案件'), body, styles);
+}
 function newHeir(){ return { id:uid(), name:'', kana:'', relationLabel:'長男', relationType:'child', isAdopted:false, adoptedAsReal:false, grandAdopted:false, isDaishu:false, daishuGroup:'', isRenounced:false, address:'', tel:'', job:'', birth:'', age:'', disabled:false, disabilityType:'general', isRepresentative:false, hideFromContract:false }; }
 // 続柄（表示名）→ 計算用の続柄区分・養子・代襲のマッピング
 const RELATION_OPTIONS=[
@@ -3066,8 +3138,10 @@ function openPrintWindow(title, bodyHtml, styles){
   document.body.appendChild(iframe);
   const doc=iframe.contentDocument||iframe.contentWindow.document;
   const btns='.np-btns{position:fixed;top:12px;right:12px;z-index:100;display:flex;gap:8px;}.np-btns button{padding:9px 18px;border:none;border-radius:8px;cursor:pointer;font-weight:600;color:#fff;font-size:14px;}@media print{.np-btns{display:none;}}';
+  // 画面と同じ背景色・罫線を印刷でも保持する
+  const colorFix='html{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}*{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}@media print{*{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}}';
   doc.open();
-  doc.write('<html lang="ja"><head><meta charset="UTF-8"><title>'+title+'</title><style>'+styles+btns+'</style></head><body>'
+  doc.write('<html lang="ja"><head><meta charset="UTF-8"><title>'+title+'</title><style>'+colorFix+styles+btns+'</style></head><body>'
     +'<div class="np-btns"><button id="bp" style="background:#0071e3">印刷 / PDF保存</button><button id="bc" style="background:#8e8e93">閉じる</button></div>'
     +bodyHtml+'</body></html>');
   doc.close();
