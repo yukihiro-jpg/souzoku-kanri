@@ -1790,7 +1790,7 @@ const ASSET_COLS={
   building:[['subcategory','細目','sel'],['riyou','利用状況','text'],['location','所在場所','text'],['quantity','床面積(㎡)','num'],['koteiValue','固定資産税評価額','money'],['_frac','所有権割合','frac'],['adjust','調整','num'],['_calc','計算','calc'],['_value','価額(円)','value'],['memo','注記','text']],
   securities:[['subcategory','種類','sel'],['evalWay','評価方法','text'],['companyType','会社区分','selopt',['大会社','中会社','小会社','特定の評価会社','配当還元']],['name','銘柄','text'],['unitPrice','単価','money'],['quantity','数量','num'],['_calc','計算','calc'],['_value','価額(円)','value'],['memo','注記','text']],
   unlisted:[['subcategory','種類','sel'],['evalWay','評価方法','text'],['companyType','会社区分','selopt',['大会社','中会社','小会社','特定の評価会社','配当還元']],['name','会社名（銘柄）','text'],['unitPrice','単価','money'],['quantity','株数','num'],['_calc','計算','calc'],['_value','価額(円)','value'],['memo','注記','text']],
-  cash:[['nominee','名義','nameSel'],['subcategory','種類','text'],['name','金融機関','text'],['branch','支店','text'],['accountNo','口座番号','text'],['_value','金額(円)','value'],['memo','注記','text']],
+  cash:[['name','金融機関','text'],['branch','支店','text'],['subcategory','預金種類','text'],['accountNo','口座番号','text'],['nominee','名義人','nameSel'],['_value','金額(円)','value'],['memo','注記','text']],
   insurance:[['subcategory','区分','selopt',['死亡保険金（非課税枠の対象）','定期金に関する権利','その他']],['name','保険会社','text'],['accountNo','証券番号','text'],['nominee','受取人','nameSel'],['_value','金額(円)','value'],['memo','注記','text']],
   retirement:[['subcategory','種類','sel'],['name','支給者','text'],['nominee','受取人','nameSel'],['_value','金額(円)','value'],['memo','注記','text']],
   other:[['subcategory','細目','sel'],['name','内容','text'],['location','所在・明細','text'],['quantity','数量','num'],['unitPrice','単価','money'],['_calc','計算','calc'],['_value','価額(円)','value'],['memo','注記','text']],
@@ -1876,7 +1876,7 @@ function securitiesTableHtml(items){
       +'<td><select onchange="updAsset(\''+a.id+'\',\'subcategory\',this.value);renderAssetDetail()"><option value="">—</option>'+subs.map(s=>'<option value="'+esc(s)+'"'+(s===a.subcategory?' selected':'')+'>'+esc(s)+'</option>').join('')+'</select></td>'
       +'<td><input type="text" value="'+esc(a.code||'')+'" placeholder="'+(fund?'ISIN 例:JP90C...':'例：7203')+'" oninput="updAsset(\''+a.id+'\',\'code\',this.value)"></td>'
       +'<td><input type="text" value="'+esc(a.assoc||'')+'" placeholder="'+(fund?'協会コード':'—')+'"'+(fund?'':' disabled style="opacity:.35"')+' oninput="updAsset(\''+a.id+'\',\'assoc\',this.value)"></td>'
-      +'<td><input type="text" value="'+esc(a.name||'')+'" placeholder="'+(fund?'ファンド名':'銘柄名')+'" oninput="updAsset(\''+a.id+'\',\'name\',this.value)"></td>'
+      +'<td style="min-width:260px;"><input type="text" style="width:100%;min-width:250px;" value="'+esc(a.name||'')+'" placeholder="'+(fund?'ファンド名':'銘柄名')+'" oninput="updAsset(\''+a.id+'\',\'name\',this.value)"></td>'
       +m('p1',fund?'基準価額':'終値')+m('p2','月平均',fund)+m('p3','月平均',fund)+m('p4','月平均',fund)
       +'<td><input type="text" class="num" value="'+esc(a.quantity||'')+'" placeholder="株/口" oninput="updAsset(\''+a.id+'\',\'quantity\',this.value)"></td>'
       +m('ritio',fund?'%':'—',!fund)
@@ -1894,8 +1894,8 @@ function securitiesTableHtml(items){
       +'</tr>';
   });
   const sub=items.reduce((s,a)=>s+assetVal(a),0);
-  return '<div class="dtbl-wrap"><table class="dtbl" style="min-width:2240px;"><thead><tr>'
-    +'<th>自動</th><th>種類</th><th>銘柄コード/ISIN</th><th>協会コード<br>(投信)</th><th>銘柄/ファンド名</th>'
+  return '<div class="dtbl-wrap"><table class="dtbl" style="min-width:2380px;"><thead><tr>'
+    +'<th>自動</th><th>種類</th><th>銘柄コード/ISIN</th><th>協会コード<br>(投信)</th><th style="min-width:260px;">銘柄/ファンド名</th>'
     +'<th>①相続開始日終値<br>／基準価額(1万口)</th><th>②当月平均</th><th>③前月平均</th><th>④前々月平均</th><th>株数/口数</th>'
     +'<th>信託財産<br>留保率(%)</th><th>解約手数料</th><th>評価額<br>(株式/投信)</th>'
     +'<th>配当基準日</th><th>効力発生日<br>(株主総会決議日)</th><th>1株配当</th><th>配当区分</th><th>配当評価額<br>(源泉控除後)</th>'
@@ -1936,6 +1936,21 @@ async function fetchFundNav(isin, assoc, deathDayEnd){
   if(!best) throw new Error('相続開始日以前の基準価額が見つかりません');
   return best.nav;
 }
+// 日本語の銘柄名・ファンド名をYahoo!ファイナンス(日本版)のページタイトルから取得（GAS経由）
+async function fetchJpName(x){
+  if(!settings.gasUrl||!x) return '';
+  const page='https://finance.yahoo.co.jp/quote/'+encodeURIComponent(x);
+  const url=settings.gasUrl+(settings.gasUrl.indexOf('?')<0?'?':'&')+'url='+encodeURIComponent(page);
+  try{
+    const r=await fetch(url); if(!r.ok) return '';
+    const html=await r.text();
+    const m=html.match(/<title>([\s\S]*?)<\/title>/i); if(!m) return '';
+    let t=m[1].replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+    t=t.split('【')[0].split('｜')[0].split('|')[0].split('：')[0].split(':')[0].trim();
+    if(/yahoo/i.test(t)||t.length<2) return '';
+    return t;
+  }catch(e){ return ''; }
+}
 // 自動取得：株式＝株価4時点＋配当／投資信託＝基準価額
 async function autoFetchStock(id){
   const a=currentCase.assets.find(x=>x.id===id); if(!a) return;
@@ -1949,7 +1964,7 @@ async function autoFetchStock(id){
   if(isFund(a)){
     if(!(a.assoc||'').trim()){ toast('協会コードを入力してください（投資信託協会の検索で確認できます）', true); return; }
     toast('基準価額を取得中…');
-    try{ const nav=await fetchFundNav(code, a.assoc.trim(), deathDayEnd0); a.p1=String(Math.round(nav)); renderAssetDetail(); renderAssetNav(); renderSummary(); cacheCurrentCase(); toast('基準価額を取得：¥'+Math.round(nav).toLocaleString('ja-JP')+'（1万口）'); }
+    try{ const nav=await fetchFundNav(code, a.assoc.trim(), deathDayEnd0); a.p1=String(Math.round(nav)); let jp=''; try{ jp=await fetchJpName(code); }catch(e){} if(jp) a.name=jp; renderAssetDetail(); renderAssetNav(); renderSummary(); cacheCurrentCase(); toast('基準価額を取得：¥'+Math.round(nav).toLocaleString('ja-JP')+'（1万口）'+(jp?'／'+jp:'')); }
     catch(e){ console.error(e); toast('基準価額の自動取得に失敗：'+e.message+'（手入力も可能です）', true); }
     return;
   }
@@ -1968,7 +1983,8 @@ async function autoFetchStock(id){
     const avg=arr=>arr&&arr.length? arr.reduce((s,x)=>s+x,0)/arr.length : null;
     const cur=dKey(death), prev=dKey(new Date(death.getFullYear(),death.getMonth()-1,1)), prev2=dKey(new Date(death.getFullYear(),death.getMonth()-2,1));
     a.code=code;
-    if(data.name) a.name=data.name;
+    let jp=''; try{ jp=await fetchJpName(symbol); }catch(e){}
+    if(jp) a.name=jp; else if(data.name) a.name=data.name;
     a.p1= deathClose!=null? String(Math.round(deathClose)):'';
     a.p2= monthly[cur]? String(Math.round(avg(monthly[cur]))):'';
     a.p3= monthly[prev]? String(Math.round(avg(monthly[prev]))):'';
@@ -2545,37 +2561,42 @@ function savingsCompute(){
 function renderSavings(){
   if(!currentCase) return;
   const sel=$('savTemplateSel'); if(sel && !sel.options.length) sel.innerHTML=SAVING_TEMPLATES.map(t=>'<option value="'+t.key+'">'+esc(t.name)+'</option>').join('');
-  const R=savingsCompute();
-  $('savBase').innerHTML=box('課税価格の合計額',yen(R.T0))+box('相続税の総額（対策前）',yen(R.baseTax));
   // measures
   const c=$('savingsContainer');
   if(!(currentCase.savings||[]).length){ c.innerHTML='<div class="muted" style="font-size:13px;">対策が未選択です。上のテンプレートから追加してください。</div>'; }
   else{
     c.innerHTML=(currentCase.savings).map(s=>{ const t=SAVING_BY_KEY[s.key]; if(!t) return ''; s.params=s.params||{};
-      const fields=t.fields.map(f=>{ const v=(s.params[f.k]!==undefined&&s.params[f.k]!=='')?s.params[f.k]:(f.def!==undefined?f.def:''); if(s.params[f.k]===undefined) s.params[f.k]=f.def;
+      const fields=t.fields.map(f=>{ if(s.params[f.k]===undefined) s.params[f.k]=f.def; const v=(s.params[f.k]!==undefined&&s.params[f.k]!=='')?s.params[f.k]:(f.def!==undefined?f.def:'');
         const disp=f.type==='money'?(num(v)?num(v).toLocaleString('ja-JP'):''):v;
         return '<div class="field"><label>'+esc(f.label)+'</label><input type="text" class="num" value="'+esc(disp)+'" oninput="updSaving(\''+s.id+'\',\''+f.k+'\',this.value)"'+(f.type==='money'?' onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"':'')+'></div>'; }).join('');
-      const res=t.compute(s.params,savingsCtx());
       return '<div class="heir-card"><div class="heir-top"><span class="heir-no">'+esc(t.name)+'</span><button class="btn red sm" style="margin-left:auto;" onclick="removeSaving(\''+s.id+'\')">削除</button></div>'
         +'<div class="muted" style="font-size:12px;margin-bottom:10px;">'+esc(t.desc)+'</div>'
         +'<div class="grid grid-3">'+fields+'</div>'
-        +'<div style="margin-top:10px;font-size:13px;">この対策の効果：'+(res.dT?'課税価格 −'+yen(res.dT):'')+(res.dn?' 法定相続人 ＋'+res.dn+'人':'')+(res.note?'<span class="muted" style="font-size:11.5px;"> ／ '+esc(res.note)+'</span>':'')+'</div>'
+        +'<div id="saveff-'+s.id+'" style="margin-top:10px;font-size:13px;"></div>'
         +'</div>';
     }).join('');
   }
-  // result
-  $('savResult').innerHTML=box('対策後の課税価格',yen(R.T1))+box('対策後の相続税の総額',yen(R.afterTax))+boxAccent('節税効果（削減額）',yen(R.save));
+  refreshSavingsResult();
+  $('savDisclaimer').innerHTML='※ 本シミュレーションは「相続税の総額」（課税価格の合計額・基礎控除・法定相続分による速算表）ベースの概算です。配偶者の税額軽減等の個別の税額控除は対策前後で同様に作用するため比較から除いています。各対策には適用要件・否認リスク・贈与税等の別途コストがあり、実行可否は必ず税理士にご相談ください。';
+}
+function refreshSavingsResult(){
+  if(!currentCase) return;
+  const R=savingsCompute();
+  if($('savBase')) $('savBase').innerHTML=box('課税価格の合計額',yen(R.T0))+box('相続税の総額（対策前）',yen(R.baseTax));
+  if($('savResult')) $('savResult').innerHTML=box('対策後の課税価格',yen(R.T1))+box('対策後の相続税の総額',yen(R.afterTax))+boxAccent('節税効果（削減額）',yen(R.save));
+  // 各対策の効果ライン
+  (currentCase.savings||[]).forEach(s=>{ const el=$('saveff-'+s.id); if(!el) return; const t=SAVING_BY_KEY[s.key]; if(!t) return; const res=t.compute(s.params||{},savingsCtx());
+    el.innerHTML='この対策の効果：'+(res.dT?'課税価格 −'+yen(res.dT):'')+(res.dn?' 法定相続人 ＋'+res.dn+'人':'')+(res.note?'<span class="muted" style="font-size:11.5px;"> ／ '+esc(res.note)+'</span>':''); });
+  // 内訳
   let bk='';
   if(R.rows.length){ bk='<table class="sim-table" style="margin-top:12px;"><thead><tr><th>対策</th><th>課税価格の削減</th><th>法定相続人の増加</th></tr></thead><tbody>'
     +R.rows.map(x=>'<tr><td style="text-align:left;">'+esc(x.name)+'</td><td>'+(x.dT?'−'+yen(x.dT):'-')+'</td><td>'+(x.dn?'＋'+x.dn+'人':'-')+'</td></tr>').join('')
     +'</tbody><tfoot><tr><td style="text-align:left;">合計</td><td>−'+yen(R.dTtotal)+'</td><td>'+(R.dnTotal?'＋'+R.dnTotal+'人':'-')+'</td></tr></tfoot></table>'; }
-  $('savBreak').innerHTML=bk;
-  $('savDisclaimer').innerHTML='※ 本シミュレーションは「相続税の総額」（課税価格の合計額・基礎控除・法定相続分による速算表）ベースの概算です。配偶者の税額軽減等の個別の税額控除は対策前後で同様に作用するため比較から除いています。各対策には適用要件・否認リスク・贈与税等の別途コストがあり、実行可否は必ず税理士にご相談ください。';
+  if($('savBreak')) $('savBreak').innerHTML=bk;
 }
 function addSaving(){ if(!currentCase) return; const key=$('savTemplateSel').value||SAVING_TEMPLATES[0].key; const t=SAVING_BY_KEY[key]; const params={}; t.fields.forEach(f=>params[f.k]=f.def!==undefined?f.def:''); currentCase.savings.push({id:uid(),key,params}); renderSavings(); cacheCurrentCase(); }
 function removeSaving(id){ currentCase.savings=(currentCase.savings||[]).filter(s=>s.id!==id); renderSavings(); cacheCurrentCase(); }
-function updSaving(id,field,val){ const s=(currentCase.savings||[]).find(x=>x.id===id); if(!s) return; s.params=s.params||{}; s.params[field]=val; // re-render result only (avoid losing focus): update result + breakdown
-  const R=savingsCompute(); $('savResult').innerHTML=box('対策後の課税価格',yen(R.T1))+box('対策後の相続税の総額',yen(R.afterTax))+boxAccent('節税効果（削減額）',yen(R.save)); cacheCurrentCase(); }
+function updSaving(id,field,val){ const s=(currentCase.savings||[]).find(x=>x.id===id); if(!s) return; s.params=s.params||{}; s.params[field]=val; refreshSavingsResult(); cacheCurrentCase(); }
 
 // ============================================================
 //  財産診断書（PDF / Excel）
