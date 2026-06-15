@@ -752,7 +752,7 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
       <div class="card">
         <h2>株価の自動取得（有価証券）</h2>
         <div class="setting-row">
-          <div class="sr-info"><div class="t">Apps Script ウェブアプリURL</div><div class="d">下のコードをGoogle Apps Scriptに貼り付け、「デプロイ→新しいデプロイ→ウェブアプリ（アクセス：全員）」で発行した /exec のURLを入力してください。Yahoo!ファイナンスから株価4時点と配当を取得します。</div></div>
+          <div class="sr-info"><div class="t">Apps Script ウェブアプリURL</div><div class="d">下のコードをGoogle Apps Scriptに貼り付け、「デプロイ→新しいデプロイ→ウェブアプリ（アクセス：全員）」で発行した /exec のURLを入力してください。株価4時点・配当はYahoo!ファイナンスから取得し、Yahoo!が不調なときはStooqから株価を自動補完します（同じプロキシで動作します）。投資信託の基準価額・ファンド名は投資信託協会から取得します。</div></div>
           <div class="sr-control">
             <input type="text" id="set_gasUrl" placeholder="https://script.google.com/macros/s/XXXX/exec" oninput="onGasUrlInput()">
             <div class="muted" style="font-size:12px;margin-top:8px;">Apps Script に貼り付けるコード：</div>
@@ -2302,6 +2302,34 @@ async function fetchFundName(isin, assoc){
     return '';
   }catch(e){ return ''; }
 }
+// 日次終値の配列 [{ts,close}] から評価4時点（相続開始日終値・当月/前月/前々月の平均）を計算
+function compute4Points(rows, death){
+  const monthly={}; let deathClose=null, deathTs=-1;
+  const dKey=d=>d.getFullYear()+'-'+d.getMonth();
+  const deathDayEnd=new Date(death.getFullYear(),death.getMonth(),death.getDate(),23,59,59).getTime()/1000;
+  rows.forEach(r=>{ const c=r.close; if(c==null) return; const dt=new Date(r.ts*1000); const mk=dKey(dt); (monthly[mk]=monthly[mk]||[]).push(c);
+    if(r.ts<=deathDayEnd && r.ts>deathTs){ deathTs=r.ts; deathClose=c; } });
+  const avg=arr=>arr&&arr.length? arr.reduce((s,x)=>s+x,0)/arr.length:null;
+  const cur=dKey(death), prev=dKey(new Date(death.getFullYear(),death.getMonth()-1,1)), prev2=dKey(new Date(death.getFullYear(),death.getMonth()-2,1));
+  return { deathClose, deathTs, p2:monthly[cur]?avg(monthly[cur]):null, p3:monthly[prev]?avg(monthly[prev]):null, p4:monthly[prev2]?avg(monthly[prev2]):null };
+}
+// Stooqから日次終値CSVを取得（GAS経由）。日本株は「コード.jp」。配当・名称は取得できないが株価は安定して取れる。
+async function fetchStooqDaily(code, p1sec, p2sec){
+  const sym=code.replace(/\.[A-Za-z]+$/,'').toLowerCase()+'.jp';
+  const ymd=sec=>{ const d=new Date(sec*1000); return ''+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'); };
+  const api='https://stooq.com/q/d/l/?s='+encodeURIComponent(sym)+'&d1='+ymd(p1sec)+'&d2='+ymd(p2sec)+'&i=d';
+  const txt=await gasFetchText(api, 2);
+  const lines=txt.trim().split(/\r?\n/);
+  if(lines.length<2||!/date/i.test(lines[0])) throw new Error('Stooqからデータを取得できません');
+  const out=[];
+  for(let i=1;i<lines.length;i++){ const c=lines[i].split(','); if(c.length<5) continue;
+    const ds=(c[0]||'').replace(/[^0-9]/g,''); if(ds.length<8) continue;
+    const ts=Math.floor(new Date(+ds.slice(0,4),+ds.slice(4,6)-1,+ds.slice(6,8),12,0,0).getTime()/1000);
+    const close=parseFloat(c[4]); if(isNaN(ts)||isNaN(close)) continue;
+    out.push({ts,close});
+  }
+  return out;
+}
 // 自動取得：株式＝株価4時点＋配当／投資信託＝基準価額
 async function autoFetchStock(id){
   const a=currentCase.assets.find(x=>x.id===id); if(!a) return;
@@ -2326,53 +2354,54 @@ async function autoFetchStock(id){
   }
   const symbol=/\.[A-Za-z]+$/.test(code)? code : code+'.T';
   const end=new Date(death.getFullYear(), death.getMonth()+1, 1);
-  const divStart=new Date(death.getFullYear()-1, death.getMonth()-1, 1);
+  const histStart=new Date(death.getFullYear()-1, death.getMonth()-1, 1);
+  const p1sec=Math.floor(histStart.getTime()/1000), p2sec=Math.floor(end.getTime()/1000);
   toast('株価を取得中…');
+  // 株価4時点：① Yahoo!ファイナンス（株価＋配当＋名称を一括取得）→ 不調なら ② Stooq（株価のみ）で自動フォールバック
+  let rows=null, dividends=[], usName='', priceSrc='';
   try{
-    const data=await fetchChart(symbol, Math.floor(divStart.getTime()/1000), Math.floor(end.getTime()/1000));
-    const ts=data.ts, cl=data.close;
-    const monthly={}; let deathClose=null, deathTs=-1;
-    const dKey=d=>d.getFullYear()+'-'+d.getMonth();
-    const deathDayEnd=new Date(death.getFullYear(),death.getMonth(),death.getDate(),23,59,59).getTime()/1000;
-    for(let i=0;i<ts.length;i++){ const c=cl[i]; if(c==null) continue; const dt=new Date(ts[i]*1000); const mk=dKey(dt); (monthly[mk]=monthly[mk]||[]).push(c);
-      if(ts[i]<=deathDayEnd && ts[i]>deathTs){ deathTs=ts[i]; deathClose=c; } }
-    const avg=arr=>arr&&arr.length? arr.reduce((s,x)=>s+x,0)/arr.length : null;
-    const cur=dKey(death), prev=dKey(new Date(death.getFullYear(),death.getMonth()-1,1)), prev2=dKey(new Date(death.getFullYear(),death.getMonth()-2,1));
-    a.code=code;
-    // 日本語の銘柄名：Yahoo!ファイナンス(日本版)を「7203.T」→「7203」の順に試し、取れなければ英語名にフォールバック
-    let jp=''; try{ jp=await fetchJpName(symbol); }catch(e){}
-    if(!jp){ const bare=code.replace(/\.[A-Za-z]+$/,''); if(bare!==symbol){ try{ jp=await fetchJpName(bare); }catch(e){} } }
-    if(jp) a.name=jp; else if(data.name) a.name=data.name;
-    a.p1= deathClose!=null? String(Math.round(deathClose)):'';
-    a.p2= monthly[cur]? String(Math.round(avg(monthly[cur]))):'';
-    a.p3= monthly[prev]? String(Math.round(avg(monthly[prev]))):'';
-    a.p4= monthly[prev2]? String(Math.round(avg(monthly[prev2]))):'';
-    let divMsg='';
-    let cand=null;
-    (data.dividends||[]).forEach(dv=>{ if(dv&&dv.date!=null && dv.date<=deathDayEnd && (deathTs<0||deathTs-dv.date<=200*86400)){ if(!cand||dv.date>cand.date) cand=dv; } });
-    if(cand){
-      // Yahoo!の配当 date は「権利落ち日(ex-date)」。基準日≒権利落ち日の翌営業日、効力発生日(株主総会)≒基準日の約3か月後、
-      // 支払開始日≒効力発生日の約2週間後、として推定値をセットする（いずれも目安。実際の日付が分かれば手修正してください）。
-      const exd=new Date(cand.date*1000);
-      const baseD=new Date(exd.getFullYear(),exd.getMonth(),exd.getDate()+1);
-      const effD=new Date(baseD.getFullYear(),baseD.getMonth()+3,Math.min(baseD.getDate(),28));
-      const payD=new Date(effD.getFullYear(),effD.getMonth(),effD.getDate()+14);
-      const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-      a.divBase=iso(baseD); a.divEffective=iso(effD); a.divPayStart=iso(payD); a.divPerShare=String(Math.round(cand.amount*100)/100); if(!a.divRate) a.divRate='20.315';
-      const di=divInfo(a); divMsg = di.kind!=='なし'? '／'+di.kind+' '+yen(di.net)+'（日付は推定値です。ご確認ください）':'／配当：受領済み等で対象外';
-    } else { a.divBase=''; a.divEffective=''; a.divPayStart=''; a.divPerShare=''; divMsg='／該当する未収配当金・配当期待権なし'; }
-    renderAssetDetail(); renderAssetNav(); renderSummary(); cacheCurrentCase();
-    toast('取得しました：'+(a.name||symbol)+'（採用単価 ¥'+secUnit(a).toLocaleString('ja-JP')+'）'+divMsg);
-  }catch(e){
-    console.error(e);
-    toast('自動取得に失敗：'+e.message+' ／ 設定の取得方法をご確認ください（手入力も可能です）', true);
+    const data=await fetchChart(symbol, p1sec, p2sec);
+    rows=[]; for(let i=0;i<data.ts.length;i++){ if(data.close[i]!=null) rows.push({ts:data.ts[i],close:data.close[i]}); }
+    dividends=data.dividends||[]; usName=data.name||''; priceSrc='Yahoo';
+  }catch(e){ console.warn('Yahoo chart失敗：', e); }
+  let pts=(rows&&rows.length)? compute4Points(rows, death): null;
+  if(!pts || pts.deathClose==null){
+    try{ const srows=await fetchStooqDaily(code, p1sec, p2sec); if(srows&&srows.length){ const sp=compute4Points(srows, death); if(sp.deathClose!=null){ pts=sp; priceSrc=priceSrc?priceSrc+'→Stooq':'Stooq'; } } }
+    catch(e){ console.warn('Stooq失敗：', e); }
   }
+  if(!pts || pts.deathClose==null){ toast('株価の自動取得に失敗しました。銘柄コードと設定（Apps Script URL）をご確認ください（4時点・配当は手入力も可能です）', true); return; }
+  a.code=code;
+  // 名称：Yahoo!ファイナンス(日本版)を「7203.T」→「7203」の順に試し、取れなければ英語名／既存値
+  let jp=''; try{ jp=await fetchJpName(symbol); }catch(e){}
+  if(!jp){ const bare=code.replace(/\.[A-Za-z]+$/,''); if(bare!==symbol){ try{ jp=await fetchJpName(bare); }catch(e){} } }
+  if(jp) a.name=jp; else if(usName) a.name=usName;
+  a.p1= pts.deathClose!=null? String(Math.round(pts.deathClose)):'';
+  a.p2= pts.p2!=null? String(Math.round(pts.p2)):'';
+  a.p3= pts.p3!=null? String(Math.round(pts.p3)):'';
+  a.p4= pts.p4!=null? String(Math.round(pts.p4)):'';
+  // 配当（配当期待権／未収配当金）：Yahoo!の配当履歴で判定（Yahoo!不調時は手入力）
+  const deathTs=pts.deathTs; let divMsg='', cand=null;
+  dividends.forEach(dv=>{ if(dv&&dv.date!=null && dv.date<=deathDayEnd0 && (deathTs<0||deathTs-dv.date<=200*86400)){ if(!cand||dv.date>cand.date) cand=dv; } });
+  if(cand){
+    // Yahoo!の配当 date は「権利落ち日(ex-date)」。基準日≒権利落ち日の翌日、効力発生日(株主総会)≒基準日の約3か月後、
+    // 支払開始日≒効力発生日の約2週間後、として推定値をセット（いずれも目安。実日付が分かれば手修正してください）。
+    const exd=new Date(cand.date*1000);
+    const baseD=new Date(exd.getFullYear(),exd.getMonth(),exd.getDate()+1);
+    const effD=new Date(baseD.getFullYear(),baseD.getMonth()+3,Math.min(baseD.getDate(),28));
+    const payD=new Date(effD.getFullYear(),effD.getMonth(),effD.getDate()+14);
+    const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    a.divBase=iso(baseD); a.divEffective=iso(effD); a.divPayStart=iso(payD); a.divPerShare=String(Math.round(cand.amount*100)/100); if(!a.divRate) a.divRate='20.315';
+    const di=divInfo(a); divMsg = di.kind!=='なし'? '／'+di.kind+' '+yen(di.net)+'（配当の日付は推定値です。ご確認ください）':'／配当：受領済み等で対象外';
+  } else if(dividends.length){ a.divBase=''; a.divEffective=''; a.divPayStart=''; a.divPerShare=''; divMsg='／該当する未収配当金・配当期待権なし'; }
+  else { divMsg='／配当データは取得できませんでした（必要に応じ手入力）'; }
+  renderAssetDetail(); renderAssetNav(); renderSummary(); cacheCurrentCase();
+  toast('取得しました：'+(a.name||symbol)+'（'+priceSrc+'／採用単価 ¥'+secUnit(a).toLocaleString('ja-JP')+'）'+divMsg);
 }
 function detailNote(cat){
   const notes={
     land:'価額 ＝（路線価方式：㎡単価×面積／倍率方式：固定資産税評価額×倍率）×所有権割合×調整。小規模宅地等の特例は区分と適用面積を入力すると減額を自動計算します（端数四捨五入）。',
     building:'価額 ＝ 固定資産税評価額 × 所有権割合 × 調整（四捨五入）。価額を直接入力する場合は「計算」のチェックを外してください。',
-    securities:'【上場株式・ETF・REIT】評価額 ＝ ①相続開始日終値、②当月・③前月・④前々月の終値の月平均額 のうち最も低い価額×株数。「自動算出」で銘柄コードから株価4時点・配当をYahoo!ファイナンス（GAS経由）で取得します。配当は相続開始日(死亡日)と各日付の関係で次のとおり判定し、配当総額−源泉税(20.315%)を評価額合計に加算します：①死亡日が配当基準日以前＝なし(株価に織込み済み)、②基準日の翌日〜効力発生日(株主総会決議日)＝配当期待権、③効力発生日の翌日〜支払開始日＝未収配当金、④支払開始日より後＝なし(受領済みのため現金・預貯金に計上)。自動算出の日付は推定値です（基準日≒権利落ち日の翌日、効力発生日≒基準日の約3か月後、支払開始日≒効力発生日の約2週間後）。実際の基準日・株主総会決議日・支払開始日が分かる場合は手入力で修正してください。\n【投資信託（非上場）】種類で「投資信託」を選ぶと、評価額 ＝ 基準価額(1万口)×口数÷1万 − 信託財産留保額(基準価額×留保率) − 解約手数料。「自動算出」はISINコード＋協会コードから投資信託協会の基準価額を取得します。留保率・解約手数料は目論見書を参照し入力してください。',
+    securities:'【上場株式・ETF・REIT】評価額 ＝ ①相続開始日終値、②当月・③前月・④前々月の終値の月平均額 のうち最も低い価額×株数。「自動算出」で銘柄コードから株価4時点・配当をYahoo!ファイナンス（GAS経由）で取得します（Yahoo!が不調なときはStooqから株価を自動補完）。配当は相続開始日(死亡日)と各日付の関係で次のとおり判定し、配当総額−源泉税(20.315%)を評価額合計に加算します：①死亡日が配当基準日以前＝なし(株価に織込み済み)、②基準日の翌日〜効力発生日(株主総会決議日)＝配当期待権、③効力発生日の翌日〜支払開始日＝未収配当金、④支払開始日より後＝なし(受領済みのため現金・預貯金に計上)。自動算出の日付は推定値です（基準日≒権利落ち日の翌日、効力発生日≒基準日の約3か月後、支払開始日≒効力発生日の約2週間後）。実際の基準日・株主総会決議日・支払開始日が分かる場合は手入力で修正してください。\n【投資信託（非上場）】種類で「投資信託」を選ぶと、評価額 ＝ 基準価額(1万口)×口数÷1万 − 信託財産留保額(基準価額×留保率) − 解約手数料。「自動算出」はISINコード＋協会コードから投資信託協会の基準価額を取得します。留保率・解約手数料は目論見書を参照し入力してください。',
     unlisted:'非上場株式は類似業種比準・純資産価額方式等で1株単価を算定し、単価×株数で価額を計算します。',
     cash:'相続開始日時点の残高を入力します。名義は被相続人や相続人から選択できます（名義預金は実質の所有者をご確認のうえ判断）。種類（普通預金/定期預金/現金 等）は自由入力です。',
     insurance:'区分で分けて入力します。「死亡保険金（非課税枠の対象）」＝被相続人を被保険者とし相続人が受け取る保険金で、非課税限度（500万円×法定相続人数）の対象。「定期金に関する権利」＝年金保険の受給権や保険料負担者＝被相続人で被保険者が他人の保険契約に関する権利等で、非課税の対象外（全額が課税価格）。金額は解約返戻金相当額等を入力します。',
