@@ -112,6 +112,11 @@ input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink);}
 .drive-status{font-size:12.5px;color:var(--ink-2);display:flex;align-items:center;gap:6px;}
 .drive-status .d{width:8px;height:8px;border-radius:50%;background:var(--line-2);}
 .drive-status.on .d{background:var(--green);}
+.save-status{font-size:12px;font-weight:600;padding:3px 10px;border-radius:980px;white-space:nowrap;}
+.save-status.saved{color:#1a7f37;background:#e7f8ec;}
+.save-status.saving{color:#b25e00;background:#fff4e5;}
+.save-status.dirty{color:var(--ink-2);background:var(--surface-2);}
+.save-status.local{color:#8a6d00;background:#fff8e6;}
 
 .main{grid-area:main;overflow-y:auto;padding:30px 36px 80px;}
 .view{display:none;max-width:1040px;margin:0 auto;animation:fade .25s ease;}
@@ -416,6 +421,7 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
     </div>
     <div class="topbar-right">
       <div class="drive-status" id="driveStatus"><span class="d"></span><span>未接続</span></div>
+      <span class="save-status" id="saveStatus"></span>
       <button class="btn primary sm needs-case" id="btnSaveTop" onclick="saveCurrentCase()">保存</button>
       <button class="btn sm" id="btnLogin" onclick="googleLogin()">Googleでログイン</button>
       <button class="btn sm" id="btnLogout" onclick="googleLogout()" style="display:none;">ログアウト</button>
@@ -1308,7 +1314,10 @@ function openCase(fileId){
     try{
       const data=await driveDownloadJson(fileId);
       currentCase=migrateCase(data); currentFileId=fileId;
-      loadCaseIntoUI(); cacheCurrentCase();
+      clearTimeout(autosaveTimer); isDirty=false;
+      loadCaseIntoUI();
+      try{ localStorage.setItem(LS_CASE_CACHE, JSON.stringify({fileId:currentFileId,case:currentCase})); }catch(e){}
+      updateSaveStatus('saved');
       toast('案件を読み込みました'); switchView('basic'); renderCasesList();
     }catch(e){ toast('読み込み失敗：'+e.message, true); }
   });
@@ -1377,27 +1386,61 @@ function syncUIToCase(){
   currentCase.agreement.notes=$('ag_notes').value;
   currentCase.agreement.extraHeirId=$('ag_extraHeir').value;
 }
-function cacheCurrentCase(){ try{ if(currentCase) localStorage.setItem(LS_CASE_CACHE, JSON.stringify({fileId:currentFileId,case:currentCase})); }catch(e){} }
+// 変更があるたびにローカル保存し、Driveへの自動保存をスケジュール（デバウンス）
+let autosaveTimer=null, isDirty=false, isSaving=false;
+function cacheCurrentCase(){ try{ if(currentCase) localStorage.setItem(LS_CASE_CACHE, JSON.stringify({fileId:currentFileId,case:currentCase})); }catch(e){} scheduleAutosave(); }
+function scheduleAutosave(){ if(!currentCase) return; isDirty=true; updateSaveStatus('dirty'); clearTimeout(autosaveTimer); autosaveTimer=setTimeout(autosaveNow, 3500); }
+function updateSaveStatus(state){
+  const el=$('saveStatus'); if(!el) return;
+  if(!settings.folderId){ el.textContent='ローカル保存のみ'; el.className='save-status local'; return; }
+  if(state==='saving'){ el.textContent='保存中…'; el.className='save-status saving'; }
+  else if(state==='saved'){ el.textContent='✓ 保存済み'; el.className='save-status saved'; }
+  else if(state==='local'){ el.textContent='未保存（ローカルのみ）'; el.className='save-status local'; }
+  else { el.textContent='未保存…'; el.className='save-status dirty'; }
+}
+// Drive保存の中核（トークンは有効である前提）
+async function doDriveSave(){
+  syncUIToCase();
+  currentCase.savedAt=new Date().toISOString();
+  const name=FILE_PREFIX+currentCase.deceased.name+'.json';
+  const json=JSON.stringify(currentCase,null,2);
+  const sum=progressSummary(currentCase);
+  const appProps={pct:String(sum.pct), pstat:sum.codes, stage:sum.stage, deathDate:currentCase.deceased.deathDate||''};
+  const res=await driveSaveJson(name, json, currentFileId, appProps);
+  if(!currentFileId){ currentFileId=res.id; }
+  else { try{ await driveRename(currentFileId,name); }catch(e){} }
+  isDirty=false;
+}
+// 自動保存（サイレント。未ログイン時はトークンのサイレント取得のみ試み、ダメならローカル維持）
+async function autosaveNow(){
+  if(!isDirty) return;
+  if(!currentCase || !currentCase.deceased.name.trim() || !settings.folderId){ updateSaveStatus('local'); return; }
+  if(isSaving){ scheduleAutosave(); return; }
+  try{ if(!(accessToken && Date.now()<tokenExpiry)) await requestToken(false); }
+  catch(e){ updateSaveStatus('local'); return; } // サイレント不可（ログインが必要）→ローカルのまま
+  isSaving=true; updateSaveStatus('saving');
+  try{ await doDriveSave(); updateSaveStatus('saved'); }
+  catch(e){ console.error(e); updateSaveStatus('local'); }
+  finally{ isSaving=false; }
+}
+// 手動保存（明示的なログイン誘導・トースト付き）
 async function saveCurrentCase(){
   if(!currentCase){ toast('保存する案件がありません', true); return; }
   syncUIToCase();
   if(!currentCase.deceased.name.trim()){ toast('被相続人氏名を入力してください', true); switchView('basic'); return; }
-  currentCase.savedAt=new Date().toISOString();
   cacheCurrentCase();
-  if(!settings.folderId){ toast('Driveに保存するには設定でフォルダURLを入力してください。ローカルにはキャッシュ済みです。', true); return; }
+  if(!settings.folderId){ toast('Driveに保存するには設定でフォルダURLを入力してください。ローカルには保存済みです。', true); return; }
+  updateSaveStatus('saving');
   ensureLogin(async()=>{
+    isSaving=true;
     try{
-      const name=FILE_PREFIX+currentCase.deceased.name+'.json';
-      const json=JSON.stringify(currentCase,null,2);
-      const sum=progressSummary(currentCase);
-      const appProps={pct:String(sum.pct), pstat:sum.codes, stage:sum.stage, deathDate:currentCase.deceased.deathDate||''};
-      const res=await driveSaveJson(name, json, currentFileId, appProps);
-      if(!currentFileId){ currentFileId=res.id; }
-      else { try{ await driveRename(currentFileId,name); }catch(e){} }
-      toast('Driveに保存しました：'+name);
+      await doDriveSave();
+      updateSaveStatus('saved');
+      toast('Driveに保存しました');
       try{ driveCaseFiles=await driveListCases(); }catch(e){}
       renderCasesList();
-    }catch(e){ toast('保存失敗：'+e.message, true); }
+    }catch(e){ updateSaveStatus('local'); toast('保存失敗：'+e.message, true); }
+    finally{ isSaving=false; }
   });
 }
 
@@ -1422,6 +1465,7 @@ function loadCaseIntoUI(){
   renderAssetNav(); renderAssetDetail(); renderSummary();
   renderAgreement();
   renderProgress();
+  updateSaveStatus(isDirty?'dirty':'saved');
 }
 function updateCaseChip(){
   const chip=$('caseChip');
@@ -2990,6 +3034,9 @@ window.addEventListener('load',()=>{
   refreshNavLock();
   renderCasesList();
 });
+// タブを離れる・閉じる時に未保存なら自動保存を実行
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden' && isDirty){ clearTimeout(autosaveTimer); autosaveNow(); } });
+window.addEventListener('beforeunload',()=>{ if(currentCase) try{ localStorage.setItem(LS_CASE_CACHE, JSON.stringify({fileId:currentFileId,case:currentCase})); }catch(e){} });
 </script>
 </body>
 </html>
