@@ -1879,7 +1879,7 @@ const MANUAL_VAL=['cash','insurance','retirement','debt']; // 価額を直接入
 const HAS_CALC=['land','building','securities','unlisted','other','gift'];   // 自動計算（計算チェック）あり
 function newAsset(cat){
   return {id:uid(),category:cat,subcategory:'',name:'',location:'',riyou:'',quantity:'',evalMethod:'rosen',unitPrice:'',koteiValue:'',baisu:'',ownNum:'1',ownDen:'1',adjust:'1.00',autoCalc:true,value:'',evalWay:'',companyType:'',branch:'',nominee:'',accountNo:'',memo:'',kobo:{type:'none',area:''},
-    code:'',p1:'',p2:'',p3:'',p4:'',divBase:'',divEffective:'',divPerShare:'',divRate:'',
+    code:'',p1:'',p2:'',p3:'',p4:'',divBase:'',divEffective:'',divPayStart:'',divPerShare:'',divRate:'',
     assoc:'',ritio:'',redeemFee:'',creditorAddr:'',debtStart:'',debtDue:'',payerAddr:'',payDate:'',claimAmount:'',excludeAmount:'',checkNote:'',checkResult:'',interest:'',
     giftTax:0,is4to7:false,regime:'koyo',giftRecipient:'',giftDate:'',gKind:'',gDetail:'',autoBasic:true,allocations:[]};
 }
@@ -1889,20 +1889,29 @@ function secUnit(a){ const ps=[a.p1,a.p2,a.p3,a.p4].map(num).filter(x=>x>0); ret
 function secBase(a){ if(isFund(a)) return Math.round(num(a.p1)*num(a.quantity)/10000); return Math.round(secUnit(a)*num(a.quantity)); }
 // 投資信託の控除（信託財産留保額＋解約手数料）
 function fundDeduct(a){ if(!isFund(a)) return 0; const base=secBase(a); return Math.round(base*num(a.ritio)/100)+num(a.redeemFee); }
-// 未収配当金／配当期待権の判定・評価（財基通168・193）
+// 未収配当金／配当期待権の判定・評価（財基通168・193、国税庁タックスアンサー）
+//  相続開始日(死亡日)と各日付の関係で判定する：
+//   ① 死亡日 ≦ 配当基準日              … なし（配当落ち前で株価に織り込み済み）
+//   ② 配当基準日の翌日 〜 効力発生日     … 配当期待権（株主総会決議前で金額未確定だが受給権あり）
+//   ③ 効力発生日の翌日 〜 支払開始日     … 未収配当金（決議で金額確定済みだが未受領）
+//   ④ 支払開始日より後                  … なし（受領済み＝現金・預貯金に計上されるため二重計上しない）
+//  ※ 支払開始日が未入力の場合は③の上限を設けず、効力発生日後は未収配当金として扱う（従来動作）。
 function divInfo(a){
   const per=num(a.divPerShare), qty=num(a.quantity);
   const dd=(currentCase&&currentCase.deceased)?currentCase.deceased.deathDate:'';
   if(per<=0||qty<=0||!a.divBase||!dd) return {kind:'なし',gross:0,tax:0,net:0};
-  const death=new Date(dd), base=new Date(a.divBase), eff=a.divEffective? new Date(a.divEffective):null;
+  const death=new Date(dd), base=new Date(a.divBase),
+        eff=a.divEffective? new Date(a.divEffective):null,
+        pay=a.divPayStart? new Date(a.divPayStart):null;
   if(isNaN(death)||isNaN(base)) return {kind:'なし',gross:0,tax:0,net:0};
   let kind;
-  if(death<=base) kind='なし';                       // 基準日以前 → 株価に反映済み
-  else if(eff && death<=eff) kind='配当期待権';        // 基準日後〜効力発生日(株主総会決議日)
-  else kind='未収配当金';                             // 効力発生日後で未受領
+  if(death<=base) kind='なし';                        // ① 基準日以前 → 株価に織り込み済み
+  else if(eff && death<=eff) kind='配当期待権';        // ② 基準日の翌日〜効力発生日(株主総会決議日)
+  else if(pay && death>pay) kind='なし';               // ④ 支払開始日後 → 受領済み（現金・預貯金へ計上）
+  else kind='未収配当金';                              // ③ 効力発生日後〜支払開始日まで（未受領）
   if(kind==='なし') return {kind,gross:0,tax:0,net:0};
   const gross=Math.round(per*qty);
-  const rate=(a.divRate!==''&&a.divRate!=null)? num(a.divRate):20.315; // 上場株式の源泉徴収（所得税・復興・住民税）
+  const rate=(a.divRate!==''&&a.divRate!=null)? num(a.divRate):20.315; // 上場株式の源泉徴収（所得税15.315%＋住民税5%）
   const tax=Math.floor(gross*rate/100);
   return {kind,gross,tax,net:gross-tax,rate};
 }
@@ -2185,6 +2194,7 @@ function securitiesTableHtml(items){
       +'<td><input type="text" readonly class="num computed" id="secval-'+a.id+'" value="'+(base?base.toLocaleString('ja-JP'):'0')+'"></td>'
       +'<td><input type="date" value="'+esc(a.divBase||'')+'"'+(fund?' disabled style="opacity:.35"':'')+' oninput="updAsset(\''+a.id+'\',\'divBase\',this.value)"></td>'
       +'<td><input type="date" value="'+esc(a.divEffective||'')+'"'+(fund?' disabled style="opacity:.35"':'')+' oninput="updAsset(\''+a.id+'\',\'divEffective\',this.value)"></td>'
+      +'<td><input type="date" value="'+esc(a.divPayStart||'')+'"'+(fund?' disabled style="opacity:.35"':'')+' oninput="updAsset(\''+a.id+'\',\'divPayStart\',this.value)"></td>'
       +m('divPerShare','1株配当',fund)
       +'<td style="text-align:center;font-size:11px;"><span id="divkind-'+a.id+'">'+di.kind+'</span></td>'
       +'<td><input type="text" readonly class="num computed" id="divval-'+a.id+'" value="'+(di.net?di.net.toLocaleString('ja-JP'):'0')+'" title="配当総額 '+yen(di.gross)+' − 源泉 '+yen(di.tax)+'"></td>'
@@ -2196,14 +2206,14 @@ function securitiesTableHtml(items){
       +'</tr>';
   });
   const sub=items.reduce((s,a)=>s+assetVal(a),0);
-  return '<div class="dtbl-wrap"><table class="dtbl" style="min-width:2540px;"><thead><tr>'
+  return '<div class="dtbl-wrap"><table class="dtbl" style="min-width:2680px;"><thead><tr>'
     +'<th>自動</th><th>種類</th><th>銘柄コード/ISIN</th><th>協会コード<br>(投信)</th><th style="min-width:260px;">銘柄/ファンド名</th>'
     +'<th>①相続開始日終値<br>／基準価額(1万口)</th><th>②当月平均</th><th>③前月平均</th><th>④前々月平均</th><th>株数/口数</th>'
     +'<th>信託財産<br>留保率(%)</th><th>解約手数料</th><th>評価額<br>(株式/投信)</th>'
-    +'<th>配当基準日</th><th>効力発生日<br>(株主総会決議日)</th><th>1株配当</th><th>配当区分</th><th>配当評価額<br>(源泉控除後)</th>'
+    +'<th>配当基準日</th><th>効力発生日<br>(株主総会決議日)</th><th>支払開始日<br>(実際の入金日)</th><th>1株配当</th><th>配当区分</th><th>配当評価額<br>(源泉控除後)</th>'
     +'<th>計算</th><th>評価額合計(円)</th><th>注記</th><th style="min-width:160px;">確認する事項</th><th></th>'
     +'</tr></thead><tbody>'+rows+'</tbody>'
-    +'<tfoot><tr><td colspan="19" style="text-align:right;">計</td><td class="num" id="foot-securities">'+yen(sub)+'</td><td colspan="3"></td></tr></tfoot></table></div>';
+    +'<tfoot><tr><td colspan="20" style="text-align:right;">計</td><td class="num" id="foot-securities">'+yen(sub)+'</td><td colspan="3"></td></tr></tfoot></table></div>';
 }
 // 株価データ取得（Google Apps Script ウェブアプリ経由でYahoo!ファイナンスを取得）
 // 返り値を {ts:[unix], close:[number], name, dividends:[{date,amount}]} に正規化
@@ -2341,13 +2351,16 @@ async function autoFetchStock(id){
     let cand=null;
     (data.dividends||[]).forEach(dv=>{ if(dv&&dv.date!=null && dv.date<=deathDayEnd && (deathTs<0||deathTs-dv.date<=200*86400)){ if(!cand||dv.date>cand.date) cand=dv; } });
     if(cand){
+      // Yahoo!の配当 date は「権利落ち日(ex-date)」。基準日≒権利落ち日の翌営業日、効力発生日(株主総会)≒基準日の約3か月後、
+      // 支払開始日≒効力発生日の約2週間後、として推定値をセットする（いずれも目安。実際の日付が分かれば手修正してください）。
       const exd=new Date(cand.date*1000);
       const baseD=new Date(exd.getFullYear(),exd.getMonth(),exd.getDate()+1);
       const effD=new Date(baseD.getFullYear(),baseD.getMonth()+3,Math.min(baseD.getDate(),28));
+      const payD=new Date(effD.getFullYear(),effD.getMonth(),effD.getDate()+14);
       const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-      a.divBase=iso(baseD); a.divEffective=iso(effD); a.divPerShare=String(Math.round(cand.amount*100)/100); if(!a.divRate) a.divRate='20.315';
-      const di=divInfo(a); divMsg = di.kind!=='なし'? '／'+di.kind+' '+yen(di.net):'／配当：対象外';
-    } else { a.divBase=''; a.divEffective=''; a.divPerShare=''; divMsg='／該当する未収配当金・配当期待権なし'; }
+      a.divBase=iso(baseD); a.divEffective=iso(effD); a.divPayStart=iso(payD); a.divPerShare=String(Math.round(cand.amount*100)/100); if(!a.divRate) a.divRate='20.315';
+      const di=divInfo(a); divMsg = di.kind!=='なし'? '／'+di.kind+' '+yen(di.net)+'（日付は推定値です。ご確認ください）':'／配当：受領済み等で対象外';
+    } else { a.divBase=''; a.divEffective=''; a.divPayStart=''; a.divPerShare=''; divMsg='／該当する未収配当金・配当期待権なし'; }
     renderAssetDetail(); renderAssetNav(); renderSummary(); cacheCurrentCase();
     toast('取得しました：'+(a.name||symbol)+'（採用単価 ¥'+secUnit(a).toLocaleString('ja-JP')+'）'+divMsg);
   }catch(e){
@@ -2359,7 +2372,7 @@ function detailNote(cat){
   const notes={
     land:'価額 ＝（路線価方式：㎡単価×面積／倍率方式：固定資産税評価額×倍率）×所有権割合×調整。小規模宅地等の特例は区分と適用面積を入力すると減額を自動計算します（端数四捨五入）。',
     building:'価額 ＝ 固定資産税評価額 × 所有権割合 × 調整（四捨五入）。価額を直接入力する場合は「計算」のチェックを外してください。',
-    securities:'【上場株式・ETF・REIT】評価額 ＝ ①相続開始日終値、②当月・③前月・④前々月の終値の月平均額 のうち最も低い価額×株数。「自動算出」で銘柄コードから株価4時点・配当をYahoo!ファイナンス（GAS経由）で取得します。配当は相続開始日と基準日・効力発生日(株主総会決議日)の関係で「配当期待権／未収配当金」を判定し、配当総額−源泉所得税(20.315%)を評価額合計に加算します。\n【投資信託（非上場）】種類で「投資信託」を選ぶと、評価額 ＝ 基準価額(1万口)×口数÷1万 − 信託財産留保額(基準価額×留保率) − 解約手数料。「自動算出」はISINコード＋協会コードから投資信託協会の基準価額を取得します。留保率・解約手数料は目論見書を参照し入力してください。',
+    securities:'【上場株式・ETF・REIT】評価額 ＝ ①相続開始日終値、②当月・③前月・④前々月の終値の月平均額 のうち最も低い価額×株数。「自動算出」で銘柄コードから株価4時点・配当をYahoo!ファイナンス（GAS経由）で取得します。配当は相続開始日(死亡日)と各日付の関係で次のとおり判定し、配当総額−源泉税(20.315%)を評価額合計に加算します：①死亡日が配当基準日以前＝なし(株価に織込み済み)、②基準日の翌日〜効力発生日(株主総会決議日)＝配当期待権、③効力発生日の翌日〜支払開始日＝未収配当金、④支払開始日より後＝なし(受領済みのため現金・預貯金に計上)。自動算出の日付は推定値です（基準日≒権利落ち日の翌日、効力発生日≒基準日の約3か月後、支払開始日≒効力発生日の約2週間後）。実際の基準日・株主総会決議日・支払開始日が分かる場合は手入力で修正してください。\n【投資信託（非上場）】種類で「投資信託」を選ぶと、評価額 ＝ 基準価額(1万口)×口数÷1万 − 信託財産留保額(基準価額×留保率) − 解約手数料。「自動算出」はISINコード＋協会コードから投資信託協会の基準価額を取得します。留保率・解約手数料は目論見書を参照し入力してください。',
     unlisted:'非上場株式は類似業種比準・純資産価額方式等で1株単価を算定し、単価×株数で価額を計算します。',
     cash:'相続開始日時点の残高を入力します。名義は被相続人や相続人から選択できます（名義預金は実質の所有者をご確認のうえ判断）。種類（普通預金/定期預金/現金 等）は自由入力です。',
     insurance:'区分で分けて入力します。「死亡保険金（非課税枠の対象）」＝被相続人を被保険者とし相続人が受け取る保険金で、非課税限度（500万円×法定相続人数）の対象。「定期金に関する権利」＝年金保険の受給権や保険料負担者＝被相続人で被保険者が他人の保険契約に関する権利等で、非課税の対象外（全額が課税価格）。金額は解約返戻金相当額等を入力します。',
