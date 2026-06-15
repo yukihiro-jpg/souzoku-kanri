@@ -288,6 +288,10 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 .dtbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;}
 .dtbl{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px;min-width:600px;}
 .dtbl th{position:sticky;top:0;background:var(--surface-2);text-align:left;font-size:11px;font-weight:600;color:var(--ink-2);padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap;}
+.mv-table th{position:static;background:#3a4a5e;color:#fff;border-color:#2c3a4a;text-align:center;}
+.mv-table th select{color:var(--ink);}
+.mv-table td{border-left:1px solid var(--line);}
+.mv-table .num input{text-align:right;}
 .dtbl td{padding:6px 7px;border-bottom:1px solid var(--line);vertical-align:middle;}
 .dtbl tr:last-child td{border-bottom:none;}
 .dtbl input,.dtbl select{padding:7px 8px;border:1px solid var(--line-2);border-radius:8px;font-size:12.5px;width:100%;background:#fff;}
@@ -1103,6 +1107,7 @@ function newCaseObject(name){
     agreement:{ date:'', notes:'', extraHeirId:'' },
     progress:{}, // stageKey -> {status,due,done,memo}
     secondary:{ spouseOwn:'', consume:'', years:'', nChildren:'' }, // 二次相続シミュレーション
+    movement:{ rows:[], usage:{} }, // 金融資産異動一覧表（税額計算には不使用）
     savings:[] // 節税対策 {id,key,params{}}
   };
 }
@@ -1369,6 +1374,7 @@ function migrateCase(data){
   c.checklist=data.checklist||{};
   c.successive=Object.assign({enabled:false,A:'',B:'',years:'',prevDate:''}, data.successive||{});
   c.secondary=Object.assign({spouseOwn:'',consume:'',years:'',nChildren:''}, data.secondary||{});
+  c.movement=Object.assign({rows:[],usage:{}}, data.movement||{}); if(!Array.isArray(c.movement.rows)) c.movement.rows=[]; if(!c.movement.usage) c.movement.usage={};
   c.savings=Array.isArray(data.savings)? data.savings : [];
   c.compensations=Array.isArray(data.compensations)? data.compensations : [];
   c.progress=(data.progress&&typeof data.progress==='object')? data.progress : {};
@@ -1708,14 +1714,17 @@ function refreshAssetRow(a){
 function updateCatSubtotal(cat){ const t=ASSET_BY_KEY[cat]; const items=currentCase.assets.filter(a=>a.category===cat); const sub=items.reduce((s,a)=>s+assetVal(a),0); const el=$('catSubtotal'); if(el && cat===currentAssetCat) el.textContent=(t.sign<0?'−':'')+yen(sub); const fc=$('foot-'+cat); if(fc) fc.textContent=yen(sub); }
 
 // ---- sidebar / pills ----
+const MOVEMENT_META={key:'movement', name:'金融資産異動一覧表', color:'#5f6b7a'};
+function assetNavList(){ const list=[]; ASSET_TYPES.forEach(t=>{ list.push(t); if(t.key==='cash') list.push(MOVEMENT_META); }); return list; }
 function renderAssetNav(){
   if(!currentCase) return;
   const subs={}; ASSET_TYPES.forEach(t=>subs[t.key]=0);
   currentCase.assets.forEach(a=>{ subs[a.category]=(subs[a.category]||0)+assetVal(a); });
+  const list=assetNavList();
   const sub=$('assetSubNav');
-  if(sub) sub.innerHTML=ASSET_TYPES.map(t=>'<button class="nav-subitem'+(t.key===currentAssetCat?' active':'')+'" onclick="gotoAssetCat(\''+t.key+'\')"><span class="si-ic"><i class="cdot" style="background:'+t.color+'"></i></span>'+t.name+'<span class="si-amt">'+(subs[t.key]?(t.sign<0?'−':'')+num(subs[t.key]).toLocaleString('ja-JP'):'')+'</span></button>').join('');
+  if(sub) sub.innerHTML=list.map(t=>'<button class="nav-subitem'+(t.key===currentAssetCat?' active':'')+'" onclick="gotoAssetCat(\''+t.key+'\')"><span class="si-ic"><i class="cdot" style="background:'+t.color+'"></i></span>'+t.name+'<span class="si-amt">'+(t.key!=='movement'&&subs[t.key]?(t.sign<0?'−':'')+num(subs[t.key]).toLocaleString('ja-JP'):'')+'</span></button>').join('');
   const cs=$('catSwitch');
-  if(cs) cs.innerHTML=ASSET_TYPES.map(t=>'<button class="cat-pill'+(t.key===currentAssetCat?' active':'')+'" onclick="selectAssetCat(\''+t.key+'\')"><i class="cdot" style="background:'+t.color+'"></i>'+t.name+'</button>').join('');
+  if(cs) cs.innerHTML=list.map(t=>'<button class="cat-pill'+(t.key===currentAssetCat?' active':'')+'" onclick="selectAssetCat(\''+t.key+'\')"><i class="cdot" style="background:'+t.color+'"></i>'+t.name+'</button>').join('');
 }
 function gotoAssetCat(key){ switchView('assets'); selectAssetCat(key); }
 function selectAssetCat(key){ currentAssetCat=key; renderAssetNav(); renderAssetDetail(); }
@@ -1723,6 +1732,12 @@ function selectAssetCat(key){ currentAssetCat=key; renderAssetNav(); renderAsset
 // ---- detailed entry table ----
 function renderAssetDetail(){
   if(!currentCase) return; const c=$('assetDetail'); if(!c) return;
+  if(currentAssetCat==='movement'){
+    c.innerHTML='<div class="detail-head"><div class="ic" style="background:'+MOVEMENT_META.color+'"></div><h2>'+MOVEMENT_META.name+'</h2></div>'
+      +movementTableHtml()
+      +'<div class="detail-note">この表は資金移動の確認用で、財産分割や税額計算には反映されません。現金預貯金で登録した「普通預金・通常貯金」の口座が自動で列に表示されます。各口座の入出金を記録し、口座間の資金移動や、相続財産に計上すべき過去の入出金（名義預金・生前贈与・直前引出し等）が無いかをご確認ください。日付は「R3.1.6」のように自由入力できます。</div>';
+    return;
+  }
   const t=ASSET_BY_KEY[currentAssetCat];
   const items=currentCase.assets.filter(a=>a.category===currentAssetCat);
   const subtotal=items.reduce((s,a)=>s+assetVal(a),0);
@@ -1734,6 +1749,41 @@ function renderAssetDetail(){
     +'<span class="muted" style="font-size:12px;">「複製」で同じ行をコピーできます。</span></div>'
     +detailNote(currentAssetCat);
 }
+// 金融資産異動一覧表
+function movementAccounts(){ return currentCase.assets.filter(a=>a.category==='cash' && /普通|通常|当座/.test(a.subcategory||'')); }
+function movementTableHtml(){
+  const accs=movementAccounts();
+  const mv=currentCase.movement||(currentCase.movement={rows:[],usage:{}});
+  if(!accs.length) return '<div class="center-msg">「現金・預貯金」で普通預金・通常貯金（または当座預金）を登録すると、その口座がここに表示されます。</div>';
+  const usageOpts=['','未利用','日常利用','その他'];
+  const accHead=(label,sub)=>accs.map(a=>'<th colspan="2" style="border-left:2px solid var(--line-2);">'+label(a)+'</th>').join('');
+  let head='<thead>'
+    +'<tr><th rowspan="4" style="vertical-align:middle;">日付</th>'+accs.map(a=>'<th colspan="2" style="border-left:2px solid var(--line-2);">'+esc((a.name||'')+' '+(a.branch||''))+'</th>').join('')+'<th rowspan="4" style="vertical-align:middle;">相続財産<br>計上額</th><th rowspan="4" style="vertical-align:middle;min-width:240px;">確認したい点</th></tr>'
+    +'<tr>'+accs.map(a=>'<th colspan="2" style="border-left:2px solid var(--line-2);">No.'+esc(a.accountNo||'')+'</th>').join('')+'</tr>'
+    +'<tr>'+accs.map(a=>'<th colspan="2" style="border-left:2px solid var(--line-2);"><select style="font-size:11px;padding:3px 6px;" onchange="updMovementUsage(\''+a.id+'\',this.value)">'+usageOpts.map(o=>'<option'+((mv.usage[a.id]||'')===o?' selected':'')+'>'+(o||'利用状況')+'</option>').join('')+'</select></th>').join('')+'</tr>'
+    +'<tr>'+accs.map(a=>'<th style="border-left:2px solid var(--line-2);">入金</th><th>出金</th>').join('')+'</tr>'
+    +'</thead>';
+  let body='';
+  (mv.rows||[]).forEach(row=>{ row.cells=row.cells||{};
+    body+='<tr><td><input type="text" value="'+esc(row.date||'')+'" placeholder="R3.1.6" style="min-width:90px;" oninput="updMovementField(\''+row.id+'\',\'date\',this.value)"></td>'
+      +accs.map(a=>{ const cell=row.cells[a.id]||{};
+        return '<td style="border-left:2px solid var(--line-2);"><input type="text" class="num" value="'+(num(cell.i)?num(cell.i).toLocaleString('ja-JP'):'')+'" oninput="updMovementCell(\''+row.id+'\',\''+a.id+'\',\'i\',this.value)" onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"></td>'
+          +'<td><input type="text" class="num" value="'+(num(cell.o)?num(cell.o).toLocaleString('ja-JP'):'')+'" oninput="updMovementCell(\''+row.id+'\',\''+a.id+'\',\'o\',this.value)" onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"></td>'; }).join('')
+      +'<td><input type="text" class="num" value="'+(num(row.concl)?num(row.concl).toLocaleString('ja-JP'):'')+'" oninput="updMovementField(\''+row.id+'\',\'concl\',this.value)" onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"></td>'
+      +'<td><input type="text" value="'+esc(row.note||'')+'" style="min-width:230px;" oninput="updMovementField(\''+row.id+'\',\'note\',this.value)"></td>'
+      +'<td class="rowops"><button class="del" onclick="removeMovementRow(\''+row.id+'\')">削除</button></td></tr>';
+  });
+  if(!(mv.rows||[]).length) body='<tr><td colspan="'+(accs.length*2+3)+'" class="muted" style="text-align:center;padding:14px;">「＋ 行を追加」で入出金を記録してください。</td></tr>';
+  const conclTotal=(mv.rows||[]).reduce((s,r)=>s+num(r.concl),0);
+  let foot='<tfoot><tr><td style="text-align:right;">相続財産計上額 計</td>'+accs.map(()=>'<td colspan="2"></td>').join('')+'<td class="num" id="mvConclTotal">'+yen(conclTotal)+'</td><td colspan="2"></td></tr></tfoot>';
+  return '<div class="dtbl-wrap"><table class="dtbl mv-table" style="min-width:'+(420+accs.length*220)+'px;">'+head+'<tbody>'+body+'</tbody>'+foot+'</table></div>'
+    +'<div class="detail-foot"><button class="btn primary sm" onclick="addMovementRow()">＋ 行を追加</button></div>';
+}
+function addMovementRow(){ if(!currentCase.movement) currentCase.movement={rows:[],usage:{}}; currentCase.movement.rows.push({id:uid(),date:'',cells:{},concl:'',note:''}); renderAssetDetail(); cacheCurrentCase(); }
+function removeMovementRow(id){ currentCase.movement.rows=(currentCase.movement.rows||[]).filter(r=>r.id!==id); renderAssetDetail(); cacheCurrentCase(); }
+function updMovementField(rowId,field,val){ const r=(currentCase.movement.rows||[]).find(x=>x.id===rowId); if(!r) return; r[field]=val; if(field==='concl'){ const el=$('mvConclTotal'); if(el) el.textContent=yen(currentCase.movement.rows.reduce((s,x)=>s+num(x.concl),0)); } cacheCurrentCase(); }
+function updMovementCell(rowId,accId,field,val){ const r=(currentCase.movement.rows||[]).find(x=>x.id===rowId); if(!r) return; r.cells=r.cells||{}; r.cells[accId]=r.cells[accId]||{}; r.cells[accId][field]=val; cacheCurrentCase(); }
+function updMovementUsage(accId,val){ if(!currentCase.movement.usage) currentCase.movement.usage={}; currentCase.movement.usage[accId]=val; cacheCurrentCase(); }
 function opsCell(id){ return '<td class="rowops"><button onclick="dupAsset(\''+id+'\')">複製</button><button class="del" onclick="removeAsset(\''+id+'\')">削除</button></td>'; }
 function fracCell(a){ return '<td><div class="frac"><input value="'+esc(a.ownNum||'1')+'" oninput="updAsset(\''+a.id+'\',\'ownNum\',this.value)"><span>/</span><input value="'+esc(a.ownDen||'1')+'" oninput="updAsset(\''+a.id+'\',\'ownDen\',this.value)"></div></td>'; }
 function calcCell(a){ return '<td class="chk-cell"><input type="checkbox" '+(a.autoCalc!==false?'checked':'')+' onchange="updAssetBool(\''+a.id+'\',\'autoCalc\',this.checked)"></td>'; }
@@ -1878,7 +1928,7 @@ function securitiesTableHtml(items){
       +'<td><input type="text" value="'+esc(a.assoc||'')+'" placeholder="'+(fund?'協会コード':'—')+'"'+(fund?'':' disabled style="opacity:.35"')+' oninput="updAsset(\''+a.id+'\',\'assoc\',this.value)"></td>'
       +'<td style="min-width:260px;"><input type="text" style="width:100%;min-width:250px;" value="'+esc(a.name||'')+'" placeholder="'+(fund?'ファンド名':'銘柄名')+'" oninput="updAsset(\''+a.id+'\',\'name\',this.value)"></td>'
       +m('p1',fund?'基準価額':'終値')+m('p2','月平均',fund)+m('p3','月平均',fund)+m('p4','月平均',fund)
-      +'<td><input type="text" class="num" value="'+esc(a.quantity||'')+'" placeholder="株/口" oninput="updAsset(\''+a.id+'\',\'quantity\',this.value)"></td>'
+      +'<td><input type="text" class="num" value="'+(num(a.quantity)?num(a.quantity).toLocaleString('ja-JP'):'')+'" placeholder="株/口" oninput="updAsset(\''+a.id+'\',\'quantity\',this.value)" onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"></td>'
       +m('ritio',fund?'%':'—',!fund)
       +m('redeemFee',fund?'円':'—',!fund)
       +'<td><input type="text" readonly class="num computed" id="secval-'+a.id+'" value="'+(base?base.toLocaleString('ja-JP'):'0')+'"></td>'
@@ -1918,12 +1968,20 @@ async function fetchChart(symbol, period1, period2){
   return {ts:res.timestamp, close:res.indicators.quote[0].close, name:(res.meta&&(res.meta.longName||res.meta.shortName))||'', dividends:divs};
 }
 // 投資信託の基準価額を投資信託協会（投信総合検索ライブラリー）CSVから取得（GAS経由）。相続開始日以前で最も近い日の基準価額を返す。
-async function fetchFundNav(isin, assoc, deathDayEnd){
+function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
+async function gasFetchText(targetUrl, tries){
   if(!settings.gasUrl) throw new Error('設定でApps ScriptのURLを入力してください');
+  const url=settings.gasUrl+(settings.gasUrl.indexOf('?')<0?'?':'&')+'url='+encodeURIComponent(targetUrl);
+  let lastErr;
+  for(let i=0;i<(tries||3);i++){
+    try{ const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status); const t=await r.text(); if(t&&t.length>10) return t; throw new Error('空のレスポンス'); }
+    catch(e){ lastErr=e; await delay(700*(i+1)); }
+  }
+  throw lastErr||new Error('取得に失敗しました');
+}
+async function fetchFundNav(isin, assoc, deathDayEnd){
   const api='https://toushin-lib.fwg.ne.jp/FdsWeb/FDST030000/csv-file-download?isinCd='+encodeURIComponent(isin)+'&associFundCd='+encodeURIComponent(assoc);
-  const url=settings.gasUrl+(settings.gasUrl.indexOf('?')<0?'?':'&')+'url='+encodeURIComponent(api);
-  const r=await fetch(url); if(!r.ok) throw new Error('HTTP '+r.status);
-  const txt=await r.text();
+  const txt=await gasFetchText(api, 3);
   const lines=txt.trim().split(/\r?\n/);
   if(lines.length<2) throw new Error('基準価額データが取得できません（ISIN・協会コードをご確認ください）');
   let best=null;
