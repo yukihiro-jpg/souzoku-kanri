@@ -586,7 +586,8 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
         </div>
         <div class="field" style="margin-top:14px;"><label>特記事項（任意）</label><textarea id="ag_notes" rows="3" placeholder="例：代償金の支払い、債務の負担、その他の取り決め等" oninput="onAgreementInput()"></textarea></div>
         <div class="btn-row" style="margin-top:18px;">
-          <button class="btn primary lg" onclick="downloadAgreement()">遺産分割協議書を作成</button>
+          <button class="btn primary lg" onclick="downloadAgreement()">遺産分割協議書 PDF</button>
+          <button class="btn lg" onclick="downloadAgreementWord()">遺産分割協議書 Word</button>
         </div>
       </div>
     </section>
@@ -705,7 +706,8 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
         <div class="btn-row">
           <button class="btn" onclick="downloadChecklistPDF()">必要資料チェックリスト PDF</button>
           <button class="btn" onclick="downloadChecklistExcel()">必要資料 Excel</button>
-          <button class="btn" onclick="downloadAgreement()">遺産分割協議書</button>
+          <button class="btn" onclick="downloadAgreement()">遺産分割協議書 PDF</button>
+          <button class="btn" onclick="downloadAgreementWord()">遺産分割協議書 Word</button>
           <button class="btn" onclick="downloadContract()">委任契約書</button>
         </div>
       </div>
@@ -2812,13 +2814,26 @@ function downloadShindanPDF(){
   .note{font-size:10.5px;color:#444;line-height:1.9;}
   .pgfoot{margin-top:18px;border-top:1px solid #ddd;padding-top:6px;font-size:9px;color:#999;display:flex;justify-content:space-between;}
   @media print{@page{size:A4;margin:0;}}`;
-  const foot=(n)=>'<div class="pgfoot"><span>'+esc(OFFICE.name)+'　'+esc(OFFICE.addr)+'　TEL '+OFFICE.tel+'</span><span>'+n+' / 7</span></div>';
+  const TOTAL_PAGES=8;
+  const foot=(n)=>'<div class="pgfoot"><span>'+esc(OFFICE.name)+'　'+esc(OFFICE.addr)+'　TEL '+OFFICE.tel+'</span><span>'+n+' / '+TOTAL_PAGES+'</span></div>';
+  // 財産明細（財産一覧の入力内容をそのまま）
+  let detailBody='';
+  ASSET_TYPES.forEach(t=>{
+    const items=currentCase.assets.filter(a=>a.category===t.key);
+    if(!items.length) return;
+    const sg=t.sign<0?-1:1; let sub=0;
+    const rows=items.map(a=>{ const v=assetVal(a); sub+=v; return '<tr><td>'+esc(assetDesc(a))+'</td><td class="r">'+(sg<0?'△'+yen(v):yen(v))+'</td></tr>'; }).join('');
+    detailBody+='<h3 class="blk">'+t.name+'（'+items.length+'件）</h3>'
+      +'<table class="t"><tr><th>明細</th><th class="r">'+(t.key==='gift'?'贈与時の価額':'評価額')+'</th></tr>'+rows
+      +'<tr class="tot"><td>小計</td><td class="r">'+(sg<0?'△'+yen(sub):yen(sub))+'</td></tr></table>';
+  });
+  if(!detailBody) detailBody='<p class="note">登録されている財産はありません。</p>';
   // 相続人別 取得財産明細
   let heirDetail='';
   heirs.forEach(h=>{
     let rows='';
-    ASSET_TYPES.forEach(t=>{ if(t.key==='gift') return; currentCase.assets.filter(a=>a.category===t.key).forEach(a=>{ const amt=amtOf(a,h.id); if(!amt) return; const label=[a.subcategory,a.name,a.location,a.quantity?('数量'+a.quantity):''].filter(Boolean).join('　'); rows+='<tr><td>'+t.name+'</td><td>'+esc(label)+'</td><td class="r">'+(t.sign<0?'△'+yen(amt):yen(amt))+'</td></tr>'; }); });
-    currentCase.assets.filter(a=>a.category==='gift'&&a.giftRecipient===h.id).forEach(a=>{ rows+='<tr><td>生前贈与</td><td>'+esc([(a.regime==='seisan'?'相続時精算課税':'暦年課税'),a.gKind,a.gDetail,a.giftDate].filter(Boolean).join('　'))+'</td><td class="r">'+yen(assetVal(a))+'</td></tr>'; });
+    ASSET_TYPES.forEach(t=>{ if(t.key==='gift') return; currentCase.assets.filter(a=>a.category===t.key).forEach(a=>{ const amt=amtOf(a,h.id); if(!amt) return; rows+='<tr><td>'+t.name+'</td><td>'+esc(assetDesc(a))+'</td><td class="r">'+(t.sign<0?'△'+yen(amt):yen(amt))+'</td></tr>'; }); });
+    currentCase.assets.filter(a=>a.category==='gift'&&a.giftRecipient===h.id).forEach(a=>{ rows+='<tr><td>生前贈与</td><td>'+esc(assetDesc(a))+'</td><td class="r">'+yen(assetVal(a))+'</td></tr>'; });
     if(!rows) rows='<tr><td colspan="3" style="text-align:center;color:#888;">取得財産はありません</td></tr>';
     heirDetail+='<h3 class="blk">'+esc(h.name||'')+' 様（'+relDisp(h)+'）　純財産合計：'+yen(totals[h.id])+'</h3>'
       +'<table class="t"><tr><th>種類</th><th>明細</th><th class="r">取得額</th></tr>'+rows+'</table>';
@@ -2840,65 +2855,157 @@ function downloadShindanPDF(){
       +'<table class="t"><tr><th>区分</th><th class="r">金額</th></tr>'+assetRows+'</table>'
       +'<p class="note">※ 小規模宅地等の特例による減額、生命保険金・退職手当金の非課税（500万円×法定相続人数）、債務・葬式費用、生前贈与加算を反映しています。</p>'
       +foot(3)+'</div>'
-    +'<div class="page"><div class="sec-title">3. 相続税の概算<span class="pno">TAX</span></div>'
+    +'<div class="page"><div class="sec-title">3. 財産明細<span class="pno">ITEMS</span></div>'
+      +detailBody
+      +'<p class="note">※ 財産一覧に登録された各財産の明細と評価額です。金額は財産評価明細に基づく評価額（生前贈与財産は贈与時の価額）です。</p>'
+      +foot(4)+'</div>'
+    +'<div class="page"><div class="sec-title">4. 相続税の概算<span class="pno">TAX</span></div>'
       +'<table class="t"><tr><th>項目</th><th class="r">金額</th></tr>'+taxRows+'</table>'
       +'<h3 class="blk">相続人別の納付税額</h3><table class="t"><tr><th>相続人</th><th class="r">課税価格</th><th class="r">算出税額</th><th class="r">税額控除等</th><th class="r">納付税額</th></tr>'+heirTaxRows+'</table>'
-      +foot(4)+'</div>'
-    +'<div class="page"><div class="sec-title">4. 財産分割案<span class="pno">DIVISION</span></div>'
+      +foot(5)+'</div>'
+    +'<div class="page"><div class="sec-title">5. 財産分割案<span class="pno">DIVISION</span></div>'
       +'<table class="t">'+divHead+divBody+'</table>'
       +'<p class="note">※ 各相続人が取得する財産の純額と、それに対応する納付税額の概算です。</p>'
-      +foot(5)+'</div>'
-    +'<div class="page"><div class="sec-title">5. 相続人別 取得財産明細<span class="pno">DETAIL</span></div>'
+      +foot(6)+'</div>'
+    +'<div class="page"><div class="sec-title">6. 相続人別 取得財産明細<span class="pno">DETAIL</span></div>'
       +heirDetail
       +'<p class="note">※ 各相続人が取得する財産の明細です（生前贈与財産を含む）。</p>'
-      +foot(6)+'</div>'
-    +'<div class="page"><div class="sec-title">6. 留意事項<span class="pno">NOTES</span></div>'
+      +foot(7)+'</div>'
+    +'<div class="page"><div class="sec-title">7. 留意事項<span class="pno">NOTES</span></div>'
       +'<p class="note">1. 本診断書は試算であり、実際の申告額を保証するものではありません。<br>'
       +'2. 財産評価は入力された金額に基づきます。土地等の評価は別途、財産評価基本通達に基づく精査が必要です。<br>'
       +'3. 法定相続人の数は、相続放棄を放棄がなかったものとして算入し、養子の数の制限を適用しています。<br>'
       +'4. 配偶者の税額軽減・未成年者控除・障害者控除・相次相続控除・贈与税額控除を反映しています。納税猶予・外国税額控除等は含みません。<br>'
       +'5. 二次相続を考慮した分割のご提案も可能です。詳しくは担当者までお問い合わせください。</p>'
       +'<div class="ofc" style="margin-top:30px;font-size:12px;line-height:1.9;">'+esc(OFFICE.name)+'<br>'+esc(OFFICE.addr)+'<br>TEL '+OFFICE.tel+'　FAX '+OFFICE.fax+'</div>'
-      +foot(7)+'</div>';
+      +foot(8)+'</div>';
   openPrintWindow('財産診断書_'+d.name, body, styles);
 }
 async function downloadShindanExcel(){
   if(!currentCase){ toast('案件がありません', true); return; }
   syncUIToCase();
   const d=currentCase.deceased; const R=buildReport(); const r=R.r; const heirs=currentCase.heirs;
-  const wb=new ExcelJS.Workbook();
-  const title=(ws,t)=>{ const c=ws.getCell('A1'); c.value=t; c.font={bold:true,size:14,color:{argb:'FF1A3A6B'}}; };
-  const hdr=row=>row.eachCell(c=>{c.font={bold:true,color:{argb:'FFFFFFFF'}};c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF2980B9'}};});
-  // 表紙
-  const w0=wb.addWorksheet('表紙'); title(w0,'財産診断書'); w0.getColumn(1).width=24; w0.getColumn(2).width=40;
-  [['被相続人',d.name||''],['基準日（相続開始日）',baseDateStr()],['作成日',formatJDate(todayISO())],['',''],['会計事務所',OFFICE.name],['所在地',OFFICE.addr],['TEL',OFFICE.tel],['FAX',OFFICE.fax]].forEach(rw=>w0.addRow(rw));
-  // 総括
-  const w1=wb.addWorksheet('総括'); w1.getColumn(1).width=28; w1.getColumn(2).width=20; w1.getColumn(2).numFmt='#,##0';
-  title(w1,'総括'); w1.addRow([]);
-  [['財産総額（債務控除前）',R.grossEstate],['課税価格の合計額',r.totalTaxable],['基礎控除額',r.basic],['課税遺産総額',r.netEstate],['相続税の総額',r.totalTax],['納付すべき相続税額',r.grandTotal],['実効税率(%)',Number(R.effRate.toFixed(2))]].forEach(rw=>w1.addRow(rw));
-  w1.addRow([]); hdr(w1.addRow(['続柄','氏名','生年月日','年齢','法定相続分']));
-  heirs.forEach(h=>w1.addRow([relDisp(h),h.name||'',h.birth?formatJDate(h.birth):'',(h.age!==''&&h.age!=null)?h.age:'',fracText(r.shares[h.id])]));
-  // 資産構成
-  const w2=wb.addWorksheet('資産構成'); w2.getColumn(1).width=28; w2.getColumn(2).width=20; w2.getColumn(2).numFmt='#,##0';
-  hdr(w2.addRow(['区分','金額']));
-  [['土地',R.land],['建物',R.building],['有価証券',R.sec],['非上場株式（自社株）',R.unl],['現金・預貯金',R.cash],['生命保険金等',R.ins],['退職手当金等',R.ret],['その他の財産',R.other],['① 小規模宅地等の減額',-R.kobo],['② 生命保険・退職金の非課税',-(R.insExempt+R.retExempt)],['③ 債務・葬式費用',-R.debt],['④ 生前贈与加算',R.giftAdd],['課税価格の合計額',r.totalTaxable]].forEach(rw=>w2.addRow(rw));
-  // 相続税
-  const w3=wb.addWorksheet('相続税'); w3.getColumn(1).width=18; w3.getColumn(2).width=18; w3.getColumn(3).width=16; w3.getColumn(4).width=16; w3.getColumn(5).width=16;
-  hdr(w3.addRow(['相続人','課税価格','算出税額','税額控除等','納付税額']));
-  heirs.forEach(h=>{const p=r.ph[h.id]; w3.addRow([h.name||'',p.taxableR,Math.floor(p.base),Math.round(p.credits||0),p.final]);});
-  w3.addRow(['合計',r.totalTaxable,r.totalTax,'',r.grandTotal]);
-  [2,3,4,5].forEach(i=>w3.getColumn(i).numFmt='#,##0');
-  // 財産分割案
-  const w4=wb.addWorksheet('財産分割案'); hdr(w4.addRow(['種類'].concat(heirs.map(h=>h.name||''))));
-  ASSET_TYPES.forEach(t=>{ if(t.key==='gift') return; const items=currentCase.assets.filter(a=>a.category===t.key); if(!items.length) return; const sg=t.sign<0?-1:1;
-    w4.addRow([t.name].concat(heirs.map(h=>items.reduce((x,a)=>x+amtOf(a,h.id)*sg,0)))); });
   const {totals}=heirAcquiredTotals();
-  w4.addRow(['純財産合計'].concat(heirs.map(h=>totals[h.id])));
-  w4.addRow(['納付税額'].concat(heirs.map(h=>Math.max(0,r.ph[h.id].final))));
-  w4.getColumn(1).width=22; for(let i=2;i<=heirs.length+1;i++){ w4.getColumn(i).width=16; w4.getColumn(i).numFmt='#,##0'; }
-  // 留意事項
-  const w5=wb.addWorksheet('留意事項'); w5.getColumn(1).width=100;
-  ['本診断書は試算であり、実際の申告額を保証するものではありません。','財産評価は入力金額に基づきます。土地等は別途精査が必要です。','法定相続人の数は放棄を算入し養子の数の制限を適用しています。','配偶者の税額軽減・各種控除・相次相続控除・贈与税額控除を反映、納税猶予等は含みません。'].forEach((t,i)=>w5.addRow([(i+1)+'. '+t]));
+  const wb=new ExcelJS.Workbook();
+  // ---- PDFと同一の配色・罫線 ----
+  const C={hdr:'FF1A3A6B', zebra:'FFF3F7FC', subBg:'FFFCF3F3', subTx:'FFBB0000', totBg:'FFDFE9F7', totTx:'FF1A3A6B', border:'FFCCCCCC'};
+  const thin={style:'thin',color:{argb:C.border}};
+  const BORDER={top:thin,left:thin,bottom:thin,right:thin};
+  const fill=argb=>({type:'pattern',pattern:'solid',fgColor:{argb}});
+  // セクション見出し（PDFの sec-title 相当）
+  const sectionTitle=(ws,no,t)=>{ const row=ws.addRow([no+'. '+t]); row.getCell(1).font={bold:true,size:14,color:{argb:C.hdr}}; row.getCell(1).border={bottom:{style:'medium',color:{argb:C.hdr}}}; ws.addRow([]); };
+  const blkTitle=(ws,t)=>{ const row=ws.addRow([t]); row.getCell(1).font={bold:true,size:11,color:{argb:'FF2980B9'}}; };
+  // 汎用テーブル（header配列, rows=[{cells,kind}]）。PDFのnth-child(even)に合わせて縞模様。
+  const addTable=(ws,headers,rows,numCols)=>{
+    const ncol=headers.length;
+    const hr=ws.addRow(headers);
+    hr.eachCell({includeEmpty:true},(c,i)=>{ if(i>ncol) return; c.font={bold:true,color:{argb:'FFFFFFFF'}}; c.fill=fill(C.hdr); c.border=BORDER; c.alignment={vertical:'middle'}; });
+    let childIdx=1; // ヘッダーを1とし、PDFのtr:nth-child(even)に一致させる
+    rows.forEach(rw=>{
+      childIdx++;
+      const row=ws.addRow(rw.cells);
+      row.eachCell({includeEmpty:true},(c,i)=>{ if(i>ncol) return;
+        c.border=BORDER;
+        if(rw.kind==='sub'){ c.font={color:{argb:C.subTx}}; c.fill=fill(C.subBg); }
+        else if(rw.kind==='tot'){ c.font={bold:true,color:{argb:C.totTx}}; c.fill=fill(C.totBg); }
+        else if(childIdx%2===0){ c.fill=fill(C.zebra); }
+      });
+    });
+    (numCols||[]).forEach(ci=>{ ws.getColumn(ci).numFmt='#,##0'; });
+  };
+  const sval=(v,sg)=>{ const n=sg<0?-Math.abs(v):v; return n; }; // 表示用（マイナスは△表記をしないでExcel数値のまま）
+  // ===== 表紙 =====
+  const w0=wb.addWorksheet('表紙'); w0.getColumn(1).width=26; w0.getColumn(2).width=46;
+  const tt=w0.addRow(['財産診断書']); tt.getCell(1).font={bold:true,size:20,color:{argb:C.hdr}}; w0.addRow(['相続税 試算レポート']).getCell(1).font={color:{argb:'FF666666'}}; w0.addRow([]);
+  [['被相続人',(d.name||'')+' 様'],['基準日（相続開始日）',baseDateStr()],['作成日',formatJDate(todayISO())],['',''],['会計事務所',OFFICE.name],['所在地',OFFICE.addr],['TEL',OFFICE.tel],['FAX',OFFICE.fax]].forEach(rw=>{ const row=w0.addRow(rw); if(rw[0]) row.getCell(1).font={bold:true,color:{argb:C.hdr}}; });
+  // ===== 1. 総括 =====
+  const w1=wb.addWorksheet('1_総括'); w1.getColumn(1).width=30; w1.getColumn(2).width=20; w1.getColumn(3).width=14; w1.getColumn(4).width=14; w1.getColumn(5).width=14;
+  sectionTitle(w1,1,'総括');
+  addTable(w1,['区分','金額'],[
+    {cells:['財産総額（債務控除前）',R.grossEstate]},
+    {cells:['課税価格の合計額',r.totalTaxable]},
+    {cells:['基礎控除額（3,000万円＋600万円×'+r.n+'人）',-r.basic],kind:'sub'},
+    {cells:['課税遺産総額',r.netEstate]},
+    {cells:['相続税の総額',r.totalTax],kind:'tot'},
+    {cells:['納付すべき相続税額',r.grandTotal],kind:'tot'},
+    {cells:['実効税率(%)',Number(R.effRate.toFixed(2))]},
+  ],[2]);
+  w1.addRow([]); blkTitle(w1,'親族関係（法定相続人）');
+  addTable(w1,['続柄','氏名','生年月日','年齢','法定相続分'],
+    heirs.map(h=>({cells:[relDisp(h),h.name||'',h.birth?formatJDate(h.birth):'',(h.age!==''&&h.age!=null)?h.age:'',fracText(r.shares[h.id])]})));
+  // ===== 2. 資産構成 =====
+  const w2=wb.addWorksheet('2_資産構成'); w2.getColumn(1).width=34; w2.getColumn(2).width=20;
+  sectionTitle(w2,2,'資産構成');
+  addTable(w2,['区分','金額'],[
+    {cells:['土地',R.land]},{cells:['建物',R.building]},{cells:['有価証券',R.sec]},{cells:['非上場株式（自社株）',R.unl]},
+    {cells:['現金・預貯金',R.cash]},{cells:['生命保険金等',R.ins]},{cells:['退職手当金等',R.ret]},{cells:['その他の財産',R.other]},
+    {cells:['① 小規模宅地等の減額',-R.kobo],kind:'sub'},
+    {cells:['② 生命保険金・退職手当金の非課税',-(R.insExempt+R.retExempt)],kind:'sub'},
+    {cells:['③ 債務・葬式費用',-R.debt],kind:'sub'},
+    {cells:['④ 生前贈与加算',R.giftAdd],kind:'sub'},
+    {cells:['課税価格の合計額',r.totalTaxable],kind:'tot'},
+  ],[2]);
+  // ===== 3. 財産明細（財産一覧の入力内容） =====
+  const w6=wb.addWorksheet('3_財産明細'); w6.getColumn(1).width=60; w6.getColumn(2).width=20;
+  sectionTitle(w6,3,'財産明細');
+  let anyDetail=false;
+  ASSET_TYPES.forEach(t=>{
+    const items=currentCase.assets.filter(a=>a.category===t.key);
+    if(!items.length) return; anyDetail=true;
+    const sg=t.sign<0?-1:1; let sub=0;
+    blkTitle(w6,t.name+'（'+items.length+'件）');
+    const rows=items.map(a=>{ const v=assetVal(a); sub+=v; return {cells:[assetDesc(a),sval(v,sg)]}; });
+    rows.push({cells:['小計',sval(sub,sg)],kind:'tot'});
+    addTable(w6,['明細',t.key==='gift'?'贈与時の価額':'評価額'],rows,[2]);
+    w6.addRow([]);
+  });
+  if(!anyDetail) w6.addRow(['登録されている財産はありません。']);
+  // ===== 4. 相続税の概算 =====
+  const w3=wb.addWorksheet('4_相続税'); w3.getColumn(1).width=34; for(let i=2;i<=5;i++) w3.getColumn(i).width=16;
+  sectionTitle(w3,4,'相続税の概算');
+  addTable(w3,['項目','金額'],[
+    {cells:['課税価格の合計額',r.totalTaxable]},
+    {cells:['基礎控除額（3,000万円＋600万円×'+r.n+'人）',-r.basic],kind:'sub'},
+    {cells:['課税遺産総額',r.netEstate]},
+    {cells:['相続税の総額',r.totalTax],kind:'tot'},
+    {cells:['各種税額控除（配偶者の税額軽減・贈与税額控除等）',-Math.max(0,r.totalTax-r.grandTotal)],kind:'sub'},
+    {cells:['納付すべき相続税額',r.grandTotal],kind:'tot'},
+    {cells:['実効税率(%)',Number(R.effRate.toFixed(2))]},
+  ],[2]);
+  w3.addRow([]); blkTitle(w3,'相続人別の納付税額');
+  addTable(w3,['相続人','課税価格','算出税額','税額控除等','納付税額'],
+    heirs.map(h=>{const p=r.ph[h.id]; return {cells:[h.name||'',p.taxableR,Math.floor(p.base),p.credits?-Math.round(p.credits):0,p.final]};})
+      .concat([{cells:['合計',r.totalTaxable,r.totalTax,'',r.grandTotal],kind:'tot'}]),[2,3,4,5]);
+  // ===== 5. 財産分割案 =====
+  const w4=wb.addWorksheet('5_財産分割案'); w4.getColumn(1).width=22; for(let i=2;i<=heirs.length+1;i++) w4.getColumn(i).width=16;
+  sectionTitle(w4,5,'財産分割案');
+  const divRows=[];
+  ASSET_TYPES.forEach(t=>{ if(t.key==='gift') return; const items=currentCase.assets.filter(a=>a.category===t.key); if(!items.length) return; const sg=t.sign<0?-1:1;
+    divRows.push({cells:[t.name].concat(heirs.map(h=>items.reduce((x,a)=>x+amtOf(a,h.id)*sg,0)))}); });
+  divRows.push({cells:['純財産 合計'].concat(heirs.map(h=>totals[h.id])),kind:'tot'});
+  divRows.push({cells:['納付すべき相続税額'].concat(heirs.map(h=>Math.max(0,r.ph[h.id].final))),kind:'sub'});
+  addTable(w4,['種類'].concat(heirs.map(h=>h.name||'')),divRows,heirs.map((h,i)=>i+2));
+  // ===== 6. 相続人別 取得財産明細 =====
+  const w5=wb.addWorksheet('6_取得財産明細'); w5.getColumn(1).width=14; w5.getColumn(2).width=54; w5.getColumn(3).width=18;
+  sectionTitle(w5,6,'相続人別 取得財産明細');
+  heirs.forEach(h=>{
+    blkTitle(w5,(h.name||'')+' 様（'+relDisp(h)+'）　純財産合計：'+yen(totals[h.id]));
+    const rows=[];
+    ASSET_TYPES.forEach(t=>{ if(t.key==='gift') return; currentCase.assets.filter(a=>a.category===t.key).forEach(a=>{ const amt=amtOf(a,h.id); if(!amt) return; const sg=t.sign<0?-1:1; rows.push({cells:[t.name,assetDesc(a),sval(amt,sg)]}); }); });
+    currentCase.assets.filter(a=>a.category==='gift'&&a.giftRecipient===h.id).forEach(a=>{ rows.push({cells:['生前贈与',assetDesc(a),assetVal(a)]}); });
+    if(!rows.length) rows.push({cells:['','取得財産はありません','']});
+    addTable(w5,['種類','明細','取得額'],rows,[3]);
+    w5.addRow([]);
+  });
+  // ===== 7. 留意事項 =====
+  const w7=wb.addWorksheet('7_留意事項'); w7.getColumn(1).width=100;
+  sectionTitle(w7,7,'留意事項');
+  ['本診断書は試算であり、実際の申告額を保証するものではありません。',
+   '財産評価は入力された金額に基づきます。土地等の評価は別途、財産評価基本通達に基づく精査が必要です。',
+   '法定相続人の数は、相続放棄を放棄がなかったものとして算入し、養子の数の制限を適用しています。',
+   '配偶者の税額軽減・未成年者控除・障害者控除・相次相続控除・贈与税額控除を反映しています。納税猶予・外国税額控除等は含みません。',
+   '二次相続を考慮した分割のご提案も可能です。詳しくは担当者までお問い合わせください。'].forEach((t,i)=>w7.addRow([(i+1)+'. '+t]));
+  w7.addRow([]); w7.addRow([OFFICE.name]); w7.addRow([OFFICE.addr]); w7.addRow(['TEL '+OFFICE.tel+'　FAX '+OFFICE.fax]);
   const buf=await wb.xlsx.writeBuffer();
   saveAs(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'財産診断書_'+(d.name||'案件')+'_'+todayISO()+'.xlsx');
 }
@@ -2973,7 +3080,7 @@ const DOC_STYLE_BASE=`*{margin:0;padding:0;box-sizing:border-box;}body{font-fami
 // ============================================================
 function toWarekiDate(s){ if(!s) return ''; const d=new Date(s); if(isNaN(d)) return ''; const y=d.getFullYear(),m=d.getMonth()+1,day=d.getDate(); let era,ey; if(y>=2019){era='令和';ey=y-2018;}else if(y>=1989){era='平成';ey=y-1988;}else if(y>=1926){era='昭和';ey=y-1925;}else if(y>=1912){era='大正';ey=y-1911;}else{era='明治';ey=y-1867;} return era+(ey===1?'元':ey)+'年'+m+'月'+day+'日'; }
 function allocAmt(a,h){ const al=(a.allocations||[]).find(x=>x.heirId===h.id); return al?num(al.amount):0; }
-function downloadAgreement(){
+function buildAgreement(){
   if(!currentCase){ toast('案件がありません', true); return; }
   syncUIToCase();
   const d=currentCase.deceased;
@@ -3036,13 +3143,13 @@ function downloadAgreement(){
     .dec-info{margin:8px 0 16px;}
     .dec-info div{display:flex;padding:2px 0;}
     .dec-info .k{width:130px;}
-    .agr-sec{margin:14px 0;page-break-inside:avoid;}
-    .agr-sec-title{font-weight:700;margin-bottom:4px;}
-    .agr-lead{text-indent:1em;margin-bottom:6px;}
+    .agr-sec{margin:14px 0;}
+    .agr-sec-title{font-weight:700;margin-bottom:4px;page-break-after:avoid;}
+    .agr-lead{text-indent:1em;margin-bottom:6px;page-break-after:avoid;}
     .agr-sub{margin:6px 0 6px 1em;}
-    .agr-sub-t{font-weight:700;}
-    .agr-sub-b{margin-left:1em;font-size:10.5pt;line-height:1.8;}
-    .re-block{margin:6px 0 6px 1em;line-height:1.7;}
+    .agr-sub-t{font-weight:700;page-break-after:avoid;}
+    .agr-sub-b{margin-left:1em;font-size:10.5pt;line-height:1.8;page-break-inside:avoid;}
+    .re-block{margin:14px 0 14px 1em;line-height:1.7;page-break-inside:avoid;}
     .closing{text-indent:1em;margin:18px 0;}
     .date{margin:16px 0;}
     .sig-block{margin-bottom:18px;page-break-inside:avoid;}
@@ -3066,7 +3173,15 @@ function downloadAgreement(){
     +'<div class="date">'+dateStr+'</div>'
     +'<div style="margin-bottom:8px;">相続人</div>'
     +'<div class="sig-area">'+sigs+'</div>';
-  openPrintWindow('遺産分割協議書_'+d.name, body, styles);
+  return {title:'遺産分割協議書_'+d.name, body, styles};
+}
+function downloadAgreement(){ const r=buildAgreement(); if(r) openPrintWindow(r.title, r.body, r.styles); }
+function downloadAgreementWord(){
+  const r=buildAgreement(); if(!r) return;
+  const html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><title>'+esc(r.title)+'</title>'
+    +'<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->'
+    +'<style>@page{size:A4;margin:20mm;} body{font-family:"Yu Mincho","游明朝","MS Mincho",serif;}'+r.styles+'</style></head><body>'+r.body+'</body></html>';
+  saveAs(new Blob(['﻿'+html],{type:'application/msword'}), r.title+'.doc');
 }
 
 // ============================================================
