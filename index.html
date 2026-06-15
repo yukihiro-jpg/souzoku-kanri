@@ -496,10 +496,11 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
         <h2>被相続人情報</h2>
         <div class="card-sub">亡くなられた方の情報を入力してください。</div>
         <div class="grid grid-2">
+          <div class="field" style="grid-column:1/3;"><label>管理コード</label><input type="text" id="d_code" placeholder="例：2026-001" oninput="onBasicInput();updateCaseChip();"></div>
           <div class="field"><label>氏名</label><input type="text" id="d_name" placeholder="例：山田 太郎" oninput="onBasicInput()"></div>
           <div class="field"><label>フリガナ</label><input type="text" id="d_kana" placeholder="例：ヤマダ タロウ" oninput="onBasicInput()"></div>
-          <div class="field"><label>生年月日</label><input type="date" id="d_birth" oninput="onBasicInput()"></div>
-          <div class="field"><label>相続開始日（死亡日）</label><input type="date" id="d_death" oninput="onBasicInput();calcDeadlines();"></div>
+          <div class="field"><label>生年月日</label><div id="d_birthSel" class="birth-sel"></div></div>
+          <div class="field"><label>相続開始日（死亡日）</label><div id="d_deathSel" class="birth-sel"></div></div>
           <div class="field"><label>死亡時の住所</label><input type="text" id="d_address" placeholder="例：茨城県水戸市〇〇町1-2-3" oninput="onBasicInput()"></div>
           <div class="field"><label>本籍地</label><input type="text" id="d_honseki" placeholder="例：茨城県水戸市〇〇町1番地" oninput="onBasicInput()"></div>
         </div>
@@ -1126,7 +1127,7 @@ async function testDriveConnection(){
 function newCaseObject(name){
   return {
     version:2, caseId:uid(), createdAt:new Date().toISOString(), savedAt:null,
-    deceased:{ name:name||'', kana:'', birth:'', deathDate:'', address:'', honseki:'' },
+    deceased:{ code:'', name:name||'', kana:'', birth:'', deathDate:'', address:'', honseki:'' },
     collectionDeadline:'', meetingMemo:'',
     heirs:[ newHeir() ],
     checklist:{},   // key -> {checked,memo,receivedPart,unreceivedPart}
@@ -1398,13 +1399,13 @@ let driveCaseFiles=[]; // [{id,name,modifiedTime}]
 let casesActiveTab='active';
 function casesTab(which){ casesActiveTab=which; const a=$('ctab-active'),d=$('ctab-done'); if(a) a.classList.toggle('active',which==='active'); if(d) d.classList.toggle('active',which==='done'); renderCasesList(); }
 function caseInfo(f, isActive){
-  let sum=null, death='', completed=false;
-  if(isActive && currentCase){ sum=progressSummary(currentCase); death=currentCase.deceased.deathDate||''; completed=caseCompleted(currentCase); }
-  else if(f.appProperties){ const ap=f.appProperties; death=ap.deathDate||'';
+  let sum=null, death='', completed=false, code='';
+  if(isActive && currentCase){ sum=progressSummary(currentCase); death=currentCase.deceased.deathDate||''; completed=caseCompleted(currentCase); code=currentCase.deceased.code||''; }
+  else if(f.appProperties){ const ap=f.appProperties; death=ap.deathDate||''; code=ap.code||'';
     if(ap.pstat){ const codes=ap.pstat; const done=(codes.match(/2/g)||[]).length; sum={pct:Math.round(done/PROGRESS_STAGES.length*100),done,total:PROGRESS_STAGES.length,codes,stage:ap.stage||''}; }
     completed=(ap.done==='1')||(!!ap.pstat && ap.pstat.length>=PROGRESS_STAGES.length && ap.pstat[PROGRESS_STAGES.length-1]==='2'); }
   let filingMs=Infinity, filing=''; if(death){ const dt=new Date(death); if(!isNaN(dt)){ dt.setMonth(dt.getMonth()+10); filingMs=dt.getTime(); filing=formatJDate(dt.toISOString().slice(0,10)); } }
-  return {sum,death,completed,filingMs,filing};
+  return {sum,death,completed,filingMs,filing,code};
 }
 function renderCasesList(){
   const c=$('casesContainer'); if(!c) return;
@@ -1419,9 +1420,10 @@ function renderCasesList(){
   c.innerHTML='<div class="case-grid">'+list.map(e=>caseCardHtml(e.f,e.isActive,e.info)).join('')+'</div>';
 }
 function caseCardHtml(f, isActive, info){
-  const nm=f.name? f.name.replace(FILE_PREFIX,'').replace(/\.json$/,'') : '無題';
+  const nmRaw=f.name? f.name.replace(FILE_PREFIX,'').replace(/\.json$/,'') : '無題';
   const meta=f.modifiedTime? '最終更新: '+new Date(f.modifiedTime).toLocaleString('ja-JP') : '未保存';
   info=info||caseInfo(f,isActive);
+  const nm=(info.code?info.code+'　':'')+nmRaw;
   const death=info.death;
   let dates = death
     ? '<div class="cc-deadline"><div class="dd"><span class="lbl">死亡日</span><span class="val">'+formatJDate(death)+'</span></div><div class="dd fl"><span class="lbl">相続税申告期限</span><span class="val">'+info.filing+'</span></div></div>'
@@ -1525,10 +1527,11 @@ function unsavedWarnNeeded(){ return true; }
 function syncUIToCase(){
   if(!currentCase) return;
   // basic
+  currentCase.deceased.code=$('d_code').value;
   currentCase.deceased.name=$('d_name').value;
   currentCase.deceased.kana=$('d_kana').value;
-  currentCase.deceased.birth=$('d_birth').value;
-  currentCase.deceased.deathDate=$('d_death').value;
+  if($('dd-birth-y')) currentCase.deceased.birth=readDeceasedDate('birth');
+  if($('dd-death-y')) currentCase.deceased.deathDate=readDeceasedDate('death');
   currentCase.deceased.address=$('d_address').value;
   currentCase.deceased.honseki=$('d_honseki').value;
   currentCase.collectionDeadline=$('d_collect').value;
@@ -1557,7 +1560,7 @@ async function doDriveSave(){
   const name=FILE_PREFIX+currentCase.deceased.name+'.json';
   const json=JSON.stringify(currentCase,null,2);
   const sum=progressSummary(currentCase);
-  const appProps={pct:String(sum.pct), pstat:sum.codes, stage:sum.stage, deathDate:currentCase.deceased.deathDate||'', done:caseCompleted(currentCase)?'1':'0'};
+  const appProps={pct:String(sum.pct), pstat:sum.codes, stage:sum.stage, deathDate:currentCase.deceased.deathDate||'', done:caseCompleted(currentCase)?'1':'0', code:currentCase.deceased.code||''};
   const res=await driveSaveJson(name, json, currentFileId, appProps);
   if(!currentFileId){ currentFileId=res.id; }
   else { try{ await driveRename(currentFileId,name); }catch(e){} }
@@ -1604,8 +1607,9 @@ function loadCaseIntoUI(){
   updateCaseChip();
   if(!currentCase) return;
   const d=currentCase.deceased;
+  $('d_code').value=d.code||'';
   $('d_name').value=d.name||''; $('d_kana').value=d.kana||'';
-  $('d_birth').value=d.birth||''; $('d_death').value=d.deathDate||'';
+  renderDeceasedDates();
   $('d_address').value=d.address||''; $('d_honseki').value=d.honseki||'';
   $('d_collect').value=currentCase.collectionDeadline||'';
   $('d_meetingMemo').value=currentCase.meetingMemo||'';
@@ -1621,7 +1625,7 @@ function loadCaseIntoUI(){
 }
 function updateCaseChip(){
   const chip=$('caseChip');
-  if(currentCase && currentCase.deceased.name){ chip.className='case-chip has-case'; chip.querySelector('.nm').textContent=currentCase.deceased.name+' 様'; }
+  if(currentCase && currentCase.deceased.name){ const code=currentCase.deceased.code?currentCase.deceased.code+'　':''; chip.className='case-chip has-case'; chip.querySelector('.nm').textContent=code+currentCase.deceased.name+' 様'; }
   else if(currentCase){ chip.className='case-chip has-case'; chip.querySelector('.nm').textContent='(無題の案件)'; }
   else { chip.className='case-chip'; chip.querySelector('.nm').textContent='案件が選択されていません'; }
 }
@@ -1631,8 +1635,7 @@ function onBasicInput(){ if(!currentCase) return; syncUIToCase(); updateCaseChip
 //  Deadlines
 // ============================================================
 function calcDeadlines(){
-  const v=$('d_death').value;
-  if(currentCase){ currentCase.deceased.deathDate=v; recomputeHeirAges(); if($('heirsContainer')) renderHeirs(); }
+  const v=currentCase?(currentCase.deceased.deathDate||''):'';
   if(!v){ $('filingDeadline').textContent='—'; $('junkakuDeadline').textContent='—'; return; }
   const f=new Date(v); f.setMonth(f.getMonth()+10);
   $('filingDeadline').textContent=formatJDate(f.toISOString().slice(0,10));
@@ -1667,6 +1670,30 @@ function birthSelects(h){
 function updateHeirBirth(id){ const h=currentCase.heirs.find(x=>x.id===id); if(!h) return; const y=$('by-'+id).value,m=$('bm-'+id).value,d=$('bd-'+id).value;
   if(y&&m&&d){ h.birth=y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0'); h.age=ageAt(h.birth,currentCase.deceased.deathDate); } else { h.birth=''; if(!h.birth) {} }
   renderHeirs(); cacheCurrentCase(); }
+// 被相続人の生年月日・相続開始日（年/月/日のセレクト。相続人と同じ入力方式）
+function deceasedDateSelects(kind, val){
+  const parts=(val||'').split('-'); const vy=parts[0]||'', vm=parts[1]?String(+parts[1]):'', vd=parts[2]?String(+parts[2]):'';
+  const nowY=new Date().getFullYear();
+  let yOpts='<option value="">年</option>'; for(let y=nowY;y>=1900;y--){ yOpts+='<option value="'+y+'"'+(String(y)===vy?' selected':'')+'>'+warekiYear(y)+'</option>'; }
+  let mOpts='<option value="">月</option>'; for(let m=1;m<=12;m++){ mOpts+='<option value="'+m+'"'+(String(m)===vm?' selected':'')+'>'+m+'月</option>'; }
+  let dOpts='<option value="">日</option>'; for(let d=1;d<=31;d++){ dOpts+='<option value="'+d+'"'+(String(d)===vd?' selected':'')+'>'+d+'日</option>'; }
+  return '<select id="dd-'+kind+'-y" onchange="onDeceasedDate(\''+kind+'\')">'+yOpts+'</select>'
+    +'<select id="dd-'+kind+'-m" onchange="onDeceasedDate(\''+kind+'\')">'+mOpts+'</select>'
+    +'<select id="dd-'+kind+'-d" onchange="onDeceasedDate(\''+kind+'\')">'+dOpts+'</select>';
+}
+function renderDeceasedDates(){
+  const d=currentCase?currentCase.deceased:{};
+  const b=$('d_birthSel'); if(b) b.innerHTML=deceasedDateSelects('birth', d.birth||'');
+  const dt=$('d_deathSel'); if(dt) dt.innerHTML=deceasedDateSelects('death', d.deathDate||'');
+}
+function readDeceasedDate(kind){ const y=$('dd-'+kind+'-y'),m=$('dd-'+kind+'-m'),d=$('dd-'+kind+'-d'); if(!y) return ''; if(y.value&&m.value&&d.value) return y.value+'-'+String(m.value).padStart(2,'0')+'-'+String(d.value).padStart(2,'0'); return ''; }
+function onDeceasedDate(kind){
+  if(!currentCase) return;
+  const val=readDeceasedDate(kind);
+  if(kind==='birth'){ currentCase.deceased.birth=val; }
+  else { currentCase.deceased.deathDate=val; recomputeHeirAges(); if($('heirsContainer')) renderHeirs(); calcDeadlines(); }
+  updateCaseChip(); cacheCurrentCase();
+}
 function disabilityOptions(h){ const cur=h.disabled?(h.disabilityType||'general'):'none'; return [['none','なし'],['general','一般障害者'],['special','特別障害者']].map(o=>'<option value="'+o[0]+'"'+(o[0]===cur?' selected':'')+'>'+o[1]+'</option>').join(''); }
 function updateLegalShareLabels(){ if(!currentCase) return; const sh=legalShares(currentCase.heirs); currentCase.heirs.forEach(h=>{ const el=$('lshare-'+h.id); if(el) el.textContent=fracText(sh[h.id]); }); }
 function fracText(x){ if(!x) return '0'; const pct=Math.round(x*10000)/100; return pct+'%'; }
