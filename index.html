@@ -1190,10 +1190,8 @@ function evalSubHtml(){
       +'<span class="ec-cnt">'+doneN+'/'+items.length+' 完了</span>'
       +'<span class="ec-sum">'+(t.sign<0?'−':'')+yen(subtotal)+'</span></div>';
     items.forEach(a=>{
-      const main=a.name||a.subcategory||t.name;
-      const sub=[a.subcategory&&a.subcategory!==main?a.subcategory:'',a.location].filter(Boolean).join('／');
       const s=assetEvalState(currentCase,a.id); const sc=STAT[s][1];
-      html+='<div class="eval-row"><span class="en">'+esc(main)+(sub?'<span class="sub">　'+esc(sub)+'</span>':'')+'</span>'
+      html+='<div class="eval-row"><span class="en">'+esc(assetDesc(a))+'</span>'
         +'<span class="ev">'+(t.sign<0?'−':'')+yen(assetVal(a))+'</span>'
         +'<span class="est '+sc+'" onclick="cycleAssetEval(\''+a.id+'\')">'+STAT[s][0]+'</span></div>';
     });
@@ -1696,6 +1694,23 @@ function computeAssetValue(a){
 // 生命保険金等の非課税枠の対象か（定期金に関する権利は対象外）
 function insExemptEligible(a){ return a.category==='insurance' && !(a.subcategory && a.subcategory.indexOf('定期金')>=0); }
 function assetVal(a){ return computeAssetValue(a); }
+// 財産の識別用テキスト（登録した全情報を読みやすく連結）
+function assetDesc(a){
+  const t=ASSET_BY_KEY[a.category]; const p=[]; const q=a.quantity?num(a.quantity).toLocaleString('ja-JP'):'';
+  if(a.category==='cash'){ p.push(a.name,a.branch,a.subcategory,a.accountNo?('No.'+a.accountNo):'',a.nominee?('名義:'+a.nominee):''); }
+  else if(a.category==='land'){ p.push(a.subcategory,a.location,a.riyou,q?(q+'㎡'):''); }
+  else if(a.category==='building'){ p.push(a.subcategory,a.riyou,a.location,q?(q+'㎡'):''); }
+  else if(a.category==='securities'){ p.push(a.subcategory,a.name||(isFund(a)?'投資信託':''),a.code,a.assoc,q?(q+(isFund(a)?'口':'株')):''); }
+  else if(a.category==='unlisted'){ p.push(a.name,a.subcategory,q?(q+'株'):''); }
+  else if(a.category==='insurance'){ p.push(a.subcategory,a.name,a.accountNo?('証券:'+a.accountNo):'',a.nominee?('受取人:'+a.nominee):''); }
+  else if(a.category==='retirement'){ p.push(a.subcategory,a.name,a.nominee?('受取人:'+a.nominee):''); }
+  else if(a.category==='other'){ p.push(a.subcategory,a.name,a.location,q); }
+  else if(a.category==='debt'){ p.push(a.subcategory,a.name,a.location,a.creditorAddr); }
+  else if(a.category==='funeral'){ p.push(a.name,a.payerAddr,a.location); }
+  else if(a.category==='gift'){ p.push((a.regime==='seisan'?'相続時精算課税':'暦年課税'),a.gKind,a.gDetail,a.giftDate); }
+  else { p.push(a.subcategory,a.name,a.location); }
+  const s=p.filter(Boolean).join('　'); return s||t.name;
+}
 function addAsset(cat){ if(!currentCase) return; currentCase.assets.push(newAsset(cat)); renderAssetDetail(); renderAssetNav(); renderSummary(); cacheCurrentCase(); }
 function dupAsset(id){ const a=currentCase.assets.find(x=>x.id===id); if(!a) return; const c=JSON.parse(JSON.stringify(a)); c.id=uid(); c.allocations=[]; const i=currentCase.assets.indexOf(a); currentCase.assets.splice(i+1,0,c); renderAssetDetail(); renderAssetNav(); renderSummary(); cacheCurrentCase(); }
 function removeAsset(id){ currentCase.assets=currentCase.assets.filter(a=>a.id!==id); renderAssetDetail(); renderAssetNav(); renderSummary(); cacheCurrentCase(); }
@@ -2896,6 +2911,8 @@ const DOC_STYLE_BASE=`*{margin:0;padding:0;box-sizing:border-box;}body{font-fami
 // ============================================================
 //  Document: 遺産分割協議書
 // ============================================================
+function toWarekiDate(s){ if(!s) return ''; const d=new Date(s); if(isNaN(d)) return ''; const y=d.getFullYear(),m=d.getMonth()+1,day=d.getDate(); let era,ey; if(y>=2019){era='令和';ey=y-2018;}else if(y>=1989){era='平成';ey=y-1988;}else if(y>=1926){era='昭和';ey=y-1925;}else if(y>=1912){era='大正';ey=y-1911;}else{era='明治';ey=y-1867;} return era+(ey===1?'元':ey)+'年'+m+'月'+day+'日'; }
+function allocAmt(a,h){ const al=(a.allocations||[]).find(x=>x.heirId===h.id); return al?num(al.amount):0; }
 function downloadAgreement(){
   if(!currentCase){ toast('案件がありません', true); return; }
   syncUIToCase();
@@ -2903,84 +2920,91 @@ function downloadAgreement(){
   if(!d.name){ toast('被相続人氏名を入力してください', true); return; }
   const heirs=currentCase.heirs.filter(h=>h.name.trim());
   if(!heirs.length){ toast('相続人を入力してください', true); return; }
-
-  const assets=currentCase.assets.filter(a=>a.category!=='gift');
-  // group by heir
-  let sections='';
-  let secNo=0;
-  heirs.forEach(h=>{
-    const mine=[];
-    assets.forEach(a=>{ const al=(a.allocations||[]).find(x=>x.heirId===h.id); if(al && (Number(al.amount)||0)!==0) mine.push({a,amount:Number(al.amount)||0}); });
-    if(!mine.length) return;
-    secNo++;
-    let lines='';
-    let n=0;
-    mine.forEach(({a,amount})=>{
-      const t=ASSET_BY_KEY[a.category]; n++;
-      const isDebt=t.sign<0;
-      const detail=[a.subcategory,a.name,a.location,a.quantity?('数量 '+a.quantity):''].filter(Boolean).join('　');
-      lines+='<div class="asset-line"><span class="an">('+n+')</span> <span class="at">【'+t.name+'】</span>'+esc(detail)
-        +' <span class="av">'+(isDebt?'（債務）':'')+yen(amount)+'</span></div>';
-    });
-    sections+='<div class="agr-sec"><div class="agr-sec-title">第'+secNo+'条　次の財産は、相続人 '+esc(h.name)+' が取得（承継）する。</div>'
-      +'<div class="agr-assets">'+lines+'</div></div>';
-  });
-  if(!secNo){ toast('取得者が割り当てられた財産がありません。遺産分割で割り当ててください。', true); switchView('plan'); return; }
-
-  secNo++;
-  const extraHeir=heirs.find(h=>h.id===currentCase.agreement.extraHeirId);
-  const extraName=extraHeir?extraHeir.name:'相続人全員';
-  sections+='<div class="agr-sec"><div class="agr-sec-title">第'+secNo+'条　本協議書に記載のない遺産及び後日判明した遺産については、'+esc(extraName)+' がこれを取得する。</div></div>';
-
-  if(currentCase.agreement.notes){
-    secNo++;
-    sections+='<div class="agr-sec"><div class="agr-sec-title">第'+secNo+'条　特記事項</div><div class="agr-assets">'+esc(currentCase.agreement.notes).replace(/\n/g,'<br>')+'</div></div>';
+  const base=d.deathDate? toWarekiDate(d.deathDate):'';
+  const heldByCat=(h,key)=>currentCase.assets.filter(a=>a.category===key && allocAmt(a,h)!==0);
+  // 各相続人の取得財産（種別ごとに項目化）
+  function heirItems(h){
+    const subs=[]; const re=(s)=>'<div class="re-block">'+s+'</div>';
+    const lands=heldByCat(h,'land'), blds=heldByCat(h,'building');
+    if(lands.length||blds.length){ let b='以下の土地・建物の一切（当該不動産に関する賃貸借契約に基づく賃貸人としての地位、およびこれに付随する一切の権利義務を含む）。';
+      lands.forEach(a=>{ b+=re('所　在　'+esc(a.location||'')+'<br>地　目　'+esc(a.subcategory||'')+'<br>地　積　'+esc(a.quantity||'')+'㎡'); });
+      blds.forEach(a=>{ b+=re('所　在　'+esc(a.location||'')+'<br>種　類　'+esc(a.subcategory||'')+(a.riyou?'（'+esc(a.riyou)+'）':'')+'<br>床面積　'+esc(a.quantity||'')+'㎡'); });
+      subs.push({t:'不動産',b}); }
+    const yokin=heldByCat(h,'cash').filter(a=>!/現金/.test(a.subcategory||''));
+    if(yokin.length){ let b=''; yokin.forEach(a=>{ b+=re(esc([a.name,a.branch,a.subcategory].filter(Boolean).join(' '))+'<br>口座番号 '+esc(a.accountNo||'')+'<br>口座名義 '+esc(a.nominee||'')+'<br>'+num(allocAmt(a,h)).toLocaleString('ja-JP')+' 円'+(base?'（'+base+' 現在）':'')); });
+      b+='<div style="margin-top:4px;">上記各口座に関する預貯金、並びに本協議成立時までに生じた利息および未受領配当金等の一切。</div>'; subs.push({t:'預貯金',b}); }
+    const sec=heldByCat(h,'securities');
+    if(sec.length){ let b=''; sec.forEach(a=>{ b+=re(esc(a.name||(isFund(a)?'投資信託':'有価証券'))+(a.subcategory?'（'+esc(a.subcategory)+'）':'')+'　'+(a.quantity?num(a.quantity).toLocaleString('ja-JP')+(isFund(a)?' 口':' 株'):'')+(base?'（'+base+'現在）':'')); });
+      b+='<div style="margin-top:4px;">上記に関する本協議成立時までに生じた運用益、分配金の再投資による増加口数、未受領配当金を含む当該口座に関する一切の権利。</div>'; subs.push({t:'有価証券・投資信託',b}); }
+    const unl=heldByCat(h,'unlisted'); if(unl.length){ let b=''; unl.forEach(a=>{ b+=re(esc(a.name||'')+'　'+(a.quantity?num(a.quantity).toLocaleString('ja-JP')+' 株':'')); }); subs.push({t:'非上場株式・出資金',b}); }
+    const cash=heldByCat(h,'cash').filter(a=>/現金/.test(a.subcategory||'')); if(cash.length){ subs.push({t:'現金',b:'被相続人が有していた手元現金一切。'}); }
+    const ins=heldByCat(h,'insurance'); if(ins.length){ let b=''; ins.forEach(a=>{ b+=re(esc([a.subcategory,a.name].filter(Boolean).join(' '))+(a.nominee?'（受取人：'+esc(a.nominee)+'）':'')+'　'+num(allocAmt(a,h)).toLocaleString('ja-JP')+' 円'); }); subs.push({t:'生命保険金等の受取権',b}); }
+    const ret=heldByCat(h,'retirement'); if(ret.length){ let b=''; ret.forEach(a=>{ b+=re(esc([a.subcategory,a.name].filter(Boolean).join(' '))+'　'+num(allocAmt(a,h)).toLocaleString('ja-JP')+' 円'); }); subs.push({t:'退職手当金等',b}); }
+    const oth=heldByCat(h,'other'); if(oth.length){ let b=''; oth.forEach(a=>{ b+=re(esc([a.subcategory,a.name,a.location].filter(Boolean).join('　'))+'　'+num(allocAmt(a,h)).toLocaleString('ja-JP')+' 円'); }); subs.push({t:'その他の財産',b}); }
+    return subs;
   }
-
-  const dateStr=currentCase.agreement.date? formatJDate(currentCase.agreement.date) : '令和　　年　　月　　日';
-  let sigs='';
-  heirs.forEach(h=>{
-    sigs+='<div class="sig-block">'
-      +'<div class="sig-row"><span class="sl">住　所</span><span class="sv">'+esc(h.address||'')+'</span></div>'
-      +'<div class="sig-row"><span class="sl">氏　名</span><span class="sv">'+esc(h.name)+'</span><span class="seal">印</span></div>'
-      +'</div>';
+  let sections=''; let cn=0;
+  heirs.forEach(h=>{ const subs=heirItems(h); if(!subs.length) return; cn++;
+    let body=''; subs.forEach((s,i)=>{ body+='<div class="agr-sub"><div class="agr-sub-t">（'+(i+1)+'）'+s.t+'</div><div class="agr-sub-b">'+s.b+'</div></div>'; });
+    sections+='<div class="agr-sec"><div class="agr-sec-title">第'+cn+'条（'+esc(relDisp(h))+'の取得財産）</div>'
+      +'<p class="agr-lead">相続人 '+esc(h.name)+' は、次の遺産を相続する。</p>'+body+'</div>';
   });
+  if(!cn){ toast('取得者が割り当てられた財産がありません。遺産分割で割り当ててください。', true); switchView('plan'); return; }
+  // 代償金
+  const comps=(currentCase.compensations||[]).filter(c=>c.from&&c.to&&num(c.amount)>0);
+  if(comps.length){ cn++; let lines=''; comps.forEach(c=>{ const f=heirs.find(x=>x.id===c.from), t2=heirs.find(x=>x.id===c.to); lines+='<div class="agr-sub-b">相続人 '+esc(f?f.name:'')+' は、相続人 '+esc(t2?t2.name:'')+' に対し、代償金として金 '+num(c.amount).toLocaleString('ja-JP')+' 円を支払う。</div>'; });
+    sections+='<div class="agr-sec"><div class="agr-sec-title">第'+cn+'条（代償金の支払い）</div>'+lines+'<div class="agr-sub-b" style="margin-top:4px;">前項の代償金は、本協議成立後すみやかに、各相続人が指定する口座に振り込む方法により支払うものとする。</div></div>'; }
+  // 金融機関手続権限
+  cn++;
+  sections+='<div class="agr-sec"><div class="agr-sec-title">第'+cn+'条（金融機関等における手続権限）</div><p class="agr-lead">前条までにより預貯金・有価証券・投資信託を取得した相続人は、金融機関等における解約、払戻し、名義変更、口座の移管その他必要な手続を単独で行うことを、共同相続人全員が承認し、これに一切異議を述べない。</p></div>';
+  // 債務・葬式費用（負担者ごと）
+  heirs.forEach(h=>{ const ds=currentCase.assets.filter(a=>(a.category==='debt'||a.category==='funeral')&&allocAmt(a,h)!==0); if(!ds.length) return; cn++;
+    let lines=''; ds.forEach((a,i)=>{ const who=a.category==='debt'?[a.name,a.creditorAddr,a.location].filter(Boolean).join('　'):[a.name,a.location].filter(Boolean).join('　'); lines+='<div class="agr-sub-b">（'+(i+1)+'）'+esc(who)+'　'+num(allocAmt(a,h)).toLocaleString('ja-JP')+' 円</div>'; });
+    sections+='<div class="agr-sec"><div class="agr-sec-title">第'+cn+'条（債務および葬式費用の承継）</div><p class="agr-lead">以下の債務を含む、被相続人の負担していた公租公課・未払医療費等の債務、および葬式費用の一切を相続人 '+esc(h.name)+' が負担する。</p>'+lines+'</div>'; });
+  // 包括取得条項
+  cn++; const extraHeir=heirs.find(h=>h.id===currentCase.agreement.extraHeirId); const extraName=extraHeir?extraHeir.name:'相続人全員';
+  sections+='<div class="agr-sec"><div class="agr-sec-title">第'+cn+'条（包括取得条項）</div><p class="agr-lead">本協議書に記載のない遺産及び後日判明した遺産（未収年金等を含む）については、相続人 '+esc(extraName)+' がこれを取得する。</p></div>';
+  if(currentCase.agreement.notes){ cn++; sections+='<div class="agr-sec"><div class="agr-sec-title">第'+cn+'条（特記事項）</div><div class="agr-sub-b">'+esc(currentCase.agreement.notes).replace(/\n/g,'<br>')+'</div></div>'; }
+
+  const dateStr=currentCase.agreement.date? toWarekiDate(currentCase.agreement.date) : '令和　　年　　月　　日';
+  let sigs=''; heirs.forEach(h=>{ sigs+='<div class="sig-block"><div class="sig-row"><span class="sl">住　所</span><span class="sv">'+esc(h.address||'')+'</span></div><div class="sig-row"><span class="sl">氏　名</span><span class="sv">'+esc(h.name)+'</span><span class="seal">印</span></div></div>'; });
 
   const styles=DOC_STYLE_BASE+`
-    .intro{text-indent:1em;margin-bottom:8px;}
-    .dec-info{margin:10px 0 16px;border:1px solid #000;}
-    .dec-info div{display:flex;border-bottom:1px solid #ccc;}
-    .dec-info div:last-child{border-bottom:none;}
-    .dec-info .k{width:140px;padding:4px 10px;background:#f2f2f2;border-right:1px solid #ccc;font-size:10pt;}
-    .dec-info .v{flex:1;padding:4px 10px;font-size:10pt;}
-    .agr-sec{margin:12px 0;page-break-inside:avoid;}
+    .cover{display:flex;align-items:center;justify-content:center;min-height:240mm;page-break-after:always;}
+    .cover h1{font-size:24pt;letter-spacing:8px;border:none;}
+    .intro{text-indent:1em;margin-bottom:14px;}
+    .dec-info{margin:8px 0 16px;}
+    .dec-info div{display:flex;padding:2px 0;}
+    .dec-info .k{width:130px;}
+    .agr-sec{margin:14px 0;page-break-inside:avoid;}
     .agr-sec-title{font-weight:700;margin-bottom:4px;}
-    .agr-assets{margin-left:1em;}
-    .asset-line{padding:2px 0;font-size:10.5pt;}
-    .asset-line .an{font-weight:700;}
-    .asset-line .at{font-weight:700;}
-    .asset-line .av{float:right;}
+    .agr-lead{text-indent:1em;margin-bottom:6px;}
+    .agr-sub{margin:6px 0 6px 1em;}
+    .agr-sub-t{font-weight:700;}
+    .agr-sub-b{margin-left:1em;font-size:10.5pt;line-height:1.8;}
+    .re-block{margin:6px 0 6px 1em;line-height:1.7;}
     .closing{text-indent:1em;margin:18px 0;}
     .date{margin:16px 0;}
-    .sig-area{margin-top:10px;}
-    .sig-block{margin-bottom:16px;page-break-inside:avoid;}
-    .sig-row{display:flex;align-items:baseline;margin-bottom:4px;}
+    .sig-block{margin-bottom:18px;page-break-inside:avoid;}
+    .sig-row{display:flex;align-items:baseline;margin-bottom:6px;}
     .sig-row .sl{width:80px;}
-    .sig-row .sv{flex:1;border-bottom:1px solid #000;padding:0 6px;min-height:1.6em;}
+    .sig-row .sv{flex:1;border-bottom:1px solid #000;padding:0 6px;min-height:1.8em;}
     .sig-row .seal{margin-left:16px;}
   `;
-  const body='<h1>遺産分割協議書</h1>'
-    +'<p class="intro">被相続人 '+esc(d.name)+'（以下「被相続人」という。）の遺産については、共同相続人全員において分割協議を行った結果、次のとおり分割し、取得することに合意した。</p>'
+  const body='<div class="cover"><h1>遺産分割協議書</h1></div>'
+    +'<h1>遺産分割協議書</h1>'
+    +'<p class="intro">下記の者の死亡により開始した相続につき共同相続人全員は、その相続財産について次のとおり遺産分割の協議を行い確定した。</p>'
     +'<div class="dec-info">'
-    +'<div><span class="k">被相続人</span><span class="v">'+esc(d.name)+'</span></div>'
-    +(d.birth?'<div><span class="k">生年月日</span><span class="v">'+formatJDate(d.birth)+'</span></div>':'')
-    +(d.deathDate?'<div><span class="k">相続開始日</span><span class="v">'+formatJDate(d.deathDate)+'（死亡）</span></div>':'')
-    +(d.address?'<div><span class="k">最後の住所</span><span class="v">'+esc(d.address)+'</span></div>':'')
-    +(d.honseki?'<div><span class="k">本　籍</span><span class="v">'+esc(d.honseki)+'</span></div>':'')
+    +(d.honseki?'<div><span class="k">被相続人の本籍</span><span>'+esc(d.honseki)+'</span></div>':'')
+    +(d.address?'<div><span class="k">最後の住所</span><span>'+esc(d.address)+'</span></div>':'')
+    +'<div><span class="k">氏　名</span><span>'+esc(d.name)+'</span></div>'
+    +(d.birth?'<div><span class="k">出生年月日</span><span>'+toWarekiDate(d.birth)+'</span></div>':'')
+    +(d.deathDate?'<div><span class="k">死亡年月日</span><span>'+toWarekiDate(d.deathDate)+'</span></div>':'')
     +'</div>'
     +sections
-    +'<p class="closing">以上のとおり遺産分割協議が成立したので、これを証するため本協議書を'+heirs.length+'通作成し、各自署名押印のうえ、各1通を保有する。</p>'
+    +'<p class="closing">以上の協議を証するため、この協議書を作成し各自署名押印のうえ、各自1通保有する。</p>'
     +'<div class="date">'+dateStr+'</div>'
+    +'<div style="margin-bottom:8px;">相続人</div>'
     +'<div class="sig-area">'+sigs+'</div>';
   openPrintWindow('遺産分割協議書_'+d.name, body, styles);
 }
