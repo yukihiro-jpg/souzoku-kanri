@@ -125,6 +125,7 @@ input,select,textarea{font-family:inherit;font-size:15px;color:var(--ink);}
 .tab-btn{border:none;background:none;padding:10px 20px;font-size:14px;font-weight:600;color:var(--ink-2);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;border-radius:8px 8px 0 0;}
 .tab-btn:hover{background:rgba(0,0,0,.03);}
 .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+.cases-toolbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px;}
 /* データ量の多い画面は全幅で表示 */
 #view-assets,#view-plan,#view-agreement,#view-simulation,#view-secondary,#view-savings,#view-progress,#view-cases{max-width:none;}
 @keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
@@ -173,7 +174,7 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 .case-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 22px;cursor:pointer;transition:transform .15s,box-shadow .15s;position:relative;box-shadow:var(--shadow-sm);display:flex;align-items:center;gap:24px;flex-wrap:wrap;}
 .case-card:hover{transform:translateY(-2px);box-shadow:var(--shadow);}
 .case-card.active-case{border-color:var(--accent);box-shadow:0 0 0 2px rgba(0,113,227,.2);}
-.case-card .cc-left{flex:0 0 240px;min-width:200px;}
+.case-card .cc-left{flex:0 0 300px;min-width:260px;}
 .case-card .cc-name{font-size:18px;font-weight:700;letter-spacing:-.01em;}
 .case-card .cc-meta{font-size:12.5px;color:var(--ink-2);margin-top:6px;line-height:1.7;}
 .case-card .cc-badge{display:inline-block;font-size:11px;font-weight:600;color:var(--accent);background:rgba(0,113,227,.1);border-radius:6px;padding:2px 8px;margin-top:8px;}
@@ -190,6 +191,13 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 .cc-prog .pchip.done{background:#e7f8ec;color:#1a7f37;border-color:#aee5bf;}
 .cc-dates{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-2);margin-top:5px;}
 .cc-dates .fl{color:var(--red);font-weight:600;}
+.cc-deadline{display:flex;gap:22px;margin-top:8px;flex-wrap:wrap;}
+.cc-deadline .dd{display:flex;flex-direction:column;}
+.cc-deadline .lbl{font-size:11px;color:var(--ink-2);}
+.cc-deadline .val{font-size:19px;font-weight:800;letter-spacing:-.01em;font-variant-numeric:tabular-nums;}
+.cc-deadline .dd.fl .val{color:var(--red);}
+.cc-deadline.none{color:var(--ink-2);font-size:13px;margin-top:8px;}
+.cc-done-badge{display:inline-block;font-size:11px;font-weight:700;color:#1a7f37;background:#e7f8ec;border:1px solid #aee5bf;border-radius:6px;padding:2px 10px;margin-top:8px;}
 .cc-prog .nodata{font-size:12px;color:var(--ink-2);}
 /* per-asset evaluation sub-list in progress timeline */
 .eval-sub{margin-top:14px;border-top:1px solid var(--line);padding-top:14px;}
@@ -449,13 +457,15 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
     <!-- ===== Cases ===== -->
     <section class="view active" id="view-cases">
       <div class="view-head"><h1>案件一覧</h1><p>被相続人ごとに相続案件を管理します。新規作成または既存案件を選択してください。</p></div>
-      <div class="card-head-row" style="max-width:none;">
-        <div class="btn-row">
-          <button class="btn primary" onclick="openNewCaseModal()">＋ 新規案件</button>
-          <button class="btn" onclick="refreshDriveCases()">Driveから一覧取得</button>
+      <div class="cases-toolbar">
+        <button class="btn primary" onclick="openNewCaseModal()">＋ 新規案件</button>
+        <div class="tabbar" style="margin:0;border:none;">
+          <button class="tab-btn active" id="ctab-active" onclick="casesTab('active')">進行中案件</button>
+          <button class="tab-btn" id="ctab-done" onclick="casesTab('done')">完了案件</button>
         </div>
-        <div class="btn-row">
+        <div class="btn-row" style="margin-left:auto;">
           <button class="btn sm" onclick="importLocalJson()">JSONを取り込み</button>
+          <button class="btn" onclick="refreshDriveCases()">Driveから一覧取得</button>
         </div>
       </div>
       <div id="casesContainer"></div>
@@ -1132,8 +1142,10 @@ const PROGRESS_STAGES=[
   {key:'review',name:'申告書チェック・承認',short:'チェック',desc:'社内レビュー・相続人への内容説明と承認'},
   {key:'seal',name:'押印・申告',short:'押印・申告',desc:'押印書類の回収・電子申告（e-Tax）',},
   {key:'payment',name:'納税',short:'納税',desc:'納付書の交付・納税の確認'},
-  {key:'delivery',name:'製本・納品',short:'製本納品',desc:'申告書控えの製本・納品・アフターフォロー'}
+  {key:'delivery',name:'製本・納品',short:'製本納品',desc:'申告書控えの製本・納品・アフターフォロー'},
+  {key:'complete',name:'業務完了',short:'業務完了',desc:'全工程の完了・案件クローズ（完了にすると完了案件一覧へ移動します）'}
 ];
+function caseCompleted(c){ return stageStatus(c,'complete')==='done'; }
 function progState(key){ if(!currentCase.progress[key]) currentCase.progress[key]={status:'todo',due:'',done:'',memo:''}; return currentCase.progress[key]; }
 function cycleProg(key){ const s=progState(key); s.status=(s.status==='todo')?'doing':(s.status==='doing'?'done':'todo'); if(s.status==='done'&&!s.done) s.done=todayISO(); if(s.status!=='done') s.done=''; renderProgress(); cacheCurrentCase(); }
 function updProg(key,field,val){ progState(key)[field]=val; if(field==='done'&&val){ const s=progState(key); if(s.status!=='done'){ s.status='done'; renderProgress(); } } cacheCurrentCase(); }
@@ -1309,45 +1321,48 @@ function refreshNavLock(){
 //  Cases view
 // ============================================================
 let driveCaseFiles=[]; // [{id,name,modifiedTime}]
-function renderCasesList(){
-  const c=$('casesContainer');
-  if(!driveCaseFiles.length && !currentCase){
-    c.innerHTML='<div class="empty-state"><div class="em-ico"></div><div style="font-size:17px;font-weight:600;color:var(--ink);">案件がありません</div><p style="margin-top:6px;">「＋ 新規案件」で作成するか、Driveから読み込んでください。</p></div>';
-    return;
-  }
-  let html='<div class="case-grid">';
-  // current (unsaved/new) case card if not in drive list
-  if(currentCase){
-    const inList=driveCaseFiles.some(f=>f.id===currentFileId);
-    if(!inList){
-      html+=caseCardHtml({ id:null, name:'(編集中) '+(currentCase.deceased.name||'無題'), modifiedTime:null }, true);
-    }
-  }
-  driveCaseFiles.forEach(f=>{ html+=caseCardHtml(f, currentFileId===f.id); });
-  html+='</div>';
-  c.innerHTML=html;
+let casesActiveTab='active';
+function casesTab(which){ casesActiveTab=which; const a=$('ctab-active'),d=$('ctab-done'); if(a) a.classList.toggle('active',which==='active'); if(d) d.classList.toggle('active',which==='done'); renderCasesList(); }
+function caseInfo(f, isActive){
+  let sum=null, death='', completed=false;
+  if(isActive && currentCase){ sum=progressSummary(currentCase); death=currentCase.deceased.deathDate||''; completed=caseCompleted(currentCase); }
+  else if(f.appProperties){ const ap=f.appProperties; death=ap.deathDate||'';
+    if(ap.pstat){ const codes=ap.pstat; const done=(codes.match(/2/g)||[]).length; sum={pct:Math.round(done/PROGRESS_STAGES.length*100),done,total:PROGRESS_STAGES.length,codes,stage:ap.stage||''}; }
+    completed=(ap.done==='1')||(!!ap.pstat && ap.pstat.length>=PROGRESS_STAGES.length && ap.pstat[PROGRESS_STAGES.length-1]==='2'); }
+  let filingMs=Infinity, filing=''; if(death){ const dt=new Date(death); if(!isNaN(dt)){ dt.setMonth(dt.getMonth()+10); filingMs=dt.getTime(); filing=formatJDate(dt.toISOString().slice(0,10)); } }
+  return {sum,death,completed,filingMs,filing};
 }
-function caseCardHtml(f, isActive){
+function renderCasesList(){
+  const c=$('casesContainer'); if(!c) return;
+  const entries=[];
+  if(currentCase){ const inList=driveCaseFiles.some(f=>f.id===currentFileId); if(!inList){ entries.push({f:{id:null,name:'(編集中) '+(currentCase.deceased.name||'無題'),modifiedTime:null}, isActive:true}); } }
+  driveCaseFiles.forEach(f=>entries.push({f, isActive: currentFileId===f.id}));
+  if(!entries.length){ c.innerHTML='<div class="empty-state"><div style="font-size:17px;font-weight:600;color:var(--ink);">案件がありません</div><p style="margin-top:6px;">「＋ 新規案件」で作成するか、「Driveから一覧取得」で読み込んでください。</p></div>'; return; }
+  entries.forEach(e=>{ const info=caseInfo(e.f,e.isActive); e.info=info; });
+  let list=entries.filter(e=> casesActiveTab==='done'? e.info.completed : !e.info.completed);
+  list.sort((a,b)=> a.info.filingMs-b.info.filingMs); // 申告期限が近い順
+  if(!list.length){ c.innerHTML='<div class="center-msg">'+(casesActiveTab==='done'?'完了案件はありません。進捗管理で「業務完了」を完了にすると、ここに移動します。':'進行中の案件はありません。')+'</div>'; return; }
+  c.innerHTML='<div class="case-grid">'+list.map(e=>caseCardHtml(e.f,e.isActive,e.info)).join('')+'</div>';
+}
+function caseCardHtml(f, isActive, info){
   const nm=f.name? f.name.replace(FILE_PREFIX,'').replace(/\.json$/,'') : '無題';
   const meta=f.modifiedTime? '最終更新: '+new Date(f.modifiedTime).toLocaleString('ja-JP') : '未保存';
-  // 進捗：作業中の案件は最新値、その他はDriveのappPropertiesから
-  let sum=null, death='';
-  if(isActive && currentCase){ sum=progressSummary(currentCase); death=currentCase.deceased.deathDate||''; }
-  else if(f.appProperties){ const ap=f.appProperties; death=ap.deathDate||''; if(ap.pstat){ const codes=ap.pstat; let done=(codes.match(/2/g)||[]).length; sum={pct:Math.round(done/PROGRESS_STAGES.length*100),done,total:PROGRESS_STAGES.length,codes,stage:ap.stage||''}; } }
-  let filing=''; if(death){ const d=new Date(death); if(!isNaN(d)){ d.setMonth(d.getMonth()+10); filing=formatJDate(d.toISOString().slice(0,10)); } }
-  let info='<div class="cc-meta">'+esc(meta)+'</div>';
-  if(death){ info+='<div class="cc-dates"><span>死亡日：'+formatJDate(death)+'</span><span class="fl">申告期限：'+filing+'</span></div>'; }
-  else { info+='<div class="cc-dates muted">死亡日 未入力</div>'; }
+  info=info||caseInfo(f,isActive);
+  const death=info.death;
+  let dates = death
+    ? '<div class="cc-deadline"><div class="dd"><span class="lbl">死亡日</span><span class="val">'+formatJDate(death)+'</span></div><div class="dd fl"><span class="lbl">相続税申告期限</span><span class="val">'+info.filing+'</span></div></div>'
+    : '<div class="cc-deadline none">死亡日 未入力</div>';
   return '<div class="case-card'+(isActive?' active-case':'')+'" onclick="openCase(\''+(f.id||'')+'\')">'
     +(f.id?'<button class="cc-del" onclick="event.stopPropagation();deleteCase(\''+f.id+'\',\''+esc(nm)+'\')">×</button>':'')
-    +'<div class="cc-left"><div class="cc-name">'+esc(nm)+'</div>'+info
-    +(isActive?'<span class="cc-badge">作業中</span>':'')+'</div>'
-    +'<div class="cc-prog">'+miniProgHtml(sum)+'</div>'
+    +'<div class="cc-left"><div class="cc-name">'+esc(nm)+'</div>'+dates
+    +'<div class="cc-meta">'+esc(meta)+'</div>'
+    +(info.completed?'<span class="cc-done-badge">業務完了</span>':(isActive?'<span class="cc-badge">作業中</span>':''))+'</div>'
+    +'<div class="cc-prog">'+miniProgHtml(info.sum)+'</div>'
     +'</div>';
 }
 function miniProgHtml(sum){
   if(!sum){ return '<div class="nodata">進捗データなし（開いて保存すると表示されます）</div>'; }
-  const codes=sum.codes||'0000000000';
+  const codes=sum.codes||('0'.repeat(PROGRESS_STAGES.length));
   let chips='';
   for(let i=0;i<PROGRESS_STAGES.length;i++){ const ch=codes[i]||'0'; const cls=ch==='2'?'done':ch==='1'?'doing':''; chips+='<span class="pchip '+cls+'">'+esc(PROGRESS_STAGES[i].short)+'</span>'; }
   return '<div class="ptop"><span class="pct">'+sum.pct+'%</span><span class="stg">'+sum.done+'/'+sum.total+' 完了 ・ 現在: <b>'+esc(sum.stage||'—')+'</b></span></div>'
@@ -1468,7 +1483,7 @@ async function doDriveSave(){
   const name=FILE_PREFIX+currentCase.deceased.name+'.json';
   const json=JSON.stringify(currentCase,null,2);
   const sum=progressSummary(currentCase);
-  const appProps={pct:String(sum.pct), pstat:sum.codes, stage:sum.stage, deathDate:currentCase.deceased.deathDate||''};
+  const appProps={pct:String(sum.pct), pstat:sum.codes, stage:sum.stage, deathDate:currentCase.deceased.deathDate||'', done:caseCompleted(currentCase)?'1':'0'};
   const res=await driveSaveJson(name, json, currentFileId, appProps);
   if(!currentFileId){ currentFileId=res.id; }
   else { try{ await driveRename(currentFileId,name); }catch(e){} }
