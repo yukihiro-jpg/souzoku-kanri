@@ -1932,6 +1932,8 @@ const MANUAL_VAL=['cash','insurance','retirement','debt']; // 価額を直接入
 const HAS_CALC=['land','building','securities','unlisted','other','gift'];   // 自動計算（計算チェック）あり
 function newAsset(cat){
   return {id:uid(),category:cat,subcategory:'',name:'',location:'',riyou:'',quantity:'',evalMethod:'rosen',unitPrice:'',koteiValue:'',baisu:'',ownNum:'1',ownDen:'1',adjust:'1.00',autoCalc:true,value:'',evalWay:'',companyType:'',branch:'',nominee:'',accountNo:'',memo:'',kobo:{type:'none',area:''},
+    chiban:'',tokiChimoku:'',kazeiChimoku:'',genkyo:'',tokiChiseki:'',kazeiChiseki:'',landUse:'自用地',shakuchiRatio:'',sokuho:'',toshiKeikaku:'',youtoChiiki:'',fukuin:'',shakkaRatio:'',chintaiRatio:'',landDebt:'',
+    kaokuNo:'',kozo:'',kaiso:'',tokiYuka:'',kazeiYuka:'',buildingUse:'自用',
     code:'',p1:'',p2:'',p3:'',p4:'',divBase:'',divEffective:'',divPayStart:'',divPerShare:'',divRate:'',
     assoc:'',ritio:'',redeemFee:'',creditorAddr:'',debtStart:'',debtDue:'',payerAddr:'',payDate:'',claimAmount:'',excludeAmount:'',checkNote:'',checkResult:'',interest:'',
     giftTax:0,is4to7:false,regime:'koyo',giftRecipient:'',giftDate:'',gKind:'',gDetail:'',autoBasic:true,allocations:[]};
@@ -1968,13 +1970,32 @@ function divInfo(a){
   const tax=Math.floor(gross*rate/100);
   return {kind,gross,tax,net:gross-tax,rate};
 }
+// 土地の利用区分による評価減（自用借地区分）
+function landUseFactor(a){
+  const u=a.landUse||'自用地';
+  const sh=num(a.shakuchiRatio)/100;                                   // 借地権割合
+  const ka=((a.shakkaRatio===''||a.shakkaRatio==null)?30:num(a.shakkaRatio))/100; // 借家権割合（既定30%）
+  const ch=((a.chintaiRatio===''||a.chintaiRatio==null)?100:num(a.chintaiRatio))/100; // 賃貸割合（既定100%）
+  if(u==='貸宅地') return Math.max(0,1-sh);                            // 貸宅地＝自用地×(1−借地権割合)
+  if(u==='借地権') return sh;                                          // 借地権＝自用地×借地権割合
+  if(u==='貸家建付地') return Math.max(0,1-sh*ka*ch);                  // 貸家建付地＝自用地×(1−借地権×借家権×賃貸)
+  return 1;                                                           // 自用地
+}
 function computeAssetValue(a){
   if(a.category==='cash') return num(a.value)+num(a.interest); // 預貯金残高＋既経過利息
   if(a.autoCalc===false || MANUAL_VAL.includes(a.category)) return num(a.value);
   const own=(num(a.ownNum)||1)/((num(a.ownDen)||1)||1);
   const adj=(a.adjust===''||a.adjust==null)?1:num(a.adjust);
-  if(a.category==='land'){ const base=(a.evalMethod==='baisu')? num(a.koteiValue)*num(a.baisu) : num(a.unitPrice)*num(a.quantity); return Math.round(base*own*adj); }
-  if(a.category==='building'){ return Math.round(num(a.koteiValue)*own*adj); }
+  if(a.category==='land'){
+    const area=num(a.kazeiChiseki)||num(a.tokiChiseki)||num(a.quantity); // 課税地積（無ければ登記地積→旧面積）
+    const base=(a.evalMethod==='baisu')? num(a.koteiValue)*num(a.baisu) : num(a.unitPrice)*area;
+    return Math.round(base*own*landUseFactor(a));
+  }
+  if(a.category==='building'){
+    let v=num(a.koteiValue)*own;
+    if(a.buildingUse==='貸家'){ const ch=((a.chintaiRatio===''||a.chintaiRatio==null)?100:num(a.chintaiRatio))/100; v=v*(1-0.30*ch); } // 貸家＝固評×(1−借家権割合30%×賃貸割合)
+    return Math.round(v);
+  }
   if(a.category==='securities'){ return Math.max(0, secBase(a)-fundDeduct(a))+divInfo(a).net; }
   if(a.category==='unlisted'){ return Math.round(num(a.unitPrice)*num(a.quantity)); }
   if(a.category==='gift'){ return Math.round(num(a.unitPrice)*num(a.quantity)); }
@@ -1989,8 +2010,8 @@ function assetVal(a){ return computeAssetValue(a); }
 function assetDesc(a){
   const t=ASSET_BY_KEY[a.category]; const p=[]; const q=a.quantity?num(a.quantity).toLocaleString('ja-JP'):'';
   if(a.category==='cash'){ p.push(a.name,a.branch,a.subcategory,a.accountNo?('No.'+a.accountNo):'',a.nominee?('名義:'+a.nominee):''); }
-  else if(a.category==='land'){ p.push(a.subcategory,a.location,a.riyou,q?(q+'㎡'):''); }
-  else if(a.category==='building'){ p.push(a.subcategory,a.riyou,a.location,q?(q+'㎡'):''); }
+  else if(a.category==='land'){ const ar=num(a.kazeiChiseki)||num(a.tokiChiseki)||num(a.quantity); p.push(a.chiban,a.kazeiChimoku||a.tokiChimoku||a.subcategory,a.landUse,ar?(ar.toLocaleString('ja-JP')+'㎡'):''); }
+  else if(a.category==='building'){ const ar=num(a.kazeiYuka)||num(a.tokiYuka)||num(a.quantity); p.push(a.chiban,a.kaokuNo?('家屋番号'+a.kaokuNo):'',a.subcategory,a.buildingUse,ar?(ar.toLocaleString('ja-JP')+'㎡'):''); }
   else if(a.category==='securities'){ p.push(a.subcategory,a.name||(isFund(a)?'投資信託':''),a.code,a.assoc,q?(q+(isFund(a)?'口':'株')):''); }
   else if(a.category==='unlisted'){ p.push(a.name,a.subcategory,q?(q+'株'):''); }
   else if(a.category==='insurance'){ p.push(a.subcategory,a.name,a.accountNo?('証券:'+a.accountNo):'',a.nominee?('受取人:'+a.nominee):''); }
@@ -2015,6 +2036,7 @@ function refreshAssetRow(a){
     const di=divInfo(a); const dk=$('divkind-'+a.id); if(dk) dk.textContent=di.kind;
     const dv=$('divval-'+a.id); if(dv){ dv.value=di.net?di.net.toLocaleString('ja-JP'):'0'; dv.title='配当総額 '+yen(di.gross)+' − 源泉 '+yen(di.tax); }
   }
+  if(a.category==='land'){ const kr=$('kobored-'+a.id); if(kr){ const k=computeKobo(); kr.textContent='減額 '+yen(k.byAsset[a.id]||0); } }
   updateCatSubtotal(a.category); renderAssetNav(); renderSummary(); cacheCurrentCase();
 }
 function updateCatSubtotal(cat){ const t=ASSET_BY_KEY[cat]; const items=currentCase.assets.filter(a=>a.category===cat); const sub=items.reduce((s,a)=>s+assetVal(a),0); const el=$('catSubtotal'); if(el && cat===currentAssetCat) el.textContent=(t.sign<0?'−':'')+yen(sub); const fc=$('foot-'+cat); if(fc) fc.textContent=yen(sub); }
@@ -2047,7 +2069,7 @@ function renderAssetDetail(){
   const t=ASSET_BY_KEY[currentAssetCat];
   const items=currentCase.assets.filter(a=>a.category===currentAssetCat);
   const subtotal=items.reduce((s,a)=>s+assetVal(a),0);
-  const table=(currentAssetCat==='land')? landTableHtml(items) : (currentAssetCat==='gift')? giftTableHtml(items) : (currentAssetCat==='securities')? securitiesTableHtml(items) : genericTableHtml(currentAssetCat,items);
+  const table=(currentAssetCat==='land')? landTableHtml(items) : (currentAssetCat==='building')? buildingTableHtml(items) : (currentAssetCat==='gift')? giftTableHtml(items) : (currentAssetCat==='securities')? securitiesTableHtml(items) : genericTableHtml(currentAssetCat,items);
   c.innerHTML='<div class="detail-head"><div class="ic" style="background:'+t.color+'"></div><h2>'+t.name+'</h2>'
     +'<div class="dsub'+(t.sign<0?' minus':'')+'" id="catSubtotal">'+(t.sign<0?'−':'')+yen(subtotal)+'</div></div>'
     +table
@@ -2107,9 +2129,16 @@ function dateCell(a,f){ return '<td><input type="date" value="'+esc(a[f]||'')+'"
 function nameOptions(cur){ const names=[]; if(currentCase){ if(currentCase.deceased.name) names.push(currentCase.deceased.name); currentCase.heirs.forEach(h=>{ if(h.name&&names.indexOf(h.name)<0) names.push(h.name); }); } if(cur&&names.indexOf(cur)<0) names.push(cur); return '<option value="">—</option>'+names.map(n=>'<option value="'+esc(n)+'"'+(n===cur?' selected':'')+'>'+esc(n)+'</option>').join(''); }
 function nameSelCell(a,f){ return '<td><select onchange="updAsset(\''+a.id+'\',\''+f+'\',this.value)">'+nameOptions(a[f]||'')+'</select></td>'; }
 
+// 「登記○○」を「課税○○」へ引用
+function quoteLandField(id, fromField, toField){ const a=currentCase.assets.find(x=>x.id===id); if(!a) return; a[toField]=a[fromField]||''; renderAssetDetail(); cacheCurrentCase(); }
+function quoteCell(a, field, fromField, ph, isNum){
+  const v=isNum? (num(a[field])?num(a[field]).toLocaleString('ja-JP'):'') : esc(a[field]==null?'':a[field]);
+  const blur=isNum? ' onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"':'';
+  return '<td><div style="display:flex;gap:4px;align-items:center;min-width:150px;"><input type="text"'+(isNum?' class="num"':'')+' value="'+v+'" placeholder="'+esc(ph)+'" oninput="updAsset(\''+a.id+'\',\''+field+'\',this.value)"'+blur+'><button class="btn sm" title="登記を引用" style="padding:3px 7px;white-space:nowrap;flex-shrink:0;" onclick="quoteLandField(\''+a.id+'\',\''+fromField+'\',\''+field+'\')">←登記</button></div></td>';
+}
 function landTableHtml(items){
   let rows='';
-  if(!items.length) rows='<tr><td colspan="14" class="muted" style="text-align:center;padding:16px;">未登録です。「＋ 行を追加」から入力してください。</td></tr>';
+  if(!items.length) rows='<tr><td colspan="23" class="muted" style="text-align:center;padding:16px;">未登録です。「＋ 行を追加」から入力してください。</td></tr>';
   items.forEach(a=>{
     const koOpts=[['none','適用なし'],['residence','特定居住用(330㎡80%)'],['business','特定事業用(400㎡80%)'],['company','特定同族会社(400㎡80%)'],['rental','貸付事業用(200㎡50%)']];
     const k=a.kobo||{type:'none',area:''};
@@ -2118,33 +2147,71 @@ function landTableHtml(items){
     const evalInput=isRosen
       ? '<input class="num" value="'+(num(a.unitPrice)?num(a.unitPrice).toLocaleString('ja-JP'):'')+'" placeholder="㎡単価" oninput="updAsset(\''+a.id+'\',\'unitPrice\',this.value)" onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')">'
       : '<div class="frac"><input class="num" style="width:110px;" value="'+(num(a.koteiValue)?num(a.koteiValue).toLocaleString('ja-JP'):'')+'" placeholder="固定資産税評価額" oninput="updAsset(\''+a.id+'\',\'koteiValue\',this.value)" onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"><span>×</span><input value="'+esc(a.baisu||'')+'" placeholder="倍率" oninput="updAsset(\''+a.id+'\',\'baisu\',this.value)"></div>';
+    const luOpts=['自用地','貸宅地','借地権','貸家建付地']; const lu=a.landUse||'自用地';
     rows+='<tr>'
-      +txtCell(a,'subcategory','宅地/田/畑等')
-      +txtCell(a,'location','所在場所')
-      +txtCell(a,'riyou','自用地/貸宅地等')
-      +numCell(a,'quantity','㎡')
-      +'<td><div class="evalsel">'
-        +'<div style="display:flex;gap:10px;">'
+      +txtCell(a,'chiban','地番')
+      +fracCell(a)
+      +txtCell(a,'tokiChimoku','登記地目')
+      +quoteCell(a,'kazeiChimoku','tokiChimoku','課税地目',false)
+      +txtCell(a,'genkyo','現況')
+      +numCell(a,'tokiChiseki','㎡')
+      +quoteCell(a,'kazeiChiseki','tokiChiseki','㎡',true)
+      +'<td><div class="evalsel"><div style="display:flex;gap:10px;">'
         +'<label><input type="radio" name="em-'+a.id+'" '+(isRosen?'checked':'')+' onchange="updAsset(\''+a.id+'\',\'evalMethod\',\'rosen\');renderAssetDetail()">路線価</label>'
         +'<label><input type="radio" name="em-'+a.id+'" '+(!isRosen?'checked':'')+' onchange="updAsset(\''+a.id+'\',\'evalMethod\',\'baisu\');renderAssetDetail()">倍率</label>'
-        +'</div>'+evalInput
-      +'</div></td>'
-      +fracCell(a)
-      +numCell(a,'adjust','1.00')
-      +calcCell(a)
+        +'</div>'+evalInput+'</div></td>'
       +valueCell(a)
       +'<td><select onchange="updKobo(\''+a.id+'\',\'type\',this.value)">'+koOpts.map(o=>'<option value="'+o[0]+'"'+(o[0]===k.type?' selected':'')+'>'+o[1]+'</option>').join('')+'</select></td>'
       +'<td><input type="text" class="num" value="'+esc(k.area)+'" placeholder="面積㎡" oninput="updKobo(\''+a.id+'\',\'area\',this.value)"><div class="muted" id="kobored-'+a.id+'" style="font-size:10px;text-align:right;">減額 '+yen(red)+'</div></td>'
+      +'<td><select onchange="updAsset(\''+a.id+'\',\'landUse\',this.value)">'+luOpts.map(o=>'<option'+(o===lu?' selected':'')+'>'+o+'</option>').join('')+'</select></td>'
+      +numCell(a,'shakuchiRatio','%')
+      +'<td><select onchange="updAsset(\''+a.id+'\',\'sokuho\',this.value)"><option value=""'+(!a.sokuho?' selected':'')+'>—</option>'+['側方','二方'].map(o=>'<option'+(o===a.sokuho?' selected':'')+'>'+o+'</option>').join('')+'</select></td>'
+      +txtCell(a,'toshiKeikaku','都市計画')
+      +txtCell(a,'youtoChiiki','用途地域')
+      +txtCell(a,'fukuin','m')
+      +numCell(a,'shakkaRatio','%(既定30)')
+      +numCell(a,'chintaiRatio','%(既定100)')
+      +moneyCell(a,'landDebt','円')
       +txtCell(a,'memo','注記')
-      +'<td><input type="text" value="'+esc(a.checkNote||'')+'" placeholder="確認する事項" style="min-width:160px;" oninput="updAsset(\''+a.id+'\',\'checkNote\',this.value)"></td>'
+      +checkNoteCell(a)
       +opsCell(a.id)
       +'</tr>';
   });
   const sub=items.reduce((s,a)=>s+assetVal(a),0);
-  return '<div class="dtbl-wrap"><table class="dtbl" style="min-width:1340px;"><thead><tr>'
-    +'<th>地目</th><th>所在場所</th><th>利用状況</th><th>面積(㎡)</th><th style="min-width:200px;">評価方式・単価</th><th>所有権割合</th><th>調整</th><th>計算</th><th>価額(円)</th><th>小規模区分</th><th>小規模面積</th><th>注記</th><th style="min-width:160px;">確認する事項</th><th></th>'
+  return '<div class="dtbl-wrap"><table class="dtbl" style="min-width:2780px;"><thead><tr>'
+    +'<th>地番</th><th>持分</th><th>登記地目</th><th>課税地目</th><th>現況</th><th>登記地積(㎡)</th><th>課税地積(㎡)</th><th style="min-width:200px;">評価方式・単価/固評</th><th>相続税評価額(円)</th><th>小規模区分</th><th>小規模面積</th><th>自用借地区分</th><th>借地権割合</th><th>側方・二方</th><th>都市計画</th><th>用途地域</th><th>正面幅員</th><th>借家権割合</th><th>賃貸割合</th><th>債務(円)</th><th>注記</th><th style="min-width:160px;">確認する事項</th><th></th>'
     +'</tr></thead><tbody>'+rows+'</tbody>'
-    +'<tfoot><tr><td colspan="8" style="text-align:right;">計</td><td class="num" id="foot-land">'+yen(sub)+'</td><td colspan="4"></td></tr></tfoot></table></div>';
+    +'<tfoot><tr><td colspan="8" style="text-align:right;">計</td><td class="num" id="foot-land">'+yen(sub)+'</td><td colspan="14"></td></tr></tfoot></table></div>';
+}
+function buildingTableHtml(items){
+  const t=ASSET_BY_KEY['building'];
+  let rows='';
+  if(!items.length) rows='<tr><td colspan="15" class="muted" style="text-align:center;padding:16px;">未登録です。「＋ 行を追加」から入力してください。</td></tr>';
+  items.forEach(a=>{
+    const buOpts=['自用','貸家']; const bu=a.buildingUse||'自用';
+    rows+='<tr>'
+      +txtCell(a,'chiban','地番')
+      +txtCell(a,'kaokuNo','家屋番号')
+      +fracCell(a)
+      +selCell(a,'subcategory',t.subs)
+      +txtCell(a,'kozo','構造')
+      +txtCell(a,'kaiso','階層')
+      +numCell(a,'tokiYuka','㎡')
+      +numCell(a,'kazeiYuka','㎡')
+      +moneyCell(a,'koteiValue','固定資産税評価額')
+      +'<td><select onchange="updAsset(\''+a.id+'\',\'buildingUse\',this.value)">'+buOpts.map(o=>'<option'+(o===bu?' selected':'')+'>'+o+'</option>').join('')+'</select></td>'
+      +numCell(a,'chintaiRatio','%(既定100)')
+      +valueCell(a)
+      +txtCell(a,'memo','注記')
+      +checkNoteCell(a)
+      +opsCell(a.id)
+      +'</tr>';
+  });
+  const sub=items.reduce((s,a)=>s+assetVal(a),0);
+  return '<div class="dtbl-wrap"><table class="dtbl" style="min-width:1720px;"><thead><tr>'
+    +'<th>地番</th><th>家屋番号</th><th>持分</th><th>種類</th><th>構造</th><th>階層</th><th>登記床面積(㎡)</th><th>課税床面積(㎡)</th><th>固定資産税評価額</th><th>自用貸家</th><th>賃貸割合</th><th>相続税評価額(円)</th><th>注記</th><th style="min-width:160px;">確認する事項</th><th></th>'
+    +'</tr></thead><tbody>'+rows+'</tbody>'
+    +'<tfoot><tr><td colspan="11" style="text-align:right;">計</td><td class="num" id="foot-building">'+yen(sub)+'</td><td colspan="3"></td></tr></tfoot></table></div>';
 }
 
 const ASSET_COLS={
@@ -2491,8 +2558,8 @@ async function autoFetchStock(id){
 }
 function detailNote(cat){
   const notes={
-    land:'価額 ＝（路線価方式：㎡単価×面積／倍率方式：固定資産税評価額×倍率）×所有権割合×調整。小規模宅地等の特例は区分と適用面積を入力すると減額を自動計算します（端数四捨五入）。',
-    building:'価額 ＝ 固定資産税評価額 × 所有権割合 × 調整（四捨五入）。価額を直接入力する場合は「計算」のチェックを外してください。',
+    land:'相続税評価額 ＝（路線価方式：㎡単価×課税地積／倍率方式：固定資産税評価額×倍率）×持分×利用区分の評価減。「課税地目／課税地積」は「←登記」ボタンで登記の値を引用できます。自用借地区分により評価減を自動適用します：貸宅地＝×(1−借地権割合)、借地権＝×借地権割合、貸家建付地＝×(1−借地権割合×借家権割合×賃貸割合)。借家権割合は既定30%、賃貸割合は既定100%。側方・二方／都市計画／用途地域／正面幅員は評価明細用の記録欄です（路線価の側方加算等は加味前の単価をご入力ください）。小規模宅地等の特例は区分と適用面積で減額を自動計算します。「債務」欄は記録用で評価額からは控除しません（債務は「債務」区分で計上してください）。',
+    building:'相続税評価額 ＝ 固定資産税評価額 × 持分（貸家は ×(1−借家権割合30%×賃貸割合)）。種類・構造・階層・登記/課税床面積は記録欄です。',
     securities:'【上場株式・ETF・REIT】評価額 ＝ ①相続開始日終値、②当月・③前月・④前々月の終値の月平均額 のうち最も低い価額×株数。「自動算出」で銘柄コードから株価4時点・配当・銘柄名をYahoo!ファイナンス（GAS経由）で取得します（月平均は円未満切捨。Yahoo!が不調なときはStooqから株価を自動補完）。設定のApps Scriptを高機能版にすると、実際の配当支払日も取得して未収配当金・配当期待権をより正確に判定します。配当は相続開始日(死亡日)と各日付の関係で次のとおり判定し、配当総額−源泉税(20.315%)を評価額合計に加算します：①死亡日が配当基準日以前＝なし(株価に織込み済み)、②基準日の翌日〜効力発生日(株主総会決議日)＝配当期待権、③効力発生日の翌日〜支払開始日＝未収配当金、④支払開始日より後＝なし(受領済みのため現金・預貯金に計上)。自動算出の日付は推定値です（基準日≒権利落ち日の翌日、効力発生日≒基準日の約3か月後、支払開始日≒効力発生日の約2週間後）。実際の基準日・株主総会決議日・支払開始日が分かる場合は手入力で修正してください。\n【投資信託（非上場）】種類で「投資信託」を選ぶと、評価額 ＝ 基準価額(1万口)×口数÷1万 − 信託財産留保額(基準価額×留保率) − 解約手数料。「自動算出」はISINコード＋協会コードから投資信託協会の基準価額を取得します。留保率・解約手数料は目論見書を参照し入力してください。',
     unlisted:'非上場株式は類似業種比準・純資産価額方式等で1株単価を算定し、単価×株数で価額を計算します。',
     cash:'相続開始日時点の残高を入力します。名義は被相続人や相続人から選択できます（名義預金は実質の所有者をご確認のうえ判断）。種類（普通預金/定期預金/現金 等）は自由入力です。',
