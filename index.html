@@ -323,10 +323,14 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 .dtbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;}
 .dtbl{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px;min-width:600px;}
 .dtbl th{position:sticky;top:0;background:var(--surface-2);text-align:left;font-size:11px;font-weight:600;color:var(--ink-2);padding:9px 8px;border-bottom:1px solid var(--line);white-space:nowrap;}
-.mv-table th{position:static;background:#3a4a5e;color:#fff;border-color:#2c3a4a;text-align:center;}
+.mv-table th{position:static;background:#4287f5;color:#fff;border-color:#fff;border-bottom:1px solid #fff;text-align:center;}
 .mv-table th select{color:var(--ink);}
 .mv-table td{border-left:1px solid var(--line);}
 .mv-table .num input{text-align:right;}
+/* 日付列を横スクロールで固定（Excelのウィンドウ枠固定） */
+.mv-table th.mv-frozen{position:sticky;left:0;z-index:4;background:#4287f5;border-right:2px solid #fff;}
+.mv-table td.mv-frozen{position:sticky;left:0;z-index:2;background:#fff;border-right:2px solid var(--line-2);}
+.mv-table tfoot td.mv-frozen{background:var(--surface-2);}
 .dtbl td{padding:6px 7px;border-bottom:1px solid var(--line);vertical-align:middle;}
 .dtbl tr:last-child td{border-bottom:none;}
 .dtbl input,.dtbl select{padding:7px 8px;border:1px solid var(--line-2);border-radius:8px;font-size:12.5px;width:100%;background:#fff;}
@@ -381,13 +385,19 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 .sim-step .body .v{font-size:20px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:2px;}
 .sim-step .body .sub{font-size:12px;color:var(--ink-2);margin-top:2px;}
 
-.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;}
 .sum-box{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px;}
 .sum-box .sl{font-size:12.5px;color:var(--ink-2);font-weight:600;}
 .sum-box .sv{font-size:22px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:4px;}
-.summary-grid .sum-box{padding:10px 13px;}
-.summary-grid .sum-box .sl{font-size:11.5px;}
-.summary-grid .sum-box .sv{font-size:17px;margin-top:2px;}
+.summary-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;}
+.summary-grid .sum-box{padding:9px 12px;border-radius:11px;overflow:hidden;display:flex;flex-direction:column;}
+.summary-grid .sum-box .sl{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.summary-grid .sum-box .sv{font-size:17px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.summary-grid .sum-box .sb{margin-top:4px;display:flex;flex-direction:column;gap:1px;font-size:10px;color:var(--ink-2);line-height:1.5;}
+.summary-grid .sum-box .sb span{display:flex;justify-content:space-between;gap:6px;white-space:nowrap;}
+.summary-grid .sum-box .sb b{font-variant-numeric:tabular-nums;font-weight:700;color:var(--ink);}
+@media(max-width:980px){.summary-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
+@media(max-width:560px){.summary-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
 .sum-box.accent{background:linear-gradient(145deg,#0071e3,#3a9bff);border:none;color:#fff;}
 .sum-box.accent .sl{color:rgba(255,255,255,.85);}
 .sav-compare{display:flex;align-items:stretch;gap:12px;flex-wrap:wrap;}
@@ -2136,31 +2146,31 @@ function renderAssetDetail(){
 }
 // 金融資産異動一覧表
 function movementAccounts(){ return currentCase.assets.filter(a=>a.category==='cash' && /普通|通常|当座/.test(a.subcategory||'')); }
+function mvFmt(el){ const raw=el.value.replace(/[^0-9]/g,''); el.value=raw?Number(raw).toLocaleString('ja-JP'):''; try{ const L=el.value.length; el.setSelectionRange(L,L); }catch(e){} return raw; }
 function movementTableHtml(){
   const accs=movementAccounts();
   const mv=currentCase.movement||(currentCase.movement={rows:[],usage:{}});
   if(!accs.length) return '<div class="center-msg">「現金・預貯金」で普通預金・通常貯金（または当座預金）を登録すると、その口座がここに表示されます。</div>';
   const usageOpts=['','未利用','日常利用','その他'];
-  const accHead=(label,sub)=>accs.map(a=>'<th colspan="2" style="border-left:2px solid var(--line-2);">'+label(a)+'</th>').join('');
   let head='<thead>'
-    +'<tr><th rowspan="4" style="vertical-align:middle;">日付</th>'+accs.map(a=>'<th colspan="2" style="border-left:2px solid var(--line-2);">'+esc((a.name||'')+' '+(a.branch||''))+'</th>').join('')+'<th rowspan="4" style="vertical-align:middle;">相続財産<br>計上額</th><th rowspan="4" style="vertical-align:middle;min-width:240px;">確認したい点</th></tr>'
-    +'<tr>'+accs.map(a=>'<th colspan="2" style="border-left:2px solid var(--line-2);">No.'+esc(a.accountNo||'')+'</th>').join('')+'</tr>'
-    +'<tr>'+accs.map(a=>'<th colspan="2" style="border-left:2px solid var(--line-2);"><select style="font-size:11px;padding:3px 6px;" onchange="updMovementUsage(\''+a.id+'\',this.value)">'+usageOpts.map(o=>'<option'+((mv.usage[a.id]||'')===o?' selected':'')+'>'+(o||'利用状況')+'</option>').join('')+'</select></th>').join('')+'</tr>'
-    +'<tr>'+accs.map(a=>'<th style="border-left:2px solid var(--line-2);">入金</th><th>出金</th>').join('')+'</tr>'
+    +'<tr><th rowspan="4" class="mv-frozen" style="vertical-align:middle;">日付</th>'+accs.map(a=>'<th colspan="2" style="border-left:2px solid #fff;">'+esc((a.name||'')+' '+(a.branch||''))+'</th>').join('')+'<th rowspan="4" style="vertical-align:middle;border-left:2px solid #fff;">相続財産<br>計上額</th><th rowspan="4" style="vertical-align:middle;min-width:240px;border-left:2px solid #fff;">確認したい点</th></tr>'
+    +'<tr>'+accs.map(a=>'<th colspan="2" style="border-left:2px solid #fff;">No.'+esc(a.accountNo||'')+'</th>').join('')+'</tr>'
+    +'<tr>'+accs.map(a=>'<th colspan="2" style="border-left:2px solid #fff;"><select style="font-size:11px;padding:3px 6px;" onchange="updMovementUsage(\''+a.id+'\',this.value)">'+usageOpts.map(o=>'<option'+((mv.usage[a.id]||'')===o?' selected':'')+'>'+(o||'利用状況')+'</option>').join('')+'</select></th>').join('')+'</tr>'
+    +'<tr>'+accs.map(a=>'<th style="border-left:2px solid #fff;">入金</th><th style="border-left:1px solid #fff;">出金</th>').join('')+'</tr>'
     +'</thead>';
   let body='';
   (mv.rows||[]).forEach(row=>{ row.cells=row.cells||{};
-    body+='<tr><td><input type="text" value="'+esc(row.date||'')+'" placeholder="R3.1.6" style="min-width:90px;" oninput="updMovementField(\''+row.id+'\',\'date\',this.value)"></td>'
+    body+='<tr><td class="mv-frozen"><input type="text" value="'+esc(row.date||'')+'" placeholder="R3.1.6" style="min-width:90px;" oninput="updMovementField(\''+row.id+'\',\'date\',this.value)"></td>'
       +accs.map(a=>{ const cell=row.cells[a.id]||{};
-        return '<td style="border-left:2px solid var(--line-2);"><input type="text" class="num" value="'+(num(cell.i)?num(cell.i).toLocaleString('ja-JP'):'')+'" oninput="updMovementCell(\''+row.id+'\',\''+a.id+'\',\'i\',this.value)" onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"></td>'
-          +'<td><input type="text" class="num" value="'+(num(cell.o)?num(cell.o).toLocaleString('ja-JP'):'')+'" oninput="updMovementCell(\''+row.id+'\',\''+a.id+'\',\'o\',this.value)" onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"></td>'; }).join('')
-      +'<td><input type="text" class="num" value="'+(num(row.concl)?num(row.concl).toLocaleString('ja-JP'):'')+'" oninput="updMovementField(\''+row.id+'\',\'concl\',this.value)" onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"></td>'
+        return '<td style="border-left:2px solid var(--line-2);"><input type="text" class="num" value="'+(num(cell.i)?num(cell.i).toLocaleString('ja-JP'):'')+'" oninput="updMovementCell(\''+row.id+'\',\''+a.id+'\',\'i\',mvFmt(this))"></td>'
+          +'<td><input type="text" class="num" value="'+(num(cell.o)?num(cell.o).toLocaleString('ja-JP'):'')+'" oninput="updMovementCell(\''+row.id+'\',\''+a.id+'\',\'o\',mvFmt(this))"></td>'; }).join('')
+      +'<td><input type="text" class="num" value="'+(num(row.concl)?num(row.concl).toLocaleString('ja-JP'):'')+'" oninput="updMovementField(\''+row.id+'\',\'concl\',mvFmt(this))"></td>'
       +'<td><input type="text" value="'+esc(row.note||'')+'" style="min-width:230px;" oninput="updMovementField(\''+row.id+'\',\'note\',this.value)"></td>'
       +'<td class="rowops"><button class="del" onclick="removeMovementRow(\''+row.id+'\')">削除</button></td></tr>';
   });
   if(!(mv.rows||[]).length) body='<tr><td colspan="'+(accs.length*2+3)+'" class="muted" style="text-align:center;padding:14px;">「＋ 行を追加」で入出金を記録してください。</td></tr>';
   const conclTotal=(mv.rows||[]).reduce((s,r)=>s+num(r.concl),0);
-  let foot='<tfoot><tr><td style="text-align:right;">相続財産計上額 計</td>'+accs.map(()=>'<td colspan="2"></td>').join('')+'<td class="num" id="mvConclTotal">'+yen(conclTotal)+'</td><td colspan="2"></td></tr></tfoot>';
+  let foot='<tfoot><tr><td class="mv-frozen" style="text-align:right;">計上額 計</td>'+accs.map(()=>'<td colspan="2"></td>').join('')+'<td class="num" id="mvConclTotal">'+yen(conclTotal)+'</td><td colspan="2"></td></tr></tfoot>';
   return '<div class="dtbl-wrap"><table class="dtbl mv-table" style="min-width:'+(420+accs.length*220)+'px;">'+head+'<tbody>'+body+'</tbody>'+foot+'</table></div>'
     +'<div class="detail-foot"><button class="btn primary sm" onclick="addMovementRow()">＋ 行を追加</button></div>';
 }
@@ -2656,17 +2666,22 @@ function calcSummary(){
 function renderSummary(){
   if(!currentCase){ return; }
   const s=calcSummary();
-  const g=$('summaryGrid');
+  const g=$('summaryGrid'); if(!g) return;
+  const kobo=computeKobo().total;
+  const insRet=s.insExempt+s.retExempt;
+  const exemptTotal=kobo+insRet;
   g.innerHTML=
-    box('プラス財産（特例後・債務控除前）', yen(s.plus+s.mfumi+s.sum.gift))
-    +box('小規模宅地 減額', '−'+yen(currentCase?computeKobo().total:0))
-    +box('債務・葬式費用', '−'+yen(s.minus))
-    +boxAccent('課税価格（概算）', yen(Math.max(0,s.taxableValue)))
-    +box('基礎控除額', yen(s.basicDeduction)+' ('+s.n+'人)')
-    +box('課税遺産総額（概算）', yen(s.netTaxable));
+    box('プラス財産','プラス財産（特例適用後・債務控除前）', yen(s.plus+s.mfumi+s.sum.gift))
+    +boxMulti('減額・非課税','小規模宅地等の特例による減額＋生命保険金等・退職手当金の非課税枠', '−'+yen(exemptTotal),
+        [['小規模宅地','−'+yen(kobo)],['生保・退職金 非課税','−'+yen(insRet)]])
+    +box('債務・葬式費用','債務・葬式費用', '−'+yen(s.minus))
+    +boxAccent('課税価格','課税価格（概算）', yen(Math.max(0,s.taxableValue)))
+    +box('基礎控除','基礎控除額（法定相続人 '+s.n+'人）', yen(s.basicDeduction))
+    +box('課税遺産総額','課税遺産総額（概算）', yen(s.netTaxable));
 }
-function box(l,v){ return '<div class="sum-box"><div class="sl">'+l+'</div><div class="sv">'+v+'</div></div>'; }
-function boxAccent(l,v){ return '<div class="sum-box accent"><div class="sl">'+l+'</div><div class="sv">'+v+'</div></div>'; }
+function box(l,full,v){ return '<div class="sum-box" title="'+esc(full)+'"><div class="sl">'+esc(l)+'</div><div class="sv">'+v+'</div></div>'; }
+function boxAccent(l,full,v){ return '<div class="sum-box accent" title="'+esc(full)+'"><div class="sl">'+esc(l)+'</div><div class="sv">'+v+'</div></div>'; }
+function boxMulti(l,full,v,subs){ return '<div class="sum-box" title="'+esc(full)+'"><div class="sl">'+esc(l)+'</div><div class="sv">'+v+'</div><div class="sb">'+subs.map(x=>'<span>'+esc(x[0])+'<b>'+x[1]+'</b></span>').join('')+'</div></div>'; }
 
 // ============================================================
 //  相続税 計算エンジン（相続税法に基づく算出シミュレーション）
