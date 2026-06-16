@@ -227,6 +227,12 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 .opt-chip button:hover{background:var(--red,#ff3b30);color:#fff;}
 .opt-add{display:inline-flex;gap:6px;align-items:center;}
 .opt-add input{width:150px;padding:6px 10px;}
+.quote-btn{border:none;background:none;color:var(--accent);width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .12s,transform .08s;padding:0;}
+.quote-btn:hover{background:rgba(0,113,227,.12);}
+.quote-btn:active{transform:scale(.9);}
+.quote-btn svg{width:15px;height:15px;}
+.quote-field{display:flex;gap:2px;align-items:center;min-width:148px;}
+.quote-field input{flex:1;min-width:0;}
 .empty-state{text-align:center;padding:60px 20px;color:var(--ink-2);}
 .empty-state .em-ico{font-size:46px;margin-bottom:12px;}
 
@@ -302,11 +308,11 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 /* sidebar sub-nav for asset categories */
 .nav-sub{display:none;flex-direction:column;gap:1px;margin:2px 0 2px 8px;padding-left:8px;border-left:2px solid var(--line);}
 .nav-sub.open{display:flex;}
-.nav-subitem{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;cursor:pointer;border:none;background:none;text-align:left;width:100%;font-size:12.5px;color:var(--ink-2);transition:background .12s;}
+.nav-subitem{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:8px;cursor:pointer;border:none;background:none;text-align:left;width:100%;font-size:12.5px;color:#000;font-weight:700;transition:background .12s;}
 .nav-subitem:hover{background:rgba(0,0,0,.04);}
-.nav-subitem.active{background:rgba(0,113,227,.1);color:var(--accent);font-weight:600;}
+.nav-subitem.active{background:rgba(0,113,227,.1);color:var(--accent);font-weight:700;}
 .nav-subitem .si-ic{width:16px;text-align:center;flex-shrink:0;}
-.nav-subitem .si-amt{margin-left:auto;font-size:11px;font-variant-numeric:tabular-nums;color:var(--ink-2);}
+.nav-subitem .si-amt{margin-left:auto;font-size:11px;font-variant-numeric:tabular-nums;color:var(--ink-2);font-weight:600;}
 .nav-subitem.active .si-amt{color:var(--accent);}
 /* detailed asset entry */
 .detail-head{display:flex;align-items:center;gap:12px;margin-bottom:6px;}
@@ -342,9 +348,6 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 .dtbl .chk-cell input{width:auto;}
 .detail-foot{margin-top:12px;display:flex;gap:10px;align-items:center;}
 .detail-note{margin-top:12px;font-size:12px;color:var(--ink-2);background:var(--surface-2);border-radius:10px;padding:10px 14px;line-height:1.7;}
-.cat-switch{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px;}
-.cat-pill{border:1px solid var(--line-2);background:#fff;border-radius:980px;padding:6px 13px;font-size:12.5px;font-weight:600;color:var(--ink-2);cursor:pointer;}
-.cat-pill.active{background:var(--ink);color:#fff;border-color:var(--ink);}
 .cdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle;flex-shrink:0;}
 /* allocation grid grouped by category */
 .alloc-grid{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px;}
@@ -378,12 +381,26 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 .sim-step .body .v{font-size:20px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:2px;}
 .sim-step .body .sub{font-size:12px;color:var(--ink-2);margin-top:2px;}
 
-.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;}
+.summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;}
 .sum-box{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px;}
 .sum-box .sl{font-size:12.5px;color:var(--ink-2);font-weight:600;}
 .sum-box .sv{font-size:22px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:4px;}
+.summary-grid .sum-box{padding:10px 13px;}
+.summary-grid .sum-box .sl{font-size:11.5px;}
+.summary-grid .sum-box .sv{font-size:17px;margin-top:2px;}
 .sum-box.accent{background:linear-gradient(145deg,#0071e3,#3a9bff);border:none;color:#fff;}
 .sum-box.accent .sl{color:rgba(255,255,255,.85);}
+.sav-compare{display:flex;align-items:stretch;gap:12px;flex-wrap:wrap;}
+.sav-compare .sc-col{flex:1;min-width:170px;background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:16px 18px;}
+.sav-compare .sc-l{font-size:12.5px;color:var(--ink-2);font-weight:600;}
+.sav-compare .sc-v{font-size:26px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:6px;}
+.sav-compare .sc-sub{font-size:11.5px;color:var(--ink-2);margin-top:4px;}
+.sav-compare .sc-arrow{display:flex;align-items:center;color:#b8b8bd;flex:0 0 auto;}
+.sav-compare .sc-arrow svg{width:26px;height:26px;}
+.sav-compare .sc-save{background:linear-gradient(145deg,#1a7f37,#34c759);border:none;color:#fff;}
+.sav-compare .sc-save .sc-l,.sav-compare .sc-save .sc-sub{color:rgba(255,255,255,.9);}
+.sav-eff{color:#1a7f37;font-weight:700;}
+@media(max-width:760px){.sav-compare .sc-arrow{display:none;}}
 .disclaimer{font-size:12px;color:var(--ink-2);background:#fff8e6;border-radius:10px;padding:10px 14px;margin-top:14px;line-height:1.6;}
 
 /* ---------- Agreement ---------- */
@@ -564,7 +581,6 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
       </div>
 
       <div class="card">
-        <div class="cat-switch" id="catSwitch"></div>
         <div id="assetDetail"></div>
       </div>
     </section>
@@ -675,13 +691,14 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
       <div class="view-head"><h1>相続税節税シミュレーション</h1><p>一般的な相続税の節税対策をテンプレートから選び、金額・年数などを入力して節税効果を試算します。現在の課税価格・相続税の総額を基準に、対策後の税額と削減額を比較します。</p></div>
 
       <div class="card">
-        <h2>現状（対策前）</h2>
-        <div class="summary-grid" id="savBase"></div>
+        <h2>効果サマリー（対策前 → 対策後）</h2>
+        <div class="card-sub">現在の課税価格・相続税の総額を基準に、対策後の税額と削減額を一目で比較できます。</div>
+        <div id="savCompare"></div>
       </div>
 
       <div class="card">
         <div class="card-head-row">
-          <div><h2>節税対策</h2><div class="card-sub" style="margin:0;">テンプレートを選んで追加し、金額・人数・年数を設定してください。</div></div>
+          <div><h2>節税対策</h2><div class="card-sub" style="margin:0;">テンプレートを選んで追加し、金額・人数・年数を設定してください。各対策の右下に、その対策による相続税の削減額が表示されます。</div></div>
         </div>
         <div class="field" style="max-width:420px;margin-bottom:14px;">
           <label>対策テンプレートを追加</label>
@@ -692,8 +709,7 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
       </div>
 
       <div class="card">
-        <h2>対策後の効果</h2>
-        <div class="summary-grid" id="savResult"></div>
+        <h2>対策別の内訳（どの対策でいくら減るか）</h2>
         <div id="savBreak"></div>
       </div>
 
@@ -2081,8 +2097,6 @@ function renderAssetNav(){
   const list=assetNavList();
   const sub=$('assetSubNav');
   if(sub) sub.innerHTML=list.map(t=>'<button class="nav-subitem'+(t.key===currentAssetCat?' active':'')+'" onclick="gotoAssetCat(\''+t.key+'\')"><span class="si-ic"><i class="cdot" style="background:'+t.color+'"></i></span>'+t.name+'<span class="si-amt">'+(t.key!=='movement'&&subs[t.key]?(t.sign<0?'−':'')+num(subs[t.key]).toLocaleString('ja-JP'):'')+'</span></button>').join('');
-  const cs=$('catSwitch');
-  if(cs) cs.innerHTML=list.map(t=>'<button class="cat-pill'+(t.key===currentAssetCat?' active':'')+'" onclick="selectAssetCat(\''+t.key+'\')"><i class="cdot" style="background:'+t.color+'"></i>'+t.name+'</button>').join('');
 }
 function gotoAssetCat(key){ switchView('assets'); selectAssetCat(key); }
 function selectAssetCat(key){ currentAssetCat=key; renderAssetNav(); renderAssetDetail(); }
@@ -2166,7 +2180,8 @@ function quoteLandField(id, fromField, toField){ const a=currentCase.assets.find
 function quoteCell(a, field, fromField, ph, isNum){
   const v=isNum? (num(a[field])?num(a[field]).toLocaleString('ja-JP'):'') : esc(a[field]==null?'':a[field]);
   const blur=isNum? ' onblur="this.value=(num(this.value)?num(this.value).toLocaleString(\'ja-JP\'):\'\')"':'';
-  return '<td><div style="display:flex;gap:4px;align-items:center;min-width:150px;"><input type="text"'+(isNum?' class="num"':'')+' value="'+v+'" placeholder="'+esc(ph)+'" oninput="updAsset(\''+a.id+'\',\''+field+'\',this.value)"'+blur+'><button class="btn sm" title="登記を引用" style="padding:3px 7px;white-space:nowrap;flex-shrink:0;" onclick="quoteLandField(\''+a.id+'\',\''+fromField+'\',\''+field+'\')">←登記</button></div></td>';
+  const icon='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17 4 12l5-5"/><path d="M4 12h12a4 4 0 0 1 4 4v1"/></svg>';
+  return '<td><div class="quote-field"><input type="text"'+(isNum?' class="num"':'')+' value="'+v+'" placeholder="'+esc(ph)+'" oninput="updAsset(\''+a.id+'\',\''+field+'\',this.value)"'+blur+'><button class="quote-btn" title="登記の値を引用" onclick="quoteLandField(\''+a.id+'\',\''+fromField+'\',\''+field+'\')">'+icon+'</button></div></td>';
 }
 function landTableHtml(items){
   let rows='';
@@ -3161,19 +3176,43 @@ function renderSavings(){
   refreshSavingsResult();
   $('savDisclaimer').innerHTML='※ 本シミュレーションは「相続税の総額」（課税価格の合計額・基礎控除・法定相続分による速算表）ベースの概算です。配偶者の税額軽減等の個別の税額控除は対策前後で同様に作用するため比較から除いています。各対策には適用要件・否認リスク・贈与税等の別途コストがあり、実行可否は必ず税理士にご相談ください。';
 }
+// 対策を上から順に適用したときの相続税の総額の推移（各対策の税額削減を分解。合計＝総削減額）
+function savingsWaterfall(){
+  const ctx=savingsCtx(); const T0=ctx.T0;
+  const baseTax=totalTaxScenario(T0, currentCase.heirs).tax;
+  let curT=T0, curDn=0, prevTax=baseTax;
+  const rows=[];
+  (currentCase.savings||[]).forEach(s=>{ const t=SAVING_BY_KEY[s.key]; if(!t){ rows.push(null); return; }
+    const res=t.compute(s.params||{},ctx);
+    curT=Math.max(0, curT-(res.dT||0)); curDn+=res.dn||0;
+    const dummies=[]; for(let i=0;i<curDn;i++) dummies.push({id:'sav-dummy-'+i, relationType:'child', isAdopted:true, adoptedAsReal:false, isDaishu:false, daishuGroup:''});
+    const taxNow=totalTaxScenario(curT, currentCase.heirs.concat(dummies)).tax;
+    rows.push({name:t.name, dT:res.dT||0, dn:res.dn||0, note:res.note||'', dTax:Math.max(0,prevTax-taxNow)});
+    prevTax=taxNow;
+  });
+  return {T0, T1:curT, baseTax, afterTax:prevTax, save:baseTax-prevTax, rows, dTtotal:T0-curT, dnTotal:curDn};
+}
 function refreshSavingsResult(){
   if(!currentCase) return;
-  const R=savingsCompute();
-  if($('savBase')) $('savBase').innerHTML=box('課税価格の合計額',yen(R.T0))+box('相続税の総額（対策前）',yen(R.baseTax));
-  if($('savResult')) $('savResult').innerHTML=box('対策後の課税価格',yen(R.T1))+box('対策後の相続税の総額',yen(R.afterTax))+boxAccent('節税効果（削減額）',yen(R.save));
-  // 各対策の効果ライン
-  (currentCase.savings||[]).forEach(s=>{ const el=$('saveff-'+s.id); if(!el) return; const t=SAVING_BY_KEY[s.key]; if(!t) return; const res=t.compute(s.params||{},savingsCtx());
-    el.innerHTML='この対策の効果：'+(res.dT?'課税価格 −'+yen(res.dT):'')+(res.dn?' 法定相続人 ＋'+res.dn+'人':'')+(res.note?'<span class="muted" style="font-size:11.5px;"> ／ '+esc(res.note)+'</span>':''); });
-  // 内訳
+  const R=savingsWaterfall();
+  const rate=R.baseTax>0? Math.round(R.save/R.baseTax*1000)/10 : 0;
+  if($('savCompare')) $('savCompare').innerHTML=
+    '<div class="sav-compare">'
+    +'<div class="sc-col"><div class="sc-l">対策前　相続税の総額</div><div class="sc-v">'+yen(R.baseTax)+'</div><div class="sc-sub">課税価格 '+yen(R.T0)+'</div></div>'
+    +'<div class="sc-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></div>'
+    +'<div class="sc-col"><div class="sc-l">対策後　相続税の総額</div><div class="sc-v">'+yen(R.afterTax)+'</div><div class="sc-sub">課税価格 '+yen(R.T1)+'</div></div>'
+    +'<div class="sc-col sc-save"><div class="sc-l">節税効果（削減額）</div><div class="sc-v">−'+yen(R.save)+'</div><div class="sc-sub">削減率 '+rate+'％'+(R.dnTotal?'　／　法定相続人 ＋'+R.dnTotal+'人':'')+'</div></div>'
+    +'</div>';
+  // 各対策の効果ライン（その対策による相続税の削減額）
+  (currentCase.savings||[]).forEach((s,i)=>{ const el=$('saveff-'+s.id); if(!el) return; const row=R.rows[i]; if(!row){ el.innerHTML=''; return; }
+    el.innerHTML='<span class="sav-eff">相続税 −'+yen(row.dTax)+'</span>'+(row.dT?'<span class="muted" style="font-size:11.5px;"> ／ 課税価格 −'+yen(row.dT)+'</span>':'')+(row.dn?'<span class="muted" style="font-size:11.5px;"> ／ 法定相続人 ＋'+row.dn+'人</span>':'')+(row.note?'<span class="muted" style="font-size:11.5px;"> ／ '+esc(row.note)+'</span>':''); });
+  // 内訳テーブル（対策別の相続税削減額）
   let bk='';
-  if(R.rows.length){ bk='<table class="sim-table" style="margin-top:12px;"><thead><tr><th>対策</th><th>課税価格の削減</th><th>法定相続人の増加</th></tr></thead><tbody>'
-    +R.rows.map(x=>'<tr><td style="text-align:left;">'+esc(x.name)+'</td><td>'+(x.dT?'−'+yen(x.dT):'-')+'</td><td>'+(x.dn?'＋'+x.dn+'人':'-')+'</td></tr>').join('')
-    +'</tbody><tfoot><tr><td style="text-align:left;">合計</td><td>−'+yen(R.dTtotal)+'</td><td>'+(R.dnTotal?'＋'+R.dnTotal+'人':'-')+'</td></tr></tfoot></table>'; }
+  if(R.rows.filter(Boolean).length){ bk='<table class="sim-table"><thead><tr><th>対策</th><th>課税価格の削減</th><th>相続人の増加</th><th>相続税の削減額</th></tr></thead><tbody>'
+    +R.rows.filter(Boolean).map(x=>'<tr><td style="text-align:left;">'+esc(x.name)+'</td><td>'+(x.dT?'−'+yen(x.dT):'-')+'</td><td>'+(x.dn?'＋'+x.dn+'人':'-')+'</td><td class="sav-eff">−'+yen(x.dTax)+'</td></tr>').join('')
+    +'</tbody><tfoot><tr><td style="text-align:left;">合計</td><td>−'+yen(R.dTtotal)+'</td><td>'+(R.dnTotal?'＋'+R.dnTotal+'人':'-')+'</td><td class="sav-eff">−'+yen(R.save)+'</td></tr></tfoot></table>'
+    +'<div class="muted" style="font-size:11.5px;margin-top:8px;">※「相続税の削減額」は、上から順に各対策を適用したときの相続税の総額の減少額です（累積方式のため、各行の合計＝総削減額になります）。</div>'; }
+  else bk='<div class="muted" style="font-size:13px;">対策を追加すると、どの対策でいくら相続税が減るかがここに表示されます。</div>';
   if($('savBreak')) $('savBreak').innerHTML=bk;
 }
 function addSaving(){ if(!currentCase) return; const key=$('savTemplateSel').value||SAVING_TEMPLATES[0].key; const t=SAVING_BY_KEY[key]; const params={}; t.fields.forEach(f=>params[f.k]=f.def!==undefined?f.def:''); currentCase.savings.push({id:uid(),key,params}); renderSavings(); cacheCurrentCase(); }
