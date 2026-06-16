@@ -698,6 +698,15 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
     <section class="view" id="view-docs">
       <div class="view-head"><h1>資料出力</h1><p>このアプリに登録したデータをもとに、各種書類をPDF・Excelで出力します。</p></div>
       <div class="card">
+        <h2>初回面談時に印刷するもの</h2>
+        <div class="card-sub">初回面談でお渡し・記入いただく書類です。税理士氏名は「設定 → 事務所・税理士情報」で登録した氏名が印字されます。</div>
+        <div class="btn-row">
+          <button class="btn primary" onclick="downloadDeceasedOutlinePDF()">被相続人の概要・経歴書 PDF</button>
+          <button class="btn" onclick="downloadRiyoConsentPDF()">利用者識別番号 利用同意書（お持ちの場合）PDF</button>
+          <button class="btn" onclick="downloadRiyoRequestPDF()">利用者識別番号 取得依頼書（お持ちでない場合）PDF</button>
+        </div>
+      </div>
+      <div class="card">
         <h2>財産診断書</h2>
         <div class="card-sub">表紙・総括・親族関係・資産構成・相続税の概算・財産分割案・留意事項をまとめた報告書です。</div>
         <div class="btn-row">
@@ -746,6 +755,18 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
         <div class="setting-row">
           <div class="sr-info"><div class="t">接続テスト</div><div class="d">ログイン後、保存先フォルダにアクセスできるか確認します。</div></div>
           <div class="sr-control"><button class="btn" onclick="testDriveConnection()">接続をテスト</button></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>事務所・税理士情報</h2>
+        <div class="card-sub">各種書類（被相続人の概要・利用者識別番号の同意書／依頼書・財産診断書 等）に印字される情報です。税理士氏名は同意書・依頼書の宛名（税理士〇〇 殿）に使用されます。</div>
+        <div class="grid grid-2">
+          <div class="field"><label>税理士氏名</label><input type="text" id="set_taxName" placeholder="例：日下部 幸広" oninput="onOfficeInput()"></div>
+          <div class="field"><label>事務所名</label><input type="text" id="set_officeName" placeholder="例：日下部税理士事務所" oninput="onOfficeInput()"></div>
+          <div class="field" style="grid-column:1/3;"><label>住所</label><input type="text" id="set_officeAddr" placeholder="例：茨城県水戸市〇〇" oninput="onOfficeInput()"></div>
+          <div class="field"><label>電話</label><input type="text" id="set_officeTel" placeholder="例：029-000-0000" oninput="onOfficeInput()"></div>
+          <div class="field"><label>FAX</label><input type="text" id="set_officeFax" placeholder="例：029-000-0000" oninput="onOfficeInput()"></div>
         </div>
       </div>
 
@@ -845,7 +866,7 @@ const LS_SETTINGS = 'souzoku_settings_v1';
 const LS_CASE_CACHE = 'souzoku_case_cache_v1';
 
 // ---------- App state ----------
-let settings = { folderUrl:'', folderId:'', clientId:DEFAULT_CLIENT_ID, gasUrl:'', accountHint:'' };
+let settings = { folderUrl:'', folderId:'', clientId:DEFAULT_CLIENT_ID, gasUrl:'', accountHint:'', taxName:'', officeName:'', officeAddr:'', officeTel:'', officeFax:'' };
 let currentCase = null;       // the active case object
 let currentFileId = null;     // Drive file id of active case
 let accessToken = null;
@@ -1010,12 +1031,24 @@ function toWareki(val){
 function loadSettings(){
   try{ const s=JSON.parse(localStorage.getItem(LS_SETTINGS)); if(s) settings=Object.assign(settings,s); }catch(e){}
   if(!settings.clientId) settings.clientId=DEFAULT_CLIENT_ID;
+  // 事務所・税理士情報の初期値（未設定なら既定値）
+  if(!settings.taxName) settings.taxName='日下部 幸広';
+  if(!settings.officeName) settings.officeName='日下部税理士事務所';
+  if(!settings.officeAddr) settings.officeAddr='茨城県水戸市姫子1丁目820-6 ヴィラエスポワールⅠ 1F';
+  if(!settings.officeTel) settings.officeTel='029-215-9400';
+  if(!settings.officeFax) settings.officeFax='029-311-4151';
   $('set_folderUrl').value=settings.folderUrl||'';
   $('set_clientId').value=settings.clientId||'';
   if($('set_gasUrl')) $('set_gasUrl').value=settings.gasUrl||'';
+  ['taxName','officeName','officeAddr','officeTel','officeFax'].forEach(k=>{ const el=$('set_'+k); if(el) el.value=settings[k]||''; });
+  applyOfficeSettings();
   updateFolderStatus();
 }
 function onGasUrlInput(){ settings.gasUrl=$('set_gasUrl').value.trim(); saveSettings(); }
+function onOfficeInput(){
+  ['taxName','officeName','officeAddr','officeTel','officeFax'].forEach(k=>{ const el=$('set_'+k); if(el) settings[k]=el.value; });
+  applyOfficeSettings(); saveSettings();
+}
 function saveSettings(){ localStorage.setItem(LS_SETTINGS, JSON.stringify(settings)); }
 function extractFolderId(url){
   if(!url) return '';
@@ -3001,7 +3034,15 @@ function updSaving(id,field,val){ const s=(currentCase.savings||[]).find(x=>x.id
 // ============================================================
 //  財産診断書（PDF / Excel）
 // ============================================================
-const OFFICE={name:'日下部税理士事務所',addr:'茨城県水戸市姫子1丁目820-6 ヴィラエスポワールⅠ 1F',tel:'029-215-9400',fax:'029-311-4151'};
+const OFFICE={taxName:'日下部 幸広',name:'日下部税理士事務所',addr:'茨城県水戸市姫子1丁目820-6 ヴィラエスポワールⅠ 1F',tel:'029-215-9400',fax:'029-311-4151'};
+// 設定（事務所・税理士情報）をOFFICEへ反映
+function applyOfficeSettings(){
+  if(settings.taxName) OFFICE.taxName=settings.taxName;
+  if(settings.officeName) OFFICE.name=settings.officeName;
+  if(settings.officeAddr) OFFICE.addr=settings.officeAddr;
+  if(settings.officeTel) OFFICE.tel=settings.officeTel;
+  if(settings.officeFax) OFFICE.fax=settings.officeFax;
+}
 function buildReport(){
   const r=calcTax();
   const sc=k=>currentCase.assets.filter(a=>a.category===k).reduce((s,a)=>s+assetVal(a),0);
@@ -3497,6 +3538,117 @@ function downloadContract(){
     +'<div class="sig-row"><span class="sl">受任者（乙）</span><span class="sv">税理士　日下部幸広</span><span class="seal">印</span></div></div>';
   openPrintWindow('委任契約書_'+d.name, body, styles);
 }
+
+// ============================================================
+//  Document: 初回面談時に印刷するもの
+// ============================================================
+function warekiParts(iso){
+  if(!iso) return null; const dt=new Date(iso); if(isNaN(dt)) return null;
+  const y=dt.getFullYear(),m=dt.getMonth()+1,day=dt.getDate(); let era,ey;
+  if(y>=2019){era='令和';ey=y-2018;} else if(y>=1989){era='平成';ey=y-1988;} else if(y>=1926){era='昭和';ey=y-1925;} else if(y>=1912){era='大正';ey=y-1911;} else {era='明治';ey=y-1867;}
+  return {era, ey:(ey===1?'元':ey), m, d:day};
+}
+// 被相続人の概要・経歴書（原票の様式を再現）
+function buildDeceasedOutline(){
+  if(!currentCase){ toast('案件がありません', true); return null; }
+  syncUIToCase();
+  const d=currentCase.deceased;
+  const wp=warekiParts(d.deathDate);
+  const dateCell = wp? (wp.era+'　'+wp.ey+'　年　'+wp.m+'　月　'+wp.d+'　日') : '令和　　　年　　　月　　　日';
+  let filing=''; if(d.deathDate){ const f=new Date(d.deathDate); f.setMonth(f.getMonth()+10); const fp=warekiParts(f.toISOString().slice(0,10)); if(fp) filing=fp.era+fp.ey+'年'+fp.m+'月'+fp.d+'日'; }
+  const styles=`*{margin:0;padding:0;box-sizing:border-box;}
+   body{font-family:"Yu Mincho","游明朝","Hiragino Mincho ProN","MS Mincho",serif;color:#000;font-size:9.5pt;line-height:1.5;}
+   .page{padding:12mm 12mm;}
+   .ttl{text-align:center;font-size:15pt;letter-spacing:8px;font-weight:700;margin-bottom:6px;}
+   .ttl2{text-align:center;font-size:13pt;letter-spacing:6px;font-weight:700;margin:14px 0 5px;}
+   table{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:-1px;}
+   td{border:1px solid #000;padding:3px 5px;vertical-align:top;font-size:9.5pt;word-break:break-all;}
+   .lbl{text-align:center;}
+   .wr td{height:7.0mm;}
+   .ins{text-align:left;padding:4px 6px;}
+   @media print{@page{size:A4;margin:0;}}`;
+  // 経歴テーブル（項目／年月日／内容）
+  const secs3=[['出生地',1],['先代からの相続',2],['学歴',3],['職歴',3],['結婚',2],['住所移転状況',3],['病歴',2]];
+  const secs2=[['趣味・趣向',1],['交友関係',1],['財産管理',1],['家族の生活費等源泉',1]];
+  let rk='';
+  secs3.forEach(([label,n])=>{ for(let i=0;i<n;i++){ rk+='<tr class="wr">'+(i===0?'<td class="lbl" rowspan="'+n+'">'+label+'</td>':'')+'<td></td><td></td></tr>'; } });
+  secs2.forEach(([label,n])=>{ for(let i=0;i<n;i++){ rk+='<tr class="wr">'+(i===0?'<td class="lbl" colspan="2" rowspan="'+n+'">'+label+'</td>':'')+'<td></td></tr>'; } });
+  rk+='<tr class="wr"><td class="lbl" colspan="2">取引銀行・証券会社</td><td>銀行：　　　　　　　　　　　支店：　　　　　担当者：　　　　　　</td></tr>';
+  rk+='<tr class="wr"><td class="lbl" colspan="2">担当者</td><td>証券：　　　　　　　　　　　支店：　　　　　担当者：　　　　　　</td></tr>';
+  rk+='<tr class="wr"><td class="lbl" colspan="2" rowspan="2">経歴その他</td><td></td></tr><tr class="wr"><td></td></tr>';
+  const body='<div class="page">'
+    +'<div class="ttl">被相続人の概要</div>'
+    +'<table><colgroup><col style="width:11%"><col style="width:39%"><col style="width:12%"><col style="width:14%"><col style="width:7%"><col style="width:17%"></colgroup>'
+    +'<tr class="wr"><td class="lbl">住所</td><td>'+esc(d.address||'')+'</td><td class="lbl">相続年月日</td><td colspan="3">'+esc(dateCell)+'</td></tr>'
+    +'<tr class="wr"><td class="lbl">被相続人</td><td>'+esc(d.name||'')+'</td><td class="lbl">職業</td><td></td><td class="lbl">電話</td><td></td></tr>'
+    +'<tr class="wr"><td class="lbl">死亡原因</td><td></td><td class="lbl">申告期限</td><td colspan="3">'+esc(filing)+'</td></tr>'
+    +'<tr class="wr"><td class="lbl">死亡場所</td><td></td><td class="lbl">その他</td><td colspan="3"></td></tr>'
+    +'</table>'
+    +'<div class="ttl2">被相続人の経歴書</div>'
+    +'<table><colgroup><col style="width:22%"><col style="width:78%"></colgroup>'
+    +'<tr class="wr"><td class="lbl">最終学歴</td><td></td></tr>'
+    +'<tr class="wr"><td class="lbl">最終職歴</td><td></td></tr></table>'
+    +'<table><tr><td class="ins">被相続人の出生から死亡までの経歴をわかる範囲で次にご記入ください。</td></tr></table>'
+    +'<table><colgroup><col style="width:17%"><col style="width:19%"><col style="width:64%"></colgroup>'
+    +'<tr><td class="lbl">項目</td><td class="lbl">年月日</td><td class="lbl">内容</td></tr>'
+    +rk+'</table>'
+    +'</div>';
+  return {title:'被相続人の概要_'+(d.name||'案件'), body, styles};
+}
+function downloadDeceasedOutlinePDF(){ const r=buildDeceasedOutline(); if(r) openPrintWindow(r.title, r.body, r.styles); }
+// 電子申告に係る利用者識別番号の 利用同意書／取得依頼書
+function buildRiyoDoc(kind){
+  if(!currentCase){ toast('案件がありません', true); return null; }
+  syncUIToCase();
+  const consent = (kind==='consent');
+  const topnote = consent? '利用者識別番号をお持ちの場合' : '利用者識別番号をお持ちでない場合';
+  const title = consent? '電子申告に係る利用者識別番号の利用同意書' : '電子申告に係る利用者識別番号の取得依頼書';
+  const bodyPara = consent
+    ? '私は、本日より電子情報処理組織を利用して下記の税務申告の代理又は代行を貴殿に依頼するにあたり、私の利用者識別番号を貴殿に通知するとともに、貴殿が当該利用者識別番号を使用して当該税務申告を代理又は代行することに同意します。'
+    : '私は、本日より電子情報処理組織を利用して下記の税務申告の代理又は代行を貴殿に依頼するにあたり、私の利用者識別番号を貴殿が新規取得することを依頼し、貴殿が当該利用者識別番号を使用して当該税務申告を代理又は代行することに同意します。';
+  const styles=`*{margin:0;padding:0;box-sizing:border-box;}
+   body{font-family:"Yu Mincho","游明朝","Hiragino Mincho ProN","MS Mincho",serif;color:#000;font-size:11pt;line-height:2.0;}
+   .page{padding:22mm 24mm;}
+   .topnote{font-size:10.5pt;margin-bottom:20px;}
+   .date{text-align:right;margin-bottom:8px;}
+   .to{font-size:11pt;}
+   .to2{font-size:13pt;font-weight:700;margin:2px 0 6px;}
+   .from{margin-bottom:26px;}
+   .from .ul{display:inline-block;width:230px;border-bottom:1px solid #000;}
+   .rtitle{text-align:center;font-size:15pt;font-weight:700;letter-spacing:2px;margin:10px 0 22px;}
+   .rbody{font-size:11pt;line-height:2.2;margin-bottom:18px;text-indent:1em;}
+   .ki{text-align:center;margin:8px 0 16px;font-size:12pt;}
+   .item{display:flex;gap:10px;margin-bottom:16px;align-items:flex-start;}
+   .item .no{flex:0 0 1.6em;}
+   .item .lb{flex:0 0 8em;}
+   .item .ct{flex:1;}
+   .ul2{border-bottom:1px solid #000;display:inline-block;width:100%;min-height:1.4em;}
+   .sign{margin-top:28px;}
+   .sign .ul{display:inline-block;width:280px;border-bottom:1px solid #000;}
+   .biko{margin-top:32px;font-size:10.5pt;line-height:1.95;}
+   .biko .bk-h{margin-bottom:4px;}
+   @media print{@page{size:A4;margin:0;}}`;
+  let body='<div class="page">'
+    +'<div class="topnote">'+esc(topnote)+'</div>'
+    +'<div class="date">令和　　　年　　　月　　　日</div>'
+    +'<div class="to">税理士</div>'
+    +'<div class="to2">'+esc(OFFICE.taxName||'')+'　殿</div>'
+    +'<div class="from">依頼者　<span class="ul"></span></div>'
+    +'<h1 class="rtitle">'+esc(title)+'</h1>'
+    +'<p class="rbody">'+esc(bodyPara)+'</p>'
+    +'<div class="ki">記</div>'
+    +'<div class="item"><span class="no">一</span><span class="lb">利用目的</span><span class="ct">行政手続きにおける情報通信の技術の利用に関する法律に基づく電子情報処理組織を利用した税務申告の代理又は代行</span></div>'
+    +'<div class="item"><span class="no">二</span><span class="lb">対象税目</span><span class="ct">□ すべての税務署類　　　　その他の税目（　相続税　）</span></div>';
+  if(consent){ body+='<div class="item"><span class="no">三</span><span class="lb">利用者識別番号</span><span class="ct"><span class="ul2"></span></span></div>'; }
+  body+='<div class="sign">自書・押印　<span class="ul"></span></div>';
+  if(!consent){ body+='<div class="biko"><div class="bk-h">備考</div>'
+    +'<div>■過去に利用者識別番号を取得しており、今回新たに利用者識別番号を取得すると当該番号は上書きされます。</div>'
+    +'<div>■新規で取得した利用者識別番号とパスワードは申告完了後に貴殿へ書面にてお伝えいたします。</div></div>'; }
+  body+='</div>';
+  return {title:title+'_'+(currentCase.deceased.name||'案件'), body, styles};
+}
+function downloadRiyoConsentPDF(){ const r=buildRiyoDoc('consent'); if(r) openPrintWindow(r.title, r.body, r.styles); }
+function downloadRiyoRequestPDF(){ const r=buildRiyoDoc('request'); if(r) openPrintWindow(r.title, r.body, r.styles); }
 
 // ============================================================
 //  Document: 必要資料チェックリスト PDF
