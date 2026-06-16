@@ -1151,6 +1151,7 @@ function initGis(){
         hasConsented=true;
         setDriveStatus(true);
         if(!settings.accountHint) fetchAccountEmail(); // 次回以降のサイレント更新用にアカウントを記憶
+        if(settings.folderId && !driveListLoaded) loadDriveCasesAuto(); // 接続できたら全案件を自動取得
         const res=window.__tokenRes; window.__tokenRes=null; window.__tokenRej=null; if(res) res(accessToken);
       }
     });
@@ -1183,6 +1184,7 @@ function googleLogin(){
 function googleLogout(){
   if(accessToken){ try{ google.accounts.oauth2.revoke(accessToken,()=>{}); }catch(e){} }
   accessToken=null; tokenExpiry=0; hasConsented=false; settings.accountHint=''; saveSettings(); setDriveStatus(false);
+  driveListLoaded=false; driveCaseFiles=[]; renderCasesList();
 }
 function setDriveStatus(on){
   const el=$('driveStatus');
@@ -1568,7 +1570,14 @@ function refreshNavLock(){
 //  Cases view
 // ============================================================
 let driveCaseFiles=[]; // [{id,name,modifiedTime}]
+let driveListLoaded=false; // Drive接続後に全案件を一度自動取得したか
 let casesActiveTab='active';
+// Drive接続できたら、保存先フォルダ内の全案件を自動で一覧取得する
+async function loadDriveCasesAuto(){
+  if(!settings.folderId) return;
+  try{ driveCaseFiles=await driveListCases(); driveListLoaded=true; renderCasesList(); }
+  catch(e){ console.warn('Drive一覧の自動取得に失敗', e); }
+}
 function casesTab(which){ casesActiveTab=which; const a=$('ctab-active'),d=$('ctab-done'); if(a) a.classList.toggle('active',which==='active'); if(d) d.classList.toggle('active',which==='done'); renderCasesList(); }
 function caseInfo(f, isActive){
   let sum=null, death='', completed=false, code='';
@@ -3945,12 +3954,22 @@ function closeModal(id){ $(id).classList.remove('active'); }
 function tryRestoreCache(){
   try{ const c=JSON.parse(localStorage.getItem(LS_CASE_CACHE)); if(c&&c.case){ currentCase=migrateCase(c.case); currentFileId=c.fileId||null; loadCaseIntoUI(); } }catch(e){}
 }
+let autoConnectTried=false;
+// 以前ログイン済み（アカウント記憶あり）なら、ページ表示時にサイレント接続を試み、成功したら全案件を自動取得
+function maybeAutoConnect(){
+  if(autoConnectTried || !gisReady) return;
+  autoConnectTried=true;
+  if(settings.folderId && settings.accountHint && !(accessToken && Date.now()<tokenExpiry)){
+    requestToken(false).catch(()=>{}); // サイレント不可ならログインボタンのまま（コールバックで自動取得される）
+  }
+}
 window.addEventListener('load',()=>{
   restoreSidebar();
   loadSettings();
   initGis();
-  // GIS may load after; retry
-  let tries=0; const iv=setInterval(()=>{ if(!gisReady){ initGis(); } if(gisReady||tries++>20) clearInterval(iv); },400);
+  // GIS may load after; retry。準備でき次第サイレント接続を試みる
+  let tries=0; const iv=setInterval(()=>{ if(!gisReady){ initGis(); } if(gisReady) maybeAutoConnect(); if(gisReady||tries++>20) clearInterval(iv); },400);
+  maybeAutoConnect();
   tryRestoreCache();
   refreshNavLock();
   renderCasesList();
