@@ -773,16 +773,36 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
       <div class="card">
         <h2>株価の自動取得（有価証券）</h2>
         <div class="setting-row">
-          <div class="sr-info"><div class="t">Apps Script ウェブアプリURL</div><div class="d">下のコードをGoogle Apps Scriptに貼り付け、「デプロイ→新しいデプロイ→ウェブアプリ（アクセス：全員）」で発行した /exec のURLを入力してください。株価4時点・配当はYahoo!ファイナンスから取得し、Yahoo!が不調なときはStooqから株価を自動補完します（同じプロキシで動作します）。投資信託の基準価額・ファンド名は投資信託協会から取得します。</div></div>
+          <div class="sr-info"><div class="t">Apps Script ウェブアプリURL</div><div class="d">下のコードをGoogle Apps Scriptに貼り付け、「デプロイ→新しいデプロイ→ウェブアプリ（アクセス：全員）」で発行した /exec のURLを入力してください。<b>この高機能版にすると、Python(yfinance)版と同等に「株価4時点・配当・実際の配当支払日・日本語の銘柄名」を取得します</b>（Yahooのcookie/crumbをサーバー側で処理）。Yahoo!が不調なときはStooqから株価を自動補完。投資信託の基準価額・ファンド名は投資信託協会から取得します。<br>※ 旧版（汎用プロキシのみ）のままでも動作します（その場合は支払日が推定値になります）。コードを差し替えたら必ず「新しいデプロイ」で再発行してください。</div></div>
           <div class="sr-control">
             <input type="text" id="set_gasUrl" placeholder="https://script.google.com/macros/s/XXXX/exec" oninput="onGasUrlInput()">
-            <div class="muted" style="font-size:12px;margin-top:8px;">Apps Script に貼り付けるコード：</div>
-            <pre style="background:#1d1d1f;color:#e8e8ed;border-radius:8px;padding:12px;font-size:11.5px;overflow-x:auto;white-space:pre;line-height:1.6;">function doGet(e){
-  var url = e.parameter.url;
-  var res = UrlFetchApp.fetch(url, {muteHttpExceptions:true,
-    headers:{'User-Agent':'Mozilla/5.0'}});
-  return ContentService.createTextOutput(res.getContentText())
-    .setMimeType(ContentService.MimeType.JSON);
+            <div class="muted" style="font-size:12px;margin-top:8px;">Apps Script に貼り付けるコード（高機能版）：</div>
+            <pre style="background:#1d1d1f;color:#e8e8ed;border-radius:8px;padding:12px;font-size:11.5px;overflow-x:auto;white-space:pre;line-height:1.6;">var UA_='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36';
+function doGet(e){
+  try{
+    if(e.parameter.mode==='stock') return out_(getStock_(e.parameter.symbol));
+    var res=UrlFetchApp.fetch(e.parameter.url,{muteHttpExceptions:true,headers:{'User-Agent':UA_}});
+    return ContentService.createTextOutput(res.getContentText()).setMimeType(ContentService.MimeType.JSON);
+  }catch(err){ return out_({error:String(err)}); }
+}
+function out_(o){ return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
+function crumb_(){
+  var r1=UrlFetchApp.fetch('https://fc.yahoo.com',{muteHttpExceptions:true,followRedirects:false,headers:{'User-Agent':UA_}});
+  var sc=r1.getAllHeaders()['Set-Cookie']||r1.getAllHeaders()['set-cookie']||[];
+  if(typeof sc==='string') sc=[sc];
+  var cookie=sc.map(function(s){return String(s).split(';')[0];}).join('; ');
+  var cr=UrlFetchApp.fetch('https://query2.finance.yahoo.com/v1/test/getcrumb',{muteHttpExceptions:true,headers:{'User-Agent':UA_,'Cookie':cookie}});
+  return {cookie:cookie,crumb:(cr.getContentText()||'').trim()};
+}
+function getStock_(symbol){
+  var cc={cookie:'',crumb:''}; try{ cc=crumb_(); }catch(e){}
+  var h={'User-Agent':UA_}; if(cc.cookie) h['Cookie']=cc.cookie;
+  var chart=null,summary=null,jpName='';
+  try{ chart=JSON.parse(UrlFetchApp.fetch('https://query1.finance.yahoo.com/v8/finance/chart/'+encodeURIComponent(symbol)+'?range=2y&amp;interval=1d&amp;events=div',{muteHttpExceptions:true,headers:h}).getContentText()); }catch(e){}
+  try{ summary=JSON.parse(UrlFetchApp.fetch('https://query1.finance.yahoo.com/v10/finance/quoteSummary/'+encodeURIComponent(symbol)+'?modules=price,summaryDetail,calendarEvents&amp;crumb='+encodeURIComponent(cc.crumb),{muteHttpExceptions:true,headers:h}).getContentText()); }catch(e){}
+  try{ var t=UrlFetchApp.fetch('https://finance.yahoo.co.jp/quote/'+encodeURIComponent(symbol),{muteHttpExceptions:true,headers:{'User-Agent':UA_}}).getContentText();
+    var m=t.match(/&lt;title&gt;([^&lt;]+)&lt;\/title&gt;/); if(m){ jpName=m[1].split('【')[0].split('｜')[0].split('|')[0].split('：')[0].split(':')[0].trim(); } }catch(e){}
+  return {chart:chart,summary:summary,jpName:jpName};
 }</pre>
             <div class="muted" style="font-size:12px;margin-top:4px;">※ 自動取得が不調なときは4時点の価格・配当を手入力できます。</div>
           </div>
@@ -2373,6 +2393,29 @@ async function fetchStooqDaily(code, p1sec, p2sec){
   }
   return out;
 }
+// Python(yfinance)相当：GAS高機能版(mode=stock)から 株価2年分＋配当＋実支払日＋日本語名 を一括取得
+async function fetchStockBundle(symbol){
+  if(!settings.gasUrl) return null;
+  const url=settings.gasUrl+(settings.gasUrl.indexOf('?')<0?'?':'&')+'mode=stock&symbol='+encodeURIComponent(symbol);
+  const r=await fetch(url,{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status);
+  const j=await r.json();
+  if(!j || j.error || !j.chart) throw new Error((j&&j.error)? j.error : 'bundle取得失敗（GAS未更新の可能性）');
+  const res=j.chart.chart&&j.chart.chart.result&&j.chart.chart.result[0];
+  if(!res||!res.timestamp) throw new Error('チャートデータなし');
+  const q=res.indicators&&res.indicators.quote&&res.indicators.quote[0];
+  const cl=(q&&q.close)||[];
+  const rows=[]; for(let i=0;i<res.timestamp.length;i++){ if(cl[i]!=null) rows.push({ts:res.timestamp[i],close:cl[i]}); }
+  const dividends=res.events&&res.events.dividends? Object.values(res.events.dividends).map(d=>({date:d.date,amount:d.amount})):[];
+  let usName=(res.meta&&(res.meta.longName||res.meta.shortName))||'';
+  let realPay=null, realEx=null;
+  const sm=j.summary&&j.summary.quoteSummary&&j.summary.quoteSummary.result&&j.summary.quoteSummary.result[0];
+  if(sm){
+    if(sm.calendarEvents&&sm.calendarEvents.dividendDate&&sm.calendarEvents.dividendDate.raw) realPay=sm.calendarEvents.dividendDate.raw;
+    if(sm.summaryDetail&&sm.summaryDetail.exDividendDate&&sm.summaryDetail.exDividendDate.raw) realEx=sm.summaryDetail.exDividendDate.raw;
+    if(!usName && sm.price){ usName=(sm.price.longName||sm.price.shortName||''); }
+  }
+  return {rows, dividends, usName, jpName:j.jpName||'', realPay, realEx};
+}
 // 自動取得：株式＝株価4時点＋配当／投資信託＝基準価額
 async function autoFetchStock(id){
   const a=currentCase.assets.find(x=>x.id===id); if(!a) return;
@@ -2400,41 +2443,47 @@ async function autoFetchStock(id){
   const histStart=new Date(death.getFullYear()-1, death.getMonth()-1, 1);
   const p1sec=Math.floor(histStart.getTime()/1000), p2sec=Math.floor(end.getTime()/1000);
   toast('株価を取得中…');
-  // 株価4時点：① Yahoo!ファイナンス（株価＋配当＋名称を一括取得）→ 不調なら ② Stooq（株価のみ）で自動フォールバック
-  let rows=null, dividends=[], usName='', priceSrc='';
-  try{
-    const data=await fetchChart(symbol, p1sec, p2sec);
-    rows=[]; for(let i=0;i<data.ts.length;i++){ if(data.close[i]!=null) rows.push({ts:data.ts[i],close:data.close[i]}); }
-    dividends=data.dividends||[]; usName=data.name||''; priceSrc='Yahoo';
-  }catch(e){ console.warn('Yahoo chart失敗：', e); }
+  let rows=null, dividends=[], usName='', jpName='', priceSrc='', realPay=null, realEx=null;
+  // ① Python(yfinance)相当のGAS高機能版（実支払日・配当・日本語名を一括取得）を優先
+  try{ const b=await fetchStockBundle(symbol); if(b&&b.rows&&b.rows.length){ rows=b.rows; dividends=b.dividends||[]; usName=b.usName||''; jpName=b.jpName||''; realPay=b.realPay; realEx=b.realEx; priceSrc='Yahoo(yfinance相当)'; } }
+  catch(e){ console.warn('stock bundle不可（GASが未更新の可能性）、従来方式へ：', e); }
+  // ② 従来：chart API（株価＋配当＋名称）
+  if(!(rows&&rows.length)){
+    try{ const data=await fetchChart(symbol, p1sec, p2sec); rows=[]; for(let i=0;i<data.ts.length;i++){ if(data.close[i]!=null) rows.push({ts:data.ts[i],close:data.close[i]}); } dividends=data.dividends||[]; usName=data.name||''; priceSrc='Yahoo'; }
+    catch(e){ console.warn('Yahoo chart失敗：', e); }
+  }
   let pts=(rows&&rows.length)? compute4Points(rows, death): null;
+  // ③ Stooq（株価のみ）フォールバック
   if(!pts || pts.deathClose==null){
     try{ const srows=await fetchStooqDaily(code, p1sec, p2sec); if(srows&&srows.length){ const sp=compute4Points(srows, death); if(sp.deathClose!=null){ pts=sp; priceSrc=priceSrc?priceSrc+'→Stooq':'Stooq'; } } }
     catch(e){ console.warn('Stooq失敗：', e); }
   }
   if(!pts || pts.deathClose==null){ toast('株価の自動取得に失敗しました。銘柄コードと設定（Apps Script URL）をご確認ください（4時点・配当は手入力も可能です）', true); return; }
   a.code=code;
-  // 名称：Yahoo!ファイナンス(日本版)を「7203.T」→「7203」の順に試し、取れなければ英語名／既存値
-  let jp=''; try{ jp=await fetchJpName(symbol); }catch(e){}
-  if(!jp){ const bare=code.replace(/\.[A-Za-z]+$/,''); if(bare!==symbol){ try{ jp=await fetchJpName(bare); }catch(e){} } }
-  if(jp) a.name=jp; else if(usName) a.name=usName;
+  // 名称：bundleの日本語名 → Yahoo日本版title → 英語名／既存値
+  let nm=jpName; if(!nm){ try{ nm=await fetchJpName(symbol); }catch(e){} if(!nm){ const bare=code.replace(/\.[A-Za-z]+$/,''); if(bare!==symbol){ try{ nm=await fetchJpName(bare); }catch(e){} } } }
+  if(nm) a.name=nm; else if(usName) a.name=usName;
+  // 4時点：①終値は四捨五入、②③④の月平均は円未満切捨（財基通169・上場株式の評価明細書／Python版と同じ）
   a.p1= pts.deathClose!=null? String(Math.round(pts.deathClose)):'';
-  a.p2= pts.p2!=null? String(Math.round(pts.p2)):'';
-  a.p3= pts.p3!=null? String(Math.round(pts.p3)):'';
-  a.p4= pts.p4!=null? String(Math.round(pts.p4)):'';
-  // 配当（配当期待権／未収配当金）：Yahoo!の配当履歴で判定（Yahoo!不調時は手入力）
+  a.p2= pts.p2!=null? String(Math.floor(pts.p2)):'';
+  a.p3= pts.p3!=null? String(Math.floor(pts.p3)):'';
+  a.p4= pts.p4!=null? String(Math.floor(pts.p4)):'';
+  // 配当（配当期待権／未収配当金）：直近の対象配当を判定
   const deathTs=pts.deathTs; let divMsg='', cand=null;
   dividends.forEach(dv=>{ if(dv&&dv.date!=null && dv.date<=deathDayEnd0 && (deathTs<0||deathTs-dv.date<=200*86400)){ if(!cand||dv.date>cand.date) cand=dv; } });
   if(cand){
-    // Yahoo!の配当 date は「権利落ち日(ex-date)」。基準日≒権利落ち日の翌日、効力発生日(株主総会)≒基準日の約3か月後、
-    // 支払開始日≒効力発生日の約2週間後、として推定値をセット（いずれも目安。実日付が分かれば手修正してください）。
     const exd=new Date(cand.date*1000);
     const baseD=new Date(exd.getFullYear(),exd.getMonth(),exd.getDate()+1);
-    const effD=new Date(baseD.getFullYear(),baseD.getMonth()+3,Math.min(baseD.getDate(),28));
-    const payD=new Date(effD.getFullYear(),effD.getMonth(),effD.getDate()+14);
+    let effD=new Date(baseD.getFullYear(),baseD.getMonth()+3,Math.min(baseD.getDate(),28));
+    // 支払開始日：bundleの実支払日が当該配当（権利落ち日）に対応するなら実値を使用（Python版と同じ）、なければ推定（効力発生日＋約2週間）
+    let payD, realUsed=false;
+    if(realPay && (realEx==null || Math.abs(realEx-cand.date)<=40*86400)){ payD=new Date(realPay*1000); realUsed=true; }
+    else { payD=new Date(effD.getFullYear(),effD.getMonth(),effD.getDate()+14); }
+    // 効力発生日（推定）が実支払日より後になる場合は支払日に丸める（効力発生日 ≦ 支払日。Python版と同様、支払日後は受領済み扱い）
+    if(effD.getTime()>payD.getTime()) effD=new Date(payD.getTime());
     const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
     a.divBase=iso(baseD); a.divEffective=iso(effD); a.divPayStart=iso(payD); a.divPerShare=String(Math.round(cand.amount*100)/100); if(!a.divRate) a.divRate='20.315';
-    const di=divInfo(a); divMsg = di.kind!=='なし'? '／'+di.kind+' '+yen(di.net)+'（配当の日付は推定値です。ご確認ください）':'／配当：受領済み等で対象外';
+    const di=divInfo(a); divMsg = di.kind!=='なし'? '／'+di.kind+' '+yen(di.net)+(realUsed?'（支払日は実データ）':'（配当の日付は推定値です。ご確認ください）'):'／配当：受領済み等で対象外';
   } else if(dividends.length){ a.divBase=''; a.divEffective=''; a.divPayStart=''; a.divPerShare=''; divMsg='／該当する未収配当金・配当期待権なし'; }
   else { divMsg='／配当データは取得できませんでした（必要に応じ手入力）'; }
   renderAssetDetail(); renderAssetNav(); renderSummary(); cacheCurrentCase();
@@ -2444,7 +2493,7 @@ function detailNote(cat){
   const notes={
     land:'価額 ＝（路線価方式：㎡単価×面積／倍率方式：固定資産税評価額×倍率）×所有権割合×調整。小規模宅地等の特例は区分と適用面積を入力すると減額を自動計算します（端数四捨五入）。',
     building:'価額 ＝ 固定資産税評価額 × 所有権割合 × 調整（四捨五入）。価額を直接入力する場合は「計算」のチェックを外してください。',
-    securities:'【上場株式・ETF・REIT】評価額 ＝ ①相続開始日終値、②当月・③前月・④前々月の終値の月平均額 のうち最も低い価額×株数。「自動算出」で銘柄コードから株価4時点・配当をYahoo!ファイナンス（GAS経由）で取得します（Yahoo!が不調なときはStooqから株価を自動補完）。配当は相続開始日(死亡日)と各日付の関係で次のとおり判定し、配当総額−源泉税(20.315%)を評価額合計に加算します：①死亡日が配当基準日以前＝なし(株価に織込み済み)、②基準日の翌日〜効力発生日(株主総会決議日)＝配当期待権、③効力発生日の翌日〜支払開始日＝未収配当金、④支払開始日より後＝なし(受領済みのため現金・預貯金に計上)。自動算出の日付は推定値です（基準日≒権利落ち日の翌日、効力発生日≒基準日の約3か月後、支払開始日≒効力発生日の約2週間後）。実際の基準日・株主総会決議日・支払開始日が分かる場合は手入力で修正してください。\n【投資信託（非上場）】種類で「投資信託」を選ぶと、評価額 ＝ 基準価額(1万口)×口数÷1万 − 信託財産留保額(基準価額×留保率) − 解約手数料。「自動算出」はISINコード＋協会コードから投資信託協会の基準価額を取得します。留保率・解約手数料は目論見書を参照し入力してください。',
+    securities:'【上場株式・ETF・REIT】評価額 ＝ ①相続開始日終値、②当月・③前月・④前々月の終値の月平均額 のうち最も低い価額×株数。「自動算出」で銘柄コードから株価4時点・配当・銘柄名をYahoo!ファイナンス（GAS経由）で取得します（月平均は円未満切捨。Yahoo!が不調なときはStooqから株価を自動補完）。設定のApps Scriptを高機能版にすると、実際の配当支払日も取得して未収配当金・配当期待権をより正確に判定します。配当は相続開始日(死亡日)と各日付の関係で次のとおり判定し、配当総額−源泉税(20.315%)を評価額合計に加算します：①死亡日が配当基準日以前＝なし(株価に織込み済み)、②基準日の翌日〜効力発生日(株主総会決議日)＝配当期待権、③効力発生日の翌日〜支払開始日＝未収配当金、④支払開始日より後＝なし(受領済みのため現金・預貯金に計上)。自動算出の日付は推定値です（基準日≒権利落ち日の翌日、効力発生日≒基準日の約3か月後、支払開始日≒効力発生日の約2週間後）。実際の基準日・株主総会決議日・支払開始日が分かる場合は手入力で修正してください。\n【投資信託（非上場）】種類で「投資信託」を選ぶと、評価額 ＝ 基準価額(1万口)×口数÷1万 − 信託財産留保額(基準価額×留保率) − 解約手数料。「自動算出」はISINコード＋協会コードから投資信託協会の基準価額を取得します。留保率・解約手数料は目論見書を参照し入力してください。',
     unlisted:'非上場株式は類似業種比準・純資産価額方式等で1株単価を算定し、単価×株数で価額を計算します。',
     cash:'相続開始日時点の残高を入力します。名義は被相続人や相続人から選択できます（名義預金は実質の所有者をご確認のうえ判断）。種類（普通預金/定期預金/現金 等）は自由入力です。',
     insurance:'区分で分けて入力します。「死亡保険金（非課税枠の対象）」＝被相続人を被保険者とし相続人が受け取る保険金で、非課税限度（500万円×法定相続人数）の対象。「定期金に関する権利」＝年金保険の受給権や保険料負担者＝被相続人で被保険者が他人の保険契約に関する権利等で、非課税の対象外（全額が課税価格）。金額は解約返戻金相当額等を入力します。',
