@@ -331,6 +331,8 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 .mv-table th.mv-frozen{position:sticky;left:0;z-index:4;background:#4287f5;border-right:2px solid #fff;}
 .mv-table td.mv-frozen{position:sticky;left:0;z-index:2;background:#fff;border-right:2px solid var(--line-2);}
 .mv-table tfoot td.mv-frozen{background:var(--surface-2);}
+.mv-table .mv-concl.pos{color:#1a7f37;font-weight:700;}
+.mv-table .mv-concl.neg{color:#c0392b;font-weight:700;}
 .dtbl td{padding:6px 7px;border-bottom:1px solid var(--line);vertical-align:middle;}
 .dtbl tr:last-child td{border-bottom:none;}
 .dtbl input,.dtbl select{padding:7px 8px;border:1px solid var(--line-2);border-radius:8px;font-size:12.5px;width:100%;background:#fff;}
@@ -2147,6 +2149,20 @@ function renderAssetDetail(){
 // 金融資産異動一覧表
 function movementAccounts(){ return currentCase.assets.filter(a=>a.category==='cash' && /普通|通常|当座/.test(a.subcategory||'')); }
 function mvFmt(el){ const raw=el.value.replace(/[^0-9]/g,''); el.value=raw?Number(raw).toLocaleString('ja-JP'):''; try{ const L=el.value.length; el.setSelectionRange(L,L); }catch(e){} return raw; }
+// 相続財産計上額 ＝ Σ出金 − Σ入金（出金はプラス、入金はマイナス）
+function mvRowConcl(r,accs){ let inS=0,outS=0; (accs||[]).forEach(a=>{ const c=(r.cells||{})[a.id]||{}; inS+=num(c.i); outS+=num(c.o); }); return outS-inS; }
+function mvConclDisp(v){ return v<0? '−'+yen(-v) : yen(v); }
+function recalcMvRow(r){
+  const accs=movementAccounts(); r.concl=mvRowConcl(r,accs);
+  const cc=$('mvconcl-'+r.id); if(cc){ cc.textContent=mvConclDisp(r.concl); cc.className='mv-concl'+(r.concl<0?' neg':r.concl>0?' pos':''); }
+  const tot=$('mvConclTotal'); if(tot){ const T=(currentCase.movement.rows||[]).reduce((s,x)=>s+num(x.concl),0); tot.textContent=mvConclDisp(T); tot.className='num mv-concl'+(T<0?' neg':T>0?' pos':''); }
+}
+function onMvCellInput(rowId, accId, field, el){
+  const raw=mvFmt(el);
+  const r=(currentCase.movement.rows||[]).find(x=>x.id===rowId); if(!r) return;
+  r.cells=r.cells||{}; r.cells[accId]=r.cells[accId]||{}; r.cells[accId][field]=raw;
+  recalcMvRow(r); cacheCurrentCase();
+}
 function movementTableHtml(){
   const accs=movementAccounts();
   const mv=currentCase.movement||(currentCase.movement={rows:[],usage:{}});
@@ -2159,18 +2175,18 @@ function movementTableHtml(){
     +'<tr>'+accs.map(a=>'<th style="border-left:2px solid #fff;">入金</th><th style="border-left:1px solid #fff;">出金</th>').join('')+'</tr>'
     +'</thead>';
   let body='';
-  (mv.rows||[]).forEach(row=>{ row.cells=row.cells||{};
+  (mv.rows||[]).forEach(row=>{ row.cells=row.cells||{}; row.concl=mvRowConcl(row,accs);
     body+='<tr><td class="mv-frozen"><input type="text" value="'+esc(row.date||'')+'" placeholder="R3.1.6" style="min-width:90px;" oninput="updMovementField(\''+row.id+'\',\'date\',this.value)"></td>'
       +accs.map(a=>{ const cell=row.cells[a.id]||{};
-        return '<td style="border-left:2px solid var(--line-2);"><input type="text" class="num" value="'+(num(cell.i)?num(cell.i).toLocaleString('ja-JP'):'')+'" oninput="updMovementCell(\''+row.id+'\',\''+a.id+'\',\'i\',mvFmt(this))"></td>'
-          +'<td><input type="text" class="num" value="'+(num(cell.o)?num(cell.o).toLocaleString('ja-JP'):'')+'" oninput="updMovementCell(\''+row.id+'\',\''+a.id+'\',\'o\',mvFmt(this))"></td>'; }).join('')
-      +'<td><input type="text" class="num" value="'+(num(row.concl)?num(row.concl).toLocaleString('ja-JP'):'')+'" oninput="updMovementField(\''+row.id+'\',\'concl\',mvFmt(this))"></td>'
+        return '<td style="border-left:2px solid var(--line-2);"><input type="text" class="num" inputmode="numeric" value="'+(num(cell.i)?num(cell.i).toLocaleString('ja-JP'):'')+'" oninput="onMvCellInput(\''+row.id+'\',\''+a.id+'\',\'i\',this)"></td>'
+          +'<td><input type="text" class="num" inputmode="numeric" value="'+(num(cell.o)?num(cell.o).toLocaleString('ja-JP'):'')+'" oninput="onMvCellInput(\''+row.id+'\',\''+a.id+'\',\'o\',this)"></td>'; }).join('')
+      +'<td class="num"><span id="mvconcl-'+row.id+'" class="mv-concl'+(row.concl<0?' neg':row.concl>0?' pos':'')+'">'+mvConclDisp(row.concl)+'</span></td>'
       +'<td><input type="text" value="'+esc(row.note||'')+'" style="min-width:230px;" oninput="updMovementField(\''+row.id+'\',\'note\',this.value)"></td>'
       +'<td class="rowops"><button class="del" onclick="removeMovementRow(\''+row.id+'\')">削除</button></td></tr>';
   });
-  if(!(mv.rows||[]).length) body='<tr><td colspan="'+(accs.length*2+3)+'" class="muted" style="text-align:center;padding:14px;">「＋ 行を追加」で入出金を記録してください。</td></tr>';
+  if(!(mv.rows||[]).length) body='<tr><td colspan="'+(accs.length*2+4)+'" class="muted" style="text-align:center;padding:14px;">「＋ 行を追加」で入出金を記録してください。</td></tr>';
   const conclTotal=(mv.rows||[]).reduce((s,r)=>s+num(r.concl),0);
-  let foot='<tfoot><tr><td class="mv-frozen" style="text-align:right;">計上額 計</td>'+accs.map(()=>'<td colspan="2"></td>').join('')+'<td class="num" id="mvConclTotal">'+yen(conclTotal)+'</td><td colspan="2"></td></tr></tfoot>';
+  let foot='<tfoot><tr><td class="mv-frozen" style="text-align:right;">計上額 合計</td>'+accs.map(()=>'<td colspan="2"></td>').join('')+'<td class="num mv-concl'+(conclTotal<0?' neg':conclTotal>0?' pos':'')+'" id="mvConclTotal">'+mvConclDisp(conclTotal)+'</td><td colspan="2"></td></tr></tfoot>';
   return '<div class="dtbl-wrap"><table class="dtbl mv-table" style="min-width:'+(420+accs.length*220)+'px;">'+head+'<tbody>'+body+'</tbody>'+foot+'</table></div>'
     +'<div class="detail-foot"><button class="btn primary sm" onclick="addMovementRow()">＋ 行を追加</button></div>';
 }
