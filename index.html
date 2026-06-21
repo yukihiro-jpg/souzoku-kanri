@@ -514,7 +514,7 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
           <button class="tab-btn" id="ctab-done" onclick="casesTab('done')">完了案件</button>
         </div>
         <div class="btn-row" style="margin-left:auto;">
-          <button class="btn sm" onclick="importLocalJson()">JSONを取り込み</button>
+          <button class="btn sm" onclick="importLocalJson()">JSONを取り込み（複数可）</button>
         </div>
       </div>
       <div id="casesContainer"></div>
@@ -875,7 +875,7 @@ function getStock_(symbol){
         <div class="card-sub">現在の案件をJSONファイルとして書き出し／取り込みできます（Drive未接続時のバックアップにも利用できます）。</div>
         <div class="btn-row">
           <button class="btn needs-case" onclick="exportLocalJson()">現在の案件をJSON出力</button>
-          <button class="btn" onclick="importLocalJson()">JSONを取り込み</button>
+          <button class="btn" onclick="importLocalJson()">JSONを取り込み（複数可）</button>
         </div>
       </div>
 
@@ -931,7 +931,7 @@ function getStock_(symbol){
   </div>
 </div>
 
-<input type="file" id="jsonFileInput" accept="application/json,.json" style="display:none;" onchange="handleJsonFile(this)">
+<input type="file" id="jsonFileInput" accept="application/json,.json" multiple style="display:none;" onchange="handleJsonFile(this)">
 <div class="toast" id="toast"></div>
 
 <script>
@@ -4025,10 +4025,23 @@ function exportLocalJson(){
 }
 function importLocalJson(){ $('jsonFileInput').click(); }
 function handleJsonFile(input){
-  const file=input.files[0]; if(!file) return;
-  const r=new FileReader();
-  r.onload=()=>{ try{ const data=JSON.parse(r.result); const c=migrateCase(data); if(!c.caseId) c.caseId=uid(); cloud.cases[c.caseId]=c; if(cloud.tomb) delete cloud.tomb[c.caseId]; currentCase=c; currentId=c.caseId; currentFileId=null; loadCaseIntoUI(); cacheCurrentCase(); switchView('basic'); renderCasesList(); toast('JSONを取り込みました'); }catch(e){ toast('読み込み失敗：'+e.message, true); } };
-  r.readAsText(file); input.value='';
+  const files=Array.from(input.files||[]); if(!files.length) return;
+  let done=0, ok=0, last=null;
+  const finish=()=>{
+    saveCloudLocal(); if(typeof Realtime!=='undefined') Realtime.push();
+    if(files.length===1 && last){ currentCase=last; currentId=last.caseId; currentFileId=null; loadCaseIntoUI(); switchView('basic'); }
+    else { switchView('cases'); }
+    renderCasesList();
+    const synced=(typeof Realtime!=='undefined' && Realtime.ready);
+    toast(ok+'/'+files.length+' 件のJSONを取り込みました'+(synced?'（Firebaseへ同期されます）':'（Firebase接続後に全端末へ同期されます）'), ok===0);
+  };
+  files.forEach(file=>{
+    const r=new FileReader();
+    r.onload=()=>{ try{ const data=JSON.parse(r.result); const c=migrateCase(data); if(!c.caseId) c.caseId=uid(); cloud.cases[c.caseId]=c; if(cloud.tomb) delete cloud.tomb[c.caseId]; last=c; ok++; }catch(e){ console.warn('JSON取込失敗',file.name,e); } done++; if(done===files.length) finish(); };
+    r.onerror=()=>{ done++; if(done===files.length) finish(); };
+    r.readAsText(file);
+  });
+  input.value='';
 }
 
 // ============================================================
