@@ -10,6 +10,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <style>
 :root{
   --bg:#f5f5f7;
@@ -492,11 +495,9 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
       <div class="case-chip" id="caseChip"><span class="dot"></span><span class="nm">案件が選択されていません</span></div>
     </div>
     <div class="topbar-right">
-      <div class="drive-status" id="driveStatus"><span class="d"></span><span>未接続</span></div>
+      <div class="drive-status" id="driveStatus"><span class="d"></span><span>未接続（ローカルのみ）</span></div>
       <span class="save-status" id="saveStatus"></span>
-      <button class="btn primary sm needs-case" id="btnSaveTop" onclick="saveCurrentCase()">保存</button>
-      <button class="btn sm" id="btnLogin" onclick="googleLogin()">Googleでログイン</button>
-      <button class="btn sm" id="btnLogout" onclick="googleLogout()" style="display:none;">ログアウト</button>
+      <button class="btn primary sm needs-case" id="btnSaveTop" onclick="saveCurrentCase()">同期</button>
     </div>
   </header>
 
@@ -514,7 +515,6 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
         </div>
         <div class="btn-row" style="margin-left:auto;">
           <button class="btn sm" onclick="importLocalJson()">JSONを取り込み</button>
-          <button class="btn" onclick="refreshDriveCases()">Driveから一覧取得</button>
         </div>
       </div>
       <div id="casesContainer"></div>
@@ -773,26 +773,41 @@ textarea{resize:vertical;min-height:60px;line-height:1.5;}
 
     <!-- ===== Settings ===== -->
     <section class="view" id="view-settings">
-      <div class="view-head"><h1>設定</h1><p>Googleドライブ連携の設定を行います。指定したフォルダに案件データ（JSON）が保存されます。</p></div>
+      <div class="view-head"><h1>設定</h1><p>データ同期（Firebase）の設定を行います。同じ firebaseConfig とルーム名を入力した端末どうしで、案件データがリアルタイムに共有されます。</p></div>
 
       <div class="card">
-        <h2>Googleドライブ連携</h2>
+        <h2>データ同期（Firebase）</h2>
+        <div class="card-sub">同じ <b>firebaseConfig</b> と同じ <b>ルーム名</b> を入力した全PCで、案件がリアルタイムに共有・同期されます（追加・編集・削除が全端末に反映）。設定はこの端末だけに保存され、同期はされません。</div>
         <div class="setting-row">
-          <div class="sr-info"><div class="t">保存先フォルダのURL</div><div class="d">Googleドライブで保存先フォルダを開き、ブラウザのアドレスバーのURLを貼り付けてください。</div></div>
+          <div class="sr-info"><div class="t">firebaseConfig</div><div class="d">Firebaseコンソールで発行された <code>{ apiKey: …, databaseURL: … }</code> をそのまま貼り付けてください。</div></div>
+          <div class="sr-control">
+            <textarea id="set_fbConfig" rows="7" placeholder="{&#10;  apiKey: '…',&#10;  authDomain: '….firebaseapp.com',&#10;  databaseURL: 'https://….firebaseio.com',&#10;  projectId: '…',&#10;  appId: '…'&#10;}" style="font-family:ui-monospace,monospace;font-size:12px;" oninput="onFbInput()"></textarea>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="sr-info"><div class="t">ルーム名</div><div class="d">事務所で共通の合言葉（例：komonと同じ名前）。同じ名前の端末だけがデータを共有します。</div></div>
+          <div class="sr-control"><input type="text" id="set_fbRoom" placeholder="例：jimusho-1" oninput="onFbInput()"></div>
+        </div>
+        <div class="setting-row">
+          <div class="sr-info"><div class="t">接続</div><div class="d">入力後に接続します（次回からは起動時に自動接続）。</div></div>
+          <div class="sr-control"><button class="btn primary" onclick="connectFirebase()">接続する／再接続</button><span class="muted" id="fbStatus" style="font-size:12px;margin-left:10px;">未接続</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Googleドライブからの移行（1回のみ）</h2>
+        <div class="card-sub">以前にGoogleドライブへ保存した案件を、まとめてFirebaseへ取り込みます。移行が済めば以降は不要です（通常の保存はFirebaseで自動同期されます）。</div>
+        <div class="setting-row">
+          <div class="sr-info"><div class="t">保存先フォルダのURL</div><div class="d">以前データを保存していたGoogleドライブのフォルダURLを貼り付けてください。</div></div>
           <div class="sr-control">
             <input type="text" id="set_folderUrl" placeholder="https://drive.google.com/drive/folders/XXXXXXXXXXXX" oninput="onFolderUrlInput()">
             <div class="muted" id="folderIdStatus" style="font-size:12px;margin-top:6px;">フォルダ未設定</div>
+            <input type="text" id="set_clientId" placeholder="OAuth クライアントID（初期値あり）" oninput="onClientIdInput()" style="margin-top:8px;">
           </div>
         </div>
         <div class="setting-row">
-          <div class="sr-info"><div class="t">OAuth クライアントID</div><div class="d">Google Cloud Consoleで発行したクライアントID。初期値が入っていますが、ご自身の環境に合わせて変更できます。</div></div>
-          <div class="sr-control">
-            <input type="text" id="set_clientId" placeholder="xxxxxx.apps.googleusercontent.com" oninput="onClientIdInput()">
-          </div>
-        </div>
-        <div class="setting-row">
-          <div class="sr-info"><div class="t">接続テスト</div><div class="d">ログイン後、保存先フォルダにアクセスできるか確認します。</div></div>
-          <div class="sr-control"><button class="btn" onclick="testDriveConnection()">接続をテスト</button></div>
+          <div class="sr-info"><div class="t">取り込み</div><div class="d">Googleでログインし、フォルダ内の全案件をFirebaseへ登録します。</div></div>
+          <div class="sr-control"><button class="btn" onclick="migrateFromDrive()">Driveから一括取り込み</button></div>
         </div>
       </div>
 
@@ -930,11 +945,15 @@ const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const FILE_PREFIX = '相続案件_';
 const LS_SETTINGS = 'souzoku_settings_v1';
 const LS_CASE_CACHE = 'souzoku_case_cache_v1';
+const LS_CLOUD = 'souzoku_cloud_v1';
 
 // ---------- App state ----------
-let settings = { folderUrl:'', folderId:'', clientId:DEFAULT_CLIENT_ID, gasUrl:'', accountHint:'', taxName:'', officeName:'', officeAddr:'', officeTel:'', officeFax:'' };
-let currentCase = null;       // the active case object
-let currentFileId = null;     // Drive file id of active case
+let settings = { folderUrl:'', folderId:'', clientId:DEFAULT_CLIENT_ID, gasUrl:'', accountHint:'', taxName:'', officeName:'', officeAddr:'', officeTel:'', officeFax:'', fbConfig:'', fbRoom:'' };
+// 全案件の共有ストア（Firebaseと同期）。cases[caseId]=案件オブジェクト、tomb[caseId]=削除墓標
+let cloud = { cases:{}, tomb:{} };
+let currentCase = null;       // the active case object（cloud.cases[currentId] への参照）
+let currentId = null;         // 編集中の案件ID（caseId）
+let currentFileId = null;     // （移行用）Driveファイルid
 let accessToken = null;
 let tokenExpiry = 0;          // アクセストークンの有効期限(ms)
 let hasConsented = false;     // 一度でも同意済みか（再取得をサイレントにできる）
@@ -1107,9 +1126,11 @@ function loadSettings(){
   if(!Array.isArray(settings.optUnlistedEval)) settings.optUnlistedEval=['原則評価','配当還元','額面'];
   if(!Array.isArray(settings.optCashType)) settings.optCashType=['現金','普通預金','当座預金','定期預金','通常貯金','定額貯金','定期積金'];
   if(!Array.isArray(settings.optInsType)) settings.optInsType=['終身保険','定期終身保険','定期保険','養老保険','終身年金','定期年金','確定年金'];
-  $('set_folderUrl').value=settings.folderUrl||'';
-  $('set_clientId').value=settings.clientId||'';
+  if($('set_folderUrl')) $('set_folderUrl').value=settings.folderUrl||'';
+  if($('set_clientId')) $('set_clientId').value=settings.clientId||'';
   if($('set_gasUrl')) $('set_gasUrl').value=settings.gasUrl||'';
+  if($('set_fbConfig')) $('set_fbConfig').value=settings.fbConfig||'';
+  if($('set_fbRoom')) $('set_fbRoom').value=settings.fbRoom||'';
   ['taxName','officeName','officeAddr','officeTel','officeFax'].forEach(k=>{ const el=$('set_'+k); if(el) el.value=settings[k]||''; });
   applyOfficeSettings();
   renderOptionEditors();
@@ -1165,9 +1186,7 @@ function initGis(){
         accessToken=resp.access_token;
         tokenExpiry=Date.now()+(((+resp.expires_in)||3600)*1000)-120000; // 2分の余裕
         hasConsented=true;
-        setDriveStatus(true);
         if(!settings.accountHint) fetchAccountEmail(); // 次回以降のサイレント更新用にアカウントを記憶
-        if(settings.folderId && !driveListLoaded) loadDriveCasesAuto(); // 接続できたら全案件を自動取得
         const res=window.__tokenRes; window.__tokenRes=null; window.__tokenRej=null; if(res) res(accessToken);
       }
     });
@@ -1192,23 +1211,6 @@ function ensureToken(){
 }
 // ログイン中アカウントのメールを取得し、次回以降のサイレント更新（アカウント選択を出さない）に使う
 async function fetchAccountEmail(){ try{ const r=await driveFetch('https://www.googleapis.com/drive/v3/about?fields=user'); const j=await r.json(); if(j&&j.user&&j.user.emailAddress){ settings.accountHint=j.user.emailAddress; saveSettings(); } }catch(e){} }
-function googleLogin(){
-  if(!settings.clientId){ toast('設定でクライアントIDを入力してください', true); switchView('settings'); return; }
-  requestToken(!hasConsented).then(()=>{ if(window.__afterLogin){ const cb=window.__afterLogin; window.__afterLogin=null; cb(); } })
-    .catch(e=>toast('ログインに失敗しました：'+e.message, true));
-}
-function googleLogout(){
-  if(accessToken){ try{ google.accounts.oauth2.revoke(accessToken,()=>{}); }catch(e){} }
-  accessToken=null; tokenExpiry=0; hasConsented=false; settings.accountHint=''; saveSettings(); setDriveStatus(false);
-  driveListLoaded=false; driveCaseFiles=[]; renderCasesList();
-}
-function setDriveStatus(on){
-  const el=$('driveStatus');
-  el.className='drive-status'+(on?' on':'');
-  el.querySelector('span:last-child').textContent=on?'Drive接続中':'未接続';
-  $('btnLogin').style.display=on?'none':'';
-  $('btnLogout').style.display=on?'':'none';
-}
 function ensureLogin(cb){ ensureToken().then(cb).catch(e=>toast('Google認証に失敗しました：'+e.message+'（設定とログインをご確認ください）', true)); }
 async function driveFetch(url, opts){
   opts=opts||{};
@@ -1253,6 +1255,97 @@ async function testDriveConnection(){
   ensureLogin(async()=>{
     try{ const files=await driveListCases(); toast('接続成功：フォルダ内に '+files.length+' 件の案件データ'); }
     catch(e){ toast('接続失敗：'+e.message, true); }
+  });
+}
+
+// ============================================================
+//  リアルタイム共同編集（Firebase Realtime Database）
+// ============================================================
+function saveCloudLocal(){ try{ localStorage.setItem(LS_CLOUD, JSON.stringify(cloud)); }catch(e){} }
+function loadCloudLocal(){ try{ const c=JSON.parse(localStorage.getItem(LS_CLOUD)); if(c&&c.cases){ cloud.cases=c.cases||{}; cloud.tomb=c.tomb||{}; } }catch(e){} }
+function cloudCaseList(){ return Object.keys(cloud.cases||{}).filter(id=>!(cloud.tomb&&cloud.tomb[id])).map(id=>cloud.cases[id]).filter(Boolean); }
+function setSyncStatus(state){
+  const ds=$('driveStatus'); if(ds){ const on=(state==='on'||state==='saving'); ds.className='drive-status'+(on?' on':''); const sp=ds.querySelector('span:last-child');
+    if(sp) sp.textContent = state==='on'?'同期中（接続済み）':state==='saving'?'同期中…':state==='connecting'?'接続中…':'未接続（ローカルのみ）'; }
+  const fs=$('fbStatus'); if(fs) fs.textContent = state==='on'?'接続済み（同期中）':state==='saving'?'同期中…':state==='connecting'?'接続中…':'未接続';
+}
+const Realtime=(function(){
+  const SYNC_KEYS=['cases','tomb'];
+  const BAD=/[.#$\/\[\]~]/g;
+  let ref=null, ready=false, lastSnap={}, pushTimer=null, fbPending=false;
+  function enc(k){ return '_'+String(k).replace(BAD,c=>'~'+c.charCodeAt(0).toString(16)); }
+  function dec(k){ return String(k).replace(/^_/,'').replace(/~([0-9a-f]{2})/g,(m,h)=>String.fromCharCode(parseInt(h,16))); }
+  function isObj(o){ return o&&typeof o==='object'&&!Array.isArray(o); }
+  function clone(o){ return o===undefined?undefined:JSON.parse(JSON.stringify(o)); }
+  function decodeTree(o){ if(Array.isArray(o))return o.map(decodeTree); if(isObj(o)){ const r={}; for(const k in o)r[dec(k)]=decodeTree(o[k]); return r; } return o; }
+  // フィールド単位の差分で最小限の update()（別々の項目を同時編集しても他者の入力を消さない）
+  function diffInto(up,path,cur,prev){ if(isObj(cur)&&isObj(prev)){ const ks=new Set([...Object.keys(cur),...Object.keys(prev)]); ks.forEach(k=>diffInto(up,path+'/'+enc(k),cur[k],prev[k])); } else if(JSON.stringify(cur)!==JSON.stringify(prev)){ up[path]=(cur===undefined?null:cur); } }
+  // 参照を保ったまま t の中身を s に合わせる（編集中の currentCase 参照を壊さない）
+  function mutateInto(t,s){ if(!isObj(t)||!isObj(s)) return; Object.keys(t).forEach(k=>{ if(!(k in s)) delete t[k]; }); Object.keys(s).forEach(k=>{ const sv=s[k]; if(isObj(sv)&&isObj(t[k])) mutateInto(t[k],sv); else t[k]=clone(sv); }); }
+  function syncedView(){ return { cases: cloud.cases||{}, tomb: cloud.tomb||{} }; }
+  function mergeRemoteFull(d){ // 接続時：和集合＋墓標で削除伝播
+    cloud.tomb=Object.assign({}, cloud.tomb||{}, d.tomb||{});
+    const rc=d.cases||{}; Object.keys(rc).forEach(id=>{ if(cloud.tomb[id]) return; cloud.cases[id]=rc[id]; });
+    Object.keys(cloud.tomb).forEach(id=>{ if(cloud.tomb[id]) delete cloud.cases[id]; });
+  }
+  function parseConfig(txt){ const s=String(txt||''); const a=s.indexOf('{'),b=s.lastIndexOf('}'); if(a<0||b<0)throw new Error('firebaseConfigが不正です'); return new Function('return ('+s.slice(a,b+1)+')')(); }
+  async function connect(){
+    const cfgTxt=settings.fbConfig, room=(settings.fbRoom||'').trim();
+    if(!cfgTxt||!room){ setSyncStatus('off'); return; }
+    if(!window.firebase||!firebase.database){ setSyncStatus('off'); toast('Firebase SDKが読み込めていません', true); return; }
+    let conf; try{ conf=parseConfig(cfgTxt); }catch(e){ setSyncStatus('off'); toast('firebaseConfigの形式をご確認ください', true); return; }
+    if(!conf.databaseURL){ setSyncStatus('off'); toast('firebaseConfigにdatabaseURLがありません', true); return; }
+    setSyncStatus('connecting');
+    try{
+      if(!(firebase.apps&&firebase.apps.length)) firebase.initializeApp(conf);
+      try{ if(firebase.auth) await firebase.auth().signInAnonymously(); }catch(ae){ console.warn('anon auth',ae); }
+      if(ref){ try{ ref.off(); }catch(_){ } }
+      ref=firebase.database().ref('souzoku/'+enc(room));
+      const snap=await ref.once('value'); const remote=snap.val();
+      if(remote){ const d=decodeTree(remote); lastSnap={cases:d.cases||{},tomb:d.tomb||{}}; mergeRemoteFull(d); saveCloudLocal(); pushNow(false); } // ローカル限定の案件は差分で送信
+      else { lastSnap={}; pushNow(true); } // 空ならローカルを初期投入
+      ready=true; setSyncStatus('on'); applyCloudToUI(); ref.on('value',onRemote);
+    }catch(e){ console.error(e); setSyncStatus('off'); toast('Firebase接続に失敗：'+e.message, true); }
+  }
+  function onRemote(snap){ if(!ready)return; const remote=snap.val(); const d=remote?decodeTree(remote):{cases:{},tomb:{}};
+    cloud.tomb=Object.assign({}, cloud.tomb||{}, d.tomb||{});
+    const rc=d.cases||{};
+    Object.keys(rc).forEach(id=>{ if(cloud.tomb[id]) return; if(id===currentId && isObj(cloud.cases[id])) mutateInto(cloud.cases[id], rc[id]); else cloud.cases[id]=rc[id]; });
+    Object.keys(cloud.tomb).forEach(id=>{ if(cloud.tomb[id]) delete cloud.cases[id]; });
+    saveCloudLocal(); lastSnap=clone(syncedView()); rerender();
+  }
+  function pushNow(seed){ if(!ref)return; const up={}; const cur=syncedView(); const prev=seed?{}:lastSnap;
+    SYNC_KEYS.forEach(k=>diffInto(up,enc(k),cur[k],(prev||{})[k])); lastSnap=clone(cur);
+    if(Object.keys(up).length){ setSyncStatus('saving'); ref.update(up).then(()=>setSyncStatus('on')).catch(e=>{ console.error(e); setSyncStatus('off'); }); } }
+  function push(){ if(!ready||!ref){ return; } clearTimeout(pushTimer); pushTimer=setTimeout(()=>pushNow(false),200); }
+  // 入力中はblurまで再描画を遅延し、タイプ中の値を守る
+  function rerender(){ const ae=document.activeElement; if(ae&&/INPUT|TEXTAREA|SELECT/.test(ae.tagName)&&ae.closest&&ae.closest('main')){ if(!fbPending){ fbPending=true; ae.addEventListener('blur',()=>{ fbPending=false; applyCloudToUI(); },{once:true}); } return; } applyCloudToUI(); }
+  function disconnect(){ try{ if(ref)ref.off(); }catch(_){ } ref=null; ready=false; setSyncStatus('off'); }
+  function manualSync(){ if(ready)pushNow(false); else connect(); }
+  return { connect, disconnect, push, manualSync, get ready(){return ready;} };
+})();
+// リモート反映後にUIを最新化（編集中の案件は参照を維持して再描画）
+function applyCloudToUI(){
+  if(currentId){ if(cloud.cases[currentId]){ currentCase=cloud.cases[currentId]; } else { currentCase=null; currentId=null; currentFileId=null; } }
+  renderCasesList();
+  const activeView=document.querySelector('.view.active');
+  if(currentCase){ if(activeView && activeView.id!=='view-cases' && activeView.id!=='view-settings') loadCaseIntoUI(); else { updateCaseChip(); refreshNavLock(); } }
+  else { updateCaseChip(); refreshNavLock(); }
+}
+function connectFirebase(){ onFbInput(); Realtime.connect(); }
+function onFbInput(){ const c=$('set_fbConfig'), r=$('set_fbRoom'); if(c) settings.fbConfig=c.value; if(r) settings.fbRoom=r.value.trim(); saveSettings(); }
+// Googleドライブから既存案件を一括取り込み（移行・1回のみ）
+function migrateFromDrive(){
+  if(!settings.folderId){ toast('保存先フォルダURLを入力してください', true); return; }
+  ensureLogin(async()=>{
+    try{
+      const files=await driveListCases();
+      if(!files.length){ toast('フォルダ内に案件データが見つかりませんでした', true); return; }
+      let n=0;
+      for(const f of files){ try{ const data=await driveDownloadJson(f.id); const c=migrateCase(data); if(!c.caseId) c.caseId=uid(); cloud.cases[c.caseId]=c; if(cloud.tomb) delete cloud.tomb[c.caseId]; n++; }catch(e){ console.warn('取込失敗',f.name,e); } }
+      saveCloudLocal(); if(typeof Realtime!=='undefined') Realtime.push(); renderCasesList();
+      toast(n+' 件をFirebaseへ取り込みました'+(Realtime.ready?'（全端末に同期されます）':'（設定でFirebaseに接続すると同期されます）'));
+    }catch(e){ toast('取り込み失敗：'+e.message, true); }
   });
 }
 
@@ -1585,50 +1678,35 @@ function refreshNavLock(){
 // ============================================================
 //  Cases view
 // ============================================================
-let driveCaseFiles=[]; // [{id,name,modifiedTime}]
-let driveListLoaded=false; // Drive接続後に全案件を一度自動取得したか
 let casesActiveTab='active';
-// Drive接続できたら、保存先フォルダ内の全案件を自動で一覧取得する
-async function loadDriveCasesAuto(){
-  if(!settings.folderId) return;
-  try{ driveCaseFiles=await driveListCases(); driveListLoaded=true; renderCasesList(); }
-  catch(e){ console.warn('Drive一覧の自動取得に失敗', e); }
-}
 function casesTab(which){ casesActiveTab=which; const a=$('ctab-active'),d=$('ctab-done'); if(a) a.classList.toggle('active',which==='active'); if(d) d.classList.toggle('active',which==='done'); renderCasesList(); }
-function caseInfo(f, isActive){
-  let sum=null, death='', completed=false, code='';
-  if(isActive && currentCase){ sum=progressSummary(currentCase); death=currentCase.deceased.deathDate||''; completed=caseCompleted(currentCase); code=currentCase.deceased.code||''; }
-  else if(f.appProperties){ const ap=f.appProperties; death=ap.deathDate||''; code=ap.code||'';
-    if(ap.pstat){ const codes=ap.pstat; const done=(codes.match(/2/g)||[]).length; sum={pct:Math.round(done/PROGRESS_STAGES.length*100),done,total:PROGRESS_STAGES.length,codes,stage:ap.stage||''}; }
-    completed=(ap.done==='1')||(!!ap.pstat && ap.pstat.length>=PROGRESS_STAGES.length && ap.pstat[PROGRESS_STAGES.length-1]==='2'); }
+function caseInfoFromCase(cs){
+  const sum=progressSummary(cs); const death=cs.deceased.deathDate||''; const completed=caseCompleted(cs); const code=cs.deceased.code||'';
   let filingMs=Infinity, filing=''; if(death){ const dt=new Date(death); if(!isNaN(dt)){ dt.setMonth(dt.getMonth()+10); filingMs=dt.getTime(); filing=formatJDate(dt.toISOString().slice(0,10)); } }
   return {sum,death,completed,filingMs,filing,code};
 }
 function renderCasesList(){
   const c=$('casesContainer'); if(!c) return;
-  const entries=[];
-  if(currentCase){ const inList=driveCaseFiles.some(f=>f.id===currentFileId); if(!inList){ entries.push({f:{id:null,name:'(編集中) '+(currentCase.deceased.name||'無題'),modifiedTime:null}, isActive:true}); } }
-  driveCaseFiles.forEach(f=>entries.push({f, isActive: currentFileId===f.id}));
-  if(!entries.length){ c.innerHTML='<div class="empty-state"><div style="font-size:17px;font-weight:600;color:var(--ink);">案件がありません</div><p style="margin-top:6px;">「＋ 新規案件」で作成するか、「Driveから一覧取得」で読み込んでください。</p></div>'; return; }
-  entries.forEach(e=>{ const info=caseInfo(e.f,e.isActive); e.info=info; });
-  let list=entries.filter(e=> casesActiveTab==='done'? e.info.completed : !e.info.completed);
-  list.sort((a,b)=> a.info.filingMs-b.info.filingMs); // 申告期限が近い順
+  const all=cloudCaseList();
+  if(!all.length){ c.innerHTML='<div class="empty-state"><div style="font-size:17px;font-weight:600;color:var(--ink);">案件がありません</div><p style="margin-top:6px;">「＋ 新規案件」で作成してください。別の端末で作成済みの場合は、設定でFirebaseに接続すると表示されます。</p></div>'; return; }
+  const entries=all.map(cs=>({cs, info:caseInfoFromCase(cs)}));
+  entries.sort((a,b)=> a.info.filingMs-b.info.filingMs); // 申告期限が近い順
+  const list=entries.filter(e=> casesActiveTab==='done'? e.info.completed : !e.info.completed);
   if(!list.length){ c.innerHTML='<div class="center-msg">'+(casesActiveTab==='done'?'完了案件はありません。進捗管理で「業務完了」を完了にすると、ここに移動します。':'進行中の案件はありません。')+'</div>'; return; }
-  c.innerHTML='<div class="case-grid">'+list.map(e=>caseCardHtml(e.f,e.isActive,e.info)).join('')+'</div>';
+  c.innerHTML='<div class="case-grid">'+list.map(e=>caseCardHtml(e.cs,e.info)).join('')+'</div>';
 }
-function caseCardHtml(f, isActive, info){
-  const nmRaw=f.name? f.name.replace(FILE_PREFIX,'').replace(/\.json$/,'') : '無題';
-  const meta=f.modifiedTime? '最終更新: '+new Date(f.modifiedTime).toLocaleString('ja-JP') : '未保存';
-  info=info||caseInfo(f,isActive);
-  const nm=(info.code?info.code+'　':'')+nmRaw;
+function caseCardHtml(cs, info){
+  const isActive=(currentId===cs.caseId);
+  const nm=(info.code?info.code+'　':'')+(cs.deceased.name||'無題');
+  const meta=cs.savedAt? '最終更新: '+new Date(cs.savedAt).toLocaleString('ja-JP') : '';
   const death=info.death;
   let dates = death
     ? '<div class="cc-deadline"><div class="dd"><span class="lbl">死亡日</span><span class="val">'+formatJDate(death)+'</span></div><div class="dd fl"><span class="lbl">相続税申告期限</span><span class="val">'+info.filing+'</span></div></div>'
     : '<div class="cc-deadline none">死亡日 未入力</div>';
-  return '<div class="case-card'+(isActive?' active-case':'')+'" onclick="openCase(\''+(f.id||'')+'\')">'
-    +(f.id?'<button class="cc-del" onclick="event.stopPropagation();deleteCase(\''+f.id+'\',\''+esc(nm)+'\')">×</button>':'')
+  return '<div class="case-card'+(isActive?' active-case':'')+'" onclick="openCase(\''+cs.caseId+'\')">'
+    +'<button class="cc-del" onclick="event.stopPropagation();deleteCase(\''+cs.caseId+'\',\''+esc(nm)+'\')">×</button>'
     +'<div class="cc-left"><div class="cc-name">'+esc(nm)+'</div>'+dates
-    +'<div class="cc-meta">'+esc(meta)+'</div>'
+    +(meta?'<div class="cc-meta">'+esc(meta)+'</div>':'')
     +(info.completed?'<span class="cc-done-badge">業務完了</span>':(isActive?'<span class="cc-badge">作業中</span>':''))+'</div>'
     +'<div class="cc-prog">'+miniProgHtml(info.sum)+'</div>'
     +'</div>';
@@ -1645,48 +1723,28 @@ function openNewCaseModal(){ $('nc_name').value=''; openModal('newCaseModal'); s
 function createCase(){
   const name=$('nc_name').value.trim();
   if(!name){ toast('氏名を入力してください', true); return; }
-  currentCase=newCaseObject(name); currentFileId=null;
+  const c=newCaseObject(name); cloud.cases[c.caseId]=c; if(cloud.tomb) delete cloud.tomb[c.caseId];
+  currentCase=c; currentId=c.caseId; currentFileId=null;
   closeModal('newCaseModal');
   loadCaseIntoUI();
   cacheCurrentCase();
-  toast('案件を作成しました。「保存」でDriveに保存できます。');
+  toast('案件を作成しました');
   switchView('basic');
   renderCasesList();
 }
-function openCase(fileId){
-  if(!fileId){ switchView('basic'); return; } // current editing card
-  if(currentCase && unsavedWarnNeeded()){
-    if(!confirm('現在の案件の未保存の変更が失われる可能性があります。読み込みますか？')) return;
-  }
-  ensureLogin(async()=>{
-    try{
-      const data=await driveDownloadJson(fileId);
-      currentCase=migrateCase(data); currentFileId=fileId;
-      clearTimeout(autosaveTimer); isDirty=false;
-      loadCaseIntoUI();
-      try{ localStorage.setItem(LS_CASE_CACHE, JSON.stringify({fileId:currentFileId,case:currentCase})); }catch(e){}
-      updateSaveStatus('saved');
-      toast('案件を読み込みました'); switchView('basic'); renderCasesList();
-    }catch(e){ toast('読み込み失敗：'+e.message, true); }
-  });
+function openCase(caseId){
+  if(!caseId){ switchView('basic'); return; }
+  const c=cloud.cases[caseId]; if(!c){ toast('案件が見つかりません', true); return; }
+  currentCase=c; currentId=caseId; currentFileId=null;
+  loadCaseIntoUI(); saveCloudLocal();
+  switchView('basic'); renderCasesList();
 }
-function deleteCase(fileId,nm){
-  if(!confirm('この案件をDriveから削除しますか？\n'+nm+'\n\n※この操作は取り消せません。')) return;
-  ensureLogin(async()=>{
-    try{
-      await driveDelete(fileId);
-      if(currentFileId===fileId){ currentFileId=null; }
-      driveCaseFiles=driveCaseFiles.filter(f=>f.id!==fileId);
-      renderCasesList(); toast('削除しました');
-    }catch(e){ toast('削除失敗：'+e.message, true); }
-  });
-}
-function refreshDriveCases(){
-  if(!settings.folderId){ toast('設定で保存先フォルダURLを入力してください', true); switchView('settings'); return; }
-  ensureLogin(async()=>{
-    try{ driveCaseFiles=await driveListCases(); renderCasesList(); toast(driveCaseFiles.length+' 件の案件を取得しました'); }
-    catch(e){ toast('取得失敗：'+e.message, true); }
-  });
+function deleteCase(caseId,nm){
+  if(!confirm('この案件を削除しますか？\n'+nm+'\n\n※すべての端末から削除され、元に戻せません。')) return;
+  if(!cloud.tomb) cloud.tomb={}; cloud.tomb[caseId]=true; delete cloud.cases[caseId];
+  if(currentId===caseId){ currentCase=null; currentId=null; currentFileId=null; updateCaseChip(); refreshNavLock(); }
+  saveCloudLocal(); if(typeof Realtime!=='undefined') Realtime.push();
+  renderCasesList(); toast('削除しました');
 }
 function migrateCase(data){
   const base=newCaseObject('');
@@ -1738,62 +1796,24 @@ function syncUIToCase(){
   currentCase.agreement.notes=$('ag_notes').value;
   currentCase.agreement.extraHeirId=$('ag_extraHeir').value;
 }
-// 変更があるたびにローカル保存し、Driveへの自動保存をスケジュール（デバウンス）
-let autosaveTimer=null, isDirty=false, isSaving=false;
-function cacheCurrentCase(){ try{ if(currentCase) localStorage.setItem(LS_CASE_CACHE, JSON.stringify({fileId:currentFileId,case:currentCase})); }catch(e){} scheduleAutosave(); }
-function scheduleAutosave(){ if(!currentCase) return; isDirty=true; updateSaveStatus('dirty'); clearTimeout(autosaveTimer); autosaveTimer=setTimeout(autosaveNow, 3500); }
+// 変更があるたびに共有ストアへ反映＋ローカル保存＋Firebaseへ同期（デバウンス）
 function updateSaveStatus(state){
   const el=$('saveStatus'); if(!el) return;
-  if(!settings.folderId){ el.textContent='ローカル保存のみ'; el.className='save-status local'; return; }
-  if(state==='saving'){ el.textContent='保存中…'; el.className='save-status saving'; }
-  else if(state==='saved'){ el.textContent='✓ 保存済み'; el.className='save-status saved'; }
-  else if(state==='local'){ el.textContent='未保存（ローカルのみ）'; el.className='save-status local'; }
-  else { el.textContent='未保存…'; el.className='save-status dirty'; }
+  el.className='save-status'+(state==='saving'?' saving':state==='saved'?' saved':'');
+  el.textContent = state==='saving'?'同期中…':state==='saved'?'✓ 同期済み':'';
 }
-// Drive保存の中核（トークンは有効である前提）
-async function doDriveSave(){
-  syncUIToCase();
-  currentCase.savedAt=new Date().toISOString();
-  const name=FILE_PREFIX+currentCase.deceased.name+'.json';
-  const json=JSON.stringify(currentCase,null,2);
-  const sum=progressSummary(currentCase);
-  const appProps={pct:String(sum.pct), pstat:sum.codes, stage:sum.stage, deathDate:currentCase.deceased.deathDate||'', done:caseCompleted(currentCase)?'1':'0', code:currentCase.deceased.code||''};
-  const res=await driveSaveJson(name, json, currentFileId, appProps);
-  if(!currentFileId){ currentFileId=res.id; }
-  else { try{ await driveRename(currentFileId,name); }catch(e){} }
-  isDirty=false;
+function cacheCurrentCase(){
+  if(currentCase && currentId){ currentCase.savedAt=new Date().toISOString(); cloud.cases[currentId]=currentCase; }
+  saveCloudLocal();
+  if(typeof Realtime!=='undefined'){ Realtime.push(); }
 }
-// 自動保存（サイレント。未ログイン時はトークンのサイレント取得のみ試み、ダメならローカル維持）
-async function autosaveNow(){
-  if(!isDirty) return;
-  if(!currentCase || !currentCase.deceased.name.trim() || !settings.folderId){ updateSaveStatus('local'); return; }
-  if(isSaving){ scheduleAutosave(); return; }
-  try{ if(!(accessToken && Date.now()<tokenExpiry)) await requestToken(false); }
-  catch(e){ updateSaveStatus('local'); return; } // サイレント不可（ログインが必要）→ローカルのまま
-  isSaving=true; updateSaveStatus('saving');
-  try{ await doDriveSave(); updateSaveStatus('saved'); }
-  catch(e){ console.error(e); updateSaveStatus('local'); }
-  finally{ isSaving=false; }
-}
-// 手動保存（明示的なログイン誘導・トースト付き）
-async function saveCurrentCase(){
-  if(!currentCase){ toast('保存する案件がありません', true); return; }
-  syncUIToCase();
-  if(!currentCase.deceased.name.trim()){ toast('被相続人氏名を入力してください', true); switchView('basic'); return; }
-  cacheCurrentCase();
-  if(!settings.folderId){ toast('Driveに保存するには設定でフォルダURLを入力してください。ローカルには保存済みです。', true); return; }
-  updateSaveStatus('saving');
-  ensureLogin(async()=>{
-    isSaving=true;
-    try{
-      await doDriveSave();
-      updateSaveStatus('saved');
-      toast('Driveに保存しました');
-      try{ driveCaseFiles=await driveListCases(); }catch(e){}
-      renderCasesList();
-    }catch(e){ updateSaveStatus('local'); toast('保存失敗：'+e.message, true); }
-    finally{ isSaving=false; }
-  });
+// 「同期」ボタン：UIを反映してFirebaseへ即時プッシュ（未接続なら接続を試みる）
+function saveCurrentCase(){
+  if(!currentCase){ toast('案件がありません', true); return; }
+  syncUIToCase(); cacheCurrentCase();
+  if(typeof Realtime!=='undefined' && Realtime.ready){ Realtime.manualSync(); toast('同期しました'); }
+  else if(settings.fbConfig && settings.fbRoom){ Realtime.connect(); toast('Firebaseへ接続して同期します'); }
+  else { toast('ローカルに保存しました（設定でFirebaseに接続すると全端末に同期されます）'); switchView('settings'); }
 }
 
 // ============================================================
@@ -1818,7 +1838,7 @@ function loadCaseIntoUI(){
   renderAssetNav(); renderAssetDetail(); renderSummary();
   renderAgreement();
   renderProgress();
-  updateSaveStatus(isDirty?'dirty':'saved');
+  updateSaveStatus('saved');
 }
 function updateCaseChip(){
   const chip=$('caseChip');
@@ -4007,7 +4027,7 @@ function importLocalJson(){ $('jsonFileInput').click(); }
 function handleJsonFile(input){
   const file=input.files[0]; if(!file) return;
   const r=new FileReader();
-  r.onload=()=>{ try{ const data=JSON.parse(r.result); currentCase=migrateCase(data); currentFileId=null; loadCaseIntoUI(); cacheCurrentCase(); switchView('basic'); renderCasesList(); toast('JSONを取り込みました'); }catch(e){ toast('読み込み失敗：'+e.message, true); } };
+  r.onload=()=>{ try{ const data=JSON.parse(r.result); const c=migrateCase(data); if(!c.caseId) c.caseId=uid(); cloud.cases[c.caseId]=c; if(cloud.tomb) delete cloud.tomb[c.caseId]; currentCase=c; currentId=c.caseId; currentFileId=null; loadCaseIntoUI(); cacheCurrentCase(); switchView('basic'); renderCasesList(); toast('JSONを取り込みました'); }catch(e){ toast('読み込み失敗：'+e.message, true); } };
   r.readAsText(file); input.value='';
 }
 
@@ -4020,32 +4040,21 @@ function closeModal(id){ $(id).classList.remove('active'); }
 // ============================================================
 //  Init
 // ============================================================
-function tryRestoreCache(){
-  try{ const c=JSON.parse(localStorage.getItem(LS_CASE_CACHE)); if(c&&c.case){ currentCase=migrateCase(c.case); currentFileId=c.fileId||null; loadCaseIntoUI(); } }catch(e){}
-}
-let autoConnectTried=false;
-// 以前ログイン済み（アカウント記憶あり）なら、ページ表示時にサイレント接続を試み、成功したら全案件を自動取得
-function maybeAutoConnect(){
-  if(autoConnectTried || !gisReady) return;
-  autoConnectTried=true;
-  if(settings.folderId && settings.accountHint && !(accessToken && Date.now()<tokenExpiry)){
-    requestToken(false).catch(()=>{}); // サイレント不可ならログインボタンのまま（コールバックで自動取得される）
-  }
-}
 window.addEventListener('load',()=>{
   restoreSidebar();
   loadSettings();
-  initGis();
-  // GIS may load after; retry。準備でき次第サイレント接続を試みる
-  let tries=0; const iv=setInterval(()=>{ if(!gisReady){ initGis(); } if(gisReady) maybeAutoConnect(); if(gisReady||tries++>20) clearInterval(iv); },400);
-  maybeAutoConnect();
-  tryRestoreCache();
+  loadCloudLocal();           // 前回までの共有ストアをローカルから復元（オフラインでも表示）
+  initGis();                  // 移行（Driveログイン）用にGISを準備
+  let tries=0; const iv=setInterval(()=>{ if(!gisReady){ initGis(); } if(gisReady||tries++>20) clearInterval(iv); },400);
   refreshNavLock();
   renderCasesList();
+  // 設定がそろっていればFirebaseへ自動接続（全案件をリアルタイム取得）
+  if(settings.fbConfig && settings.fbRoom){ setTimeout(()=>{ try{ Realtime.connect(); }catch(e){} }, 600); }
+  else { setSyncStatus('off'); }
 });
-// タブを離れる・閉じる時に未保存なら自動保存を実行
-document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden' && isDirty){ clearTimeout(autosaveTimer); autosaveNow(); } });
-window.addEventListener('beforeunload',()=>{ if(currentCase) try{ localStorage.setItem(LS_CASE_CACHE, JSON.stringify({fileId:currentFileId,case:currentCase})); }catch(e){} });
+// タブを離れる・閉じる時にローカルへ保存
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden'){ saveCloudLocal(); } });
+window.addEventListener('beforeunload',()=>{ saveCloudLocal(); });
 </script>
 </body>
 </html>
