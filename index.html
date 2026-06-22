@@ -1272,7 +1272,8 @@ function setSyncStatus(state){
 const Realtime=(function(){
   const SYNC_KEYS=['cases','tomb'];
   const BAD=/[.#$\/\[\]~]/g;
-  let ref=null, ready=false, lastSnap={}, pushTimer=null, fbPending=false;
+  const EMBED=!!(window.__SOUZOKU_EMBED__); // 総合アプリ(ホスト)にiframe埋め込みされている場合true（同期はホストcore経由）
+  let ref=null, ready=false, lastSnap={}, pushTimer=null, fbPending=false, bridgeInit=false;
   function enc(k){ return '_'+String(k).replace(BAD,c=>'~'+c.charCodeAt(0).toString(16)); }
   function dec(k){ return String(k).replace(/^_/,'').replace(/~([0-9a-f]{2})/g,(m,h)=>String.fromCharCode(parseInt(h,16))); }
   function isObj(o){ return o&&typeof o==='object'&&!Array.isArray(o); }
@@ -1288,8 +1289,37 @@ const Realtime=(function(){
     const rc=d.cases||{}; Object.keys(rc).forEach(id=>{ if(cloud.tomb[id]) return; cloud.cases[id]=rc[id]; });
     Object.keys(cloud.tomb).forEach(id=>{ if(cloud.tomb[id]) delete cloud.cases[id]; });
   }
+  // リモートスナップショット(エンコード済みrawツリー)を取り込む
+  function applyRemoteSnapshot(remoteRaw){
+    const d=remoteRaw?decodeTree(remoteRaw):{cases:{},tomb:{}};
+    cloud.tomb=Object.assign({}, cloud.tomb||{}, d.tomb||{});
+    const rc=d.cases||{};
+    Object.keys(rc).forEach(id=>{ if(cloud.tomb[id]) return; if(id===currentId && isObj(cloud.cases[id])) mutateInto(cloud.cases[id], rc[id]); else cloud.cases[id]=rc[id]; });
+    Object.keys(cloud.tomb).forEach(id=>{ if(cloud.tomb[id]) delete cloud.cases[id]; });
+    saveCloudLocal(); lastSnap=clone(syncedView()); rerender();
+  }
   function parseConfig(txt){ const s=String(txt||''); const a=s.indexOf('{'),b=s.lastIndexOf('}'); if(a<0||b<0)throw new Error('firebaseConfigが不正です'); return new Function('return ('+s.slice(a,b+1)+')')(); }
-  async function connect(){
+  // ===== ホストcore経由（iframe埋め込み時）：同期はpostMessageでホストへ委譲 =====
+  function connectBridge(){
+    if(bridgeInit) return; bridgeInit=true;
+    setSyncStatus('connecting');
+    window.addEventListener('message', onBridgeMessage);
+    try{ parent.postMessage({source:'souzoku', type:'init'}, '*'); }catch(e){}
+  }
+  function onBridgeMessage(ev){
+    const m=ev&&ev.data; if(!m||m.type!=='souzoku:data') return;
+    if(!ready){ // 初回スナップショット
+      ready=true; setSyncStatus('on');
+      const remote=m.value;
+      if(remote){ const d=decodeTree(remote); lastSnap={cases:d.cases||{},tomb:d.tomb||{}}; mergeRemoteFull(d); saveCloudLocal(); pushNow(false); }
+      else { lastSnap={}; pushNow(true); } // 空ならローカル(=ホストがseed済み)を初期投入
+      applyCloudToUI();
+    } else {
+      applyRemoteSnapshot(m.value);
+    }
+  }
+  // ===== 単体配信（GitHub Pages 等）：直接Firebaseに接続 =====
+  async function connectDirect(){
     const cfgTxt=settings.fbConfig, room=(settings.fbRoom||'').trim();
     if(!cfgTxt||!room){ setSyncStatus('off'); return; }
     if(!window.firebase||!firebase.database){ setSyncStatus('off'); toast('Firebase SDKが読み込めていません', true); return; }
@@ -1302,27 +1332,26 @@ const Realtime=(function(){
       if(ref){ try{ ref.off(); }catch(_){ } }
       ref=firebase.database().ref('souzoku/'+enc(room));
       const snap=await ref.once('value'); const remote=snap.val();
-      if(remote){ const d=decodeTree(remote); lastSnap={cases:d.cases||{},tomb:d.tomb||{}}; mergeRemoteFull(d); saveCloudLocal(); pushNow(false); } // ローカル限定の案件は差分で送信
-      else { lastSnap={}; pushNow(true); } // 空ならローカルを初期投入
-      ready=true; setSyncStatus('on'); applyCloudToUI(); ref.on('value',onRemote);
+      if(remote){ const d=decodeTree(remote); lastSnap={cases:d.cases||{},tomb:d.tomb||{}}; mergeRemoteFull(d); saveCloudLocal(); pushNow(false); }
+      else { lastSnap={}; pushNow(true); }
+      ready=true; setSyncStatus('on'); applyCloudToUI(); ref.on('value',(s)=>{ if(ready) applyRemoteSnapshot(s.val()); });
     }catch(e){ console.error(e); setSyncStatus('off'); toast('Firebase接続に失敗：'+e.message, true); }
   }
-  function onRemote(snap){ if(!ready)return; const remote=snap.val(); const d=remote?decodeTree(remote):{cases:{},tomb:{}};
-    cloud.tomb=Object.assign({}, cloud.tomb||{}, d.tomb||{});
-    const rc=d.cases||{};
-    Object.keys(rc).forEach(id=>{ if(cloud.tomb[id]) return; if(id===currentId && isObj(cloud.cases[id])) mutateInto(cloud.cases[id], rc[id]); else cloud.cases[id]=rc[id]; });
-    Object.keys(cloud.tomb).forEach(id=>{ if(cloud.tomb[id]) delete cloud.cases[id]; });
-    saveCloudLocal(); lastSnap=clone(syncedView()); rerender();
-  }
-  function pushNow(seed){ if(!ref)return; const up={}; const cur=syncedView(); const prev=seed?{}:lastSnap;
+  function connect(){ return EMBED? connectBridge() : connectDirect(); }
+  function pushNow(seed){
+    const up={}; const cur=syncedView(); const prev=seed?{}:lastSnap;
     SYNC_KEYS.forEach(k=>diffInto(up,enc(k),cur[k],(prev||{})[k])); lastSnap=clone(cur);
-    if(Object.keys(up).length){ setSyncStatus('saving'); ref.update(up).then(()=>setSyncStatus('on')).catch(e=>{ console.error(e); setSyncStatus('off'); }); } }
-  function push(){ if(!ready||!ref){ return; } clearTimeout(pushTimer); pushTimer=setTimeout(()=>pushNow(false),200); }
+    if(!Object.keys(up).length) return;
+    setSyncStatus('saving');
+    if(EMBED){ try{ parent.postMessage({source:'souzoku', type:'update', updates: up}, '*'); }catch(e){} setSyncStatus('on'); }
+    else if(ref){ ref.update(up).then(()=>setSyncStatus('on')).catch(e=>{ console.error(e); setSyncStatus('off'); }); }
+  }
+  function push(){ if(!ready) return; if(!EMBED && !ref) return; clearTimeout(pushTimer); pushTimer=setTimeout(()=>pushNow(false),200); }
   // 入力中はblurまで再描画を遅延し、タイプ中の値を守る
   function rerender(){ const ae=document.activeElement; if(ae&&/INPUT|TEXTAREA|SELECT/.test(ae.tagName)&&ae.closest&&ae.closest('main')){ if(!fbPending){ fbPending=true; ae.addEventListener('blur',()=>{ fbPending=false; applyCloudToUI(); },{once:true}); } return; } applyCloudToUI(); }
   function disconnect(){ try{ if(ref)ref.off(); }catch(_){ } ref=null; ready=false; setSyncStatus('off'); }
   function manualSync(){ if(ready)pushNow(false); else connect(); }
-  return { connect, disconnect, push, manualSync, get ready(){return ready;} };
+  return { connect, disconnect, push, manualSync, get embedded(){return EMBED;}, get ready(){return ready;} };
 })();
 // リモート反映後にUIを最新化（編集中の案件は参照を維持して再描画）
 function applyCloudToUI(){
@@ -4061,8 +4090,9 @@ window.addEventListener('load',()=>{
   let tries=0; const iv=setInterval(()=>{ if(!gisReady){ initGis(); } if(gisReady||tries++>20) clearInterval(iv); },400);
   refreshNavLock();
   renderCasesList();
-  // 設定がそろっていればFirebaseへ自動接続（全案件をリアルタイム取得）
-  if(settings.fbConfig && settings.fbRoom){ setTimeout(()=>{ try{ Realtime.connect(); }catch(e){} }, 600); }
+  // 同期を開始：ホスト埋め込み時は常にホストcore経由、単体配信時は設定がそろえば直接Firebase
+  if(Realtime.embedded){ setTimeout(()=>{ try{ Realtime.connect(); }catch(e){} }, 200); }
+  else if(settings.fbConfig && settings.fbRoom){ setTimeout(()=>{ try{ Realtime.connect(); }catch(e){} }, 600); }
   else { setSyncStatus('off'); }
 });
 // タブを離れる・閉じる時にローカルへ保存
