@@ -43,6 +43,10 @@ export function describePeriod(spec: PeriodSpec | null, deathDate: string | null
     }
     case "fiscal_years":
       return `相続開始日の直前${spec.years ?? 3}期分`;
+    case "gift_addition": {
+      const g = giftAdditionPeriod(deathDate);
+      return g ? `${g.from}〜${g.to}に受けた贈与（暦年課税の加算対象期間）。相続時精算課税は選択した年以後すべて` : "暦年課税の加算対象期間（相続開始日から算定）。相続時精算課税は選択した年以後すべて";
+    }
     default:
       return null;
   }

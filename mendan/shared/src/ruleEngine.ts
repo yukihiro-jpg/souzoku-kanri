@@ -76,7 +76,9 @@ export function entityTarget(e: Entity): string {
     case "nominee_deposit":
       return [a("holder"), a("institution")].filter(Boolean).join(" ") || e.label;
     case "other_asset":
-      return a("description") ?? e.label;
+      return a("description") ?? a("kind") ?? e.label;
+    case "situation":
+      return a("person") ?? e.label;
     default:
       return e.label;
   }
@@ -97,6 +99,8 @@ export function matchCondition(e: Entity, c: Condition): boolean {
       return v !== undefined && v.includes(target);
     case "not_contains":
       return v === undefined || !v.includes(target);
+    case "contains_any":
+      return v !== undefined && (c.value ?? "").split("|").map(normalizeText).filter(Boolean).some((t) => v.includes(t));
     default:
       return false;
   }

@@ -16,7 +16,7 @@ function validateRule(r: DocumentRule, docIds: Set<string>) {
   if (!r.appliesTo || (r.appliesTo.kind === "entity" && !ENTITY_TYPES.includes(r.appliesTo.entityType))) errs.push("適用対象（appliesTo）が不正です");
   if (!Array.isArray(r.documentIds) || r.documentIds.length === 0) errs.push("必要資料IDが必要です");
   for (const d of r.documentIds ?? []) if (!docIds.has(d)) errs.push(`資料マスタにない資料ID: ${d}`);
-  for (const c of [...(r.conditions ?? []), ...(r.exceptions ?? [])]) if (!c.attr || !["exists", "not_exists", "equals", "contains", "not_contains"].includes(c.op)) errs.push(`条件が不正です: ${JSON.stringify(c)}`);
+  for (const c of [...(r.conditions ?? []), ...(r.exceptions ?? [])]) if (!c.attr || !["exists", "not_exists", "equals", "contains", "not_contains", "contains_any"].includes(c.op)) errs.push(`条件が不正です: ${JSON.stringify(c)}`);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(r.effectiveFrom ?? "")) errs.push("有効開始日は YYYY-MM-DD");
   if (errs.length) throw new HttpsError("invalid-argument", errs.join(" / "));
 }

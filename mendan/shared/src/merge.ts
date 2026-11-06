@@ -2,7 +2,7 @@ import type { AnalysisOutput, CheckItemOp, EntityOp } from "./analysisSchema.js"
 import type { CheckItemMaster } from "./masters/checkItems.js";
 import type { DocumentMaster } from "./masters/documents.js";
 import type { DocumentRule } from "./masters/rules.js";
-import { entityKey } from "./normalize.js";
+import { entityKey, normalizeText } from "./normalize.js";
 import { evaluateRules, isActiveEntity } from "./ruleEngine.js";
 import type {
   AppSettings,
@@ -117,6 +117,16 @@ export function initialCheckItems(caseId: string, master: CheckItemMaster[], now
     updatedAt: now,
     history: [],
   }));
+}
+
+/** 確認事項の自動候補化の条件（any: いずれかを含む / notAny: いずれも含まない / どちらもなし: 属性がある） */
+function matchAuto(e: Entity, a: { attr: string; any?: string; notAny?: string }): boolean {
+  const raw = e.attributes[a.attr]?.value;
+  const v = raw ? normalizeText(raw) : "";
+  const words = (x: string) => x.split("|").map(normalizeText).filter(Boolean);
+  if (a.any) return !!v && words(a.any).some((w) => v.includes(w));
+  if (a.notAny) return !words(a.notAny).some((w) => v.includes(w));
+  return !!v;
 }
 
 export function applyAnalysis(state: CaseState, analysis: AnalysisOutput, ctx: MergeContext): MergeResult {
@@ -480,10 +490,10 @@ export function applyAnalysis(state: CaseState, analysis: AnalysisOutput, ctx: M
   // ---------------- 4. 財産の存在から確認事項を自動候補化 ----------------
   const all = [...entities.values()];
   for (const m of ctx.checkMaster) {
-    if (!m.autoFromEntityTypes?.length) continue;
+    if (!m.autoFromEntityTypes?.length && !m.autoFrom?.length) continue;
     const item = checkItems.get(m.id);
     if (!item || item.lockedByUser) continue;
-    const related = all.filter((e) => m.autoFromEntityTypes!.includes(e.type) && isActiveEntity(e) && e.assertion === "present");
+    const related = all.filter((e) => isActiveEntity(e) && e.assertion === "present" && (m.autoFromEntityTypes?.includes(e.type) || (m.autoFrom ?? []).some((a) => a.type === e.type && matchAuto(e, a))));
     if (related.length === 0) {
       if (item.autoDerived && item.status === "ai_candidate") {
         // 根拠となる財産がすべて撤回された

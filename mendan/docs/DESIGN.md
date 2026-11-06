@@ -69,7 +69,9 @@
   "enabled": true
 }
 ```
-- `op`: exists / not_exists / equals / contains / not_contains
+- `op`: exists / not_exists / equals / contains / not_contains / contains_any（value を「|」で区切ったいずれかを含む）
+- その他の財産（`other_asset`）と特記事項（`situation`）は `kind` 属性の値で資料を出し分けます。種類が当てはまらない財産には汎用の資料（内容・価額がわかる資料）を出します。
+- 期間 `gift_addition` は、相続開始日から暦年課税の生前贈与加算の対象期間を自動で算定して表示します。
 - 変更すると版が上がり、税理士の再承認待ちになります。設定「税理士承認済みのルールだけを適用する」で未承認ルールを止められます。
 - **取引履歴の収集期間**（事務所の調査方針・設定値）と **生前贈与加算の対象期間**（`shared/src/period.ts`、令和5年度改正の段階的延長）は別の値として管理しています。
 

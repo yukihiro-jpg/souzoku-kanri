@@ -49,7 +49,7 @@ export const ENTITY_SPECS: Record<EntityType, EntitySpec> = {
       location: "所在地（市区町村まで）",
       address_detail: "地番・住居表示などの詳細",
       kinds: "種類（土地・建物・マンションなど。複数は「、」区切り）",
-      usage: "利用状況（自宅・貸家・貸地・駐車場・事業用・空き家・農地など）",
+      usage: "利用状況（自宅・二世帯住宅・一部賃貸・貸家・アパート・貸地・駐車場・店舗/事業用・空き家・農地・小作など。複数は「、」区切り）",
       ownership: "所有関係（単独・共有と持分、名義人）",
       residents: "居住者・同居人",
       land_right: "土地の権利（所有地・借地・底地）",
@@ -60,7 +60,7 @@ export const ENTITY_SPECS: Record<EntityType, EntitySpec> = {
     keyAttrs: ["institution"],
     attributes: {
       institution: "証券会社・販売金融機関",
-      products: "商品（株式・投資信託・国債など）",
+      products: "商品（株式・投資信託・国債・社債・外国株式・外貨建て商品・NISA口座など。複数は「、」区切り）",
       issues: "銘柄名",
       value: "評価額（発言どおり）",
     },
@@ -78,7 +78,7 @@ export const ENTITY_SPECS: Record<EntityType, EntitySpec> = {
     keyAttrs: ["insurer"],
     attributes: {
       insurer: "保険会社",
-      insurance_type: "保険の種類（終身・定期・養老・医療など）",
+      insurance_type: "保険の種類（終身・定期・養老・医療・個人年金・年金保険・JA共済・県民共済・かんぽ など）",
       beneficiary: "受取人",
       amount: "保険金額（発言どおり）",
       premium_payer: "保険料負担者",
@@ -87,17 +87,22 @@ export const ENTITY_SPECS: Record<EntityType, EntitySpec> = {
   },
   retirement_allowance: {
     keyAttrs: ["payer"],
-    attributes: { payer: "支給者（勤務先）", amount: "金額", recipient: "受取人" },
+    attributes: { payer: "支給者（勤務先、iDeCo・企業型確定拠出年金の運営機関、小規模企業共済など）", kind: "種類（死亡退職金・弔慰金・確定拠出年金の死亡一時金・小規模企業共済の共済金など）", amount: "金額", recipient: "受取人" },
   },
   other_asset: {
-    keyAttrs: ["description"],
-    attributes: { description: "財産の内容（自動車・貴金属・貸付金・還付金など）", value: "金額・価値", notes: "補足" },
+    keyAttrs: ["kind", "description"],
+    attributes: {
+      kind: "種類（次から選ぶ: 自動車 / 電話加入権 / ゴルフ会員権・リゾート会員権 / 貸付金・前払金 / 貴金属・書画・骨董 / 未収金・還付金 / 暗号資産 / 電子マネー・スマホ決済・ポイント / 金地金・純金積立 / 国外財産 / 家財 / 事業用資産 / 著作権・特許権 / 太陽光発電設備 / 貸金庫 / その他）",
+      description: "財産の内容（例: トヨタ・プリウス、ビットコイン、PayPay残高、所得税の還付金）",
+      value: "金額・価値（発言どおり）",
+      notes: "補足",
+    },
   },
   debt: {
     keyAttrs: ["creditor", "description"],
     attributes: {
       creditor: "債権者（借入先・未払先）",
-      description: "内容（住宅ローン・未払医療費・未納税金など）",
+      description: "内容（住宅ローン・アパートローン・個人からの借入・未納の住民税/固定資産税・未払の国民健康保険料/介護保険料・未払の入院費/施設費・公共料金・クレジットカードの未払 など）",
       amount: "金額",
       group_insurance: "団体信用生命保険の有無",
     },
@@ -121,6 +126,7 @@ export const ENTITY_SPECS: Record<EntityType, EntitySpec> = {
     keyAttrs: ["holder", "institution"],
     attributes: {
       holder: "名義人",
+      asset: "財産の種類（預金・不動産・株式・保険など。預金以外の場合に記入）",
       institution: "金融機関",
       funding: "資金の出し手",
       custody: "通帳・印鑑の管理者",
@@ -130,6 +136,14 @@ export const ENTITY_SPECS: Record<EntityType, EntitySpec> = {
   will: {
     keyAttrs: [],
     attributes: { exists: "遺言書の有無（あり・なし・不明）", type: "種類（公正証書・自筆・保管制度利用）", custody: "保管場所", contents: "内容の概要" },
+  },
+  situation: {
+    keyAttrs: ["kind", "person"],
+    attributes: {
+      kind: "種類（次から選ぶ: 老人ホーム等への入居 / 家なき子（持ち家のない別居の相続人） / 障害者の相続人 / 未成年の相続人 / 過去10年以内の相続 / 相続放棄 / 代襲相続 / 海外居住の相続人 / 養子縁組 / 確定申告をしていた / 二次相続の検討 / その他）",
+      person: "対象の人（続柄・氏名）",
+      detail: "内容（施設名・入居時期・障害の等級など発言どおり）",
+    },
   },
   other_fact: {
     keyAttrs: ["topic"],

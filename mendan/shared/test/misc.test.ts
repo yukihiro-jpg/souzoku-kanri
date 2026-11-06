@@ -45,8 +45,8 @@ describe("デモ台本（簡易解析器）による通しテスト", () => {
     expect(names).toContain("筑波銀行の残高証明書（相続開始日時点）");
     expect(names).toContain("ゆうちょ銀行の定期預金の既経過利息計算書");
     expect(names.some((n) => n.startsWith("水戸市") && n.includes("登記事項証明書"))).toBe(true);
-    expect(names).toContain("さくら生命の死亡保険金支払通知書");
-    expect(names.some((n) => n.includes("家族名義口座"))).toBe(true);
+    expect(names).toContain("さくら生命の死亡保険金の支払通知書");
+    expect(names.some((n) => n.includes("家族名義の口座"))).toBe(true);
     // 訂正された常陽銀行は削除候補
     expect(state.documents.filter((d) => d.target === "常陽銀行").every((d) => d.status === "removal_candidate")).toBe(true);
     // 「借金はありません」→ 候補止まり

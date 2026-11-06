@@ -187,7 +187,7 @@ describe("不動産", () => {
       [s1],
     );
     const ids = state.documents.filter((d) => d.entityId).map((d) => d.documentId).sort();
-    expect(ids).toEqual(["re_maps", "re_nayose", "re_registry", "re_tax_notice", "re_valuation"]);
+    expect(ids).toEqual(["fire_insurance", "re_housing_map", "re_maps", "re_nayose", "re_registry", "re_tax_notice", "re_valuation"]);
     const followUps = state.checkItems.filter((c) => c.source === "rule").map((c) => c.templateId).sort();
     expect(followUps).toEqual(["re.address_detail", "re.ownership", "re.residents", "re.usage"]);
     // 利用状況は発言済みなのでAI確認候補、所在地の詳細・所有関係・同居人は未確認

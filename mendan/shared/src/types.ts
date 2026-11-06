@@ -73,6 +73,7 @@ export const ENTITY_TYPES = [
   "lifetime_gift", // 生前贈与
   "nominee_deposit", // 名義預金の可能性
   "will", // 遺言
+  "situation", // 特記事項（老人ホーム入居・障害者の相続人・過去の相続・相続放棄など）
   "other_fact", // その他の確認事項
 ] as const;
 export type EntityType = (typeof ENTITY_TYPES)[number];
@@ -90,8 +91,9 @@ export const ENTITY_TYPE_LABELS: Record<EntityType, string> = {
   debt: "借入金・未払金",
   funeral_expense: "葬式費用",
   lifetime_gift: "生前贈与",
-  nominee_deposit: "名義預金",
+  nominee_deposit: "名義預金・名義財産",
   will: "遺言・遺産分割",
+  situation: "特記事項",
   other_fact: "その他",
 };
 
@@ -204,7 +206,8 @@ export interface CheckItem {
 }
 
 export interface PeriodSpec {
-  kind: "as_of_death" | "years_before_death" | "fiscal_years" | "none";
+  /** gift_addition: 暦年課税の生前贈与加算の対象期間（相続税法の改正に合わせて自動算定） */
+  kind: "as_of_death" | "years_before_death" | "fiscal_years" | "gift_addition" | "none";
   /** years_before_death の年数。未指定なら settings.transactionHistoryYears（事務所の調査方針） */
   years?: number;
 }

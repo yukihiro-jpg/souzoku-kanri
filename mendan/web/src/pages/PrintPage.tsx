@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { CATEGORIES, DEFAULT_SETTINGS, P, type AppSettings, type CaseDoc, type DocumentRequirement, type Entity } from "@mendan/shared";
+import { CATEGORIES, DEFAULT_SETTINGS, DOCUMENT_MASTER, P, type AppSettings, type CaseDoc, type DocumentRequirement, type Entity } from "@mendan/shared";
 import { useCollection, useDoc } from "../lib/hooks";
 
 /**
@@ -9,6 +9,8 @@ import { useCollection, useDoc } from "../lib/hooks";
  */
 const OUTSTANDING = ["required", "requested", "partial", "insufficient"];
 const SUBMITTED = ["submitted", "verified"];
+/** 資料マスタ（＝事務所の資料収集ガイド）の並び順で表示する */
+const MASTER_ORDER = new Map(DOCUMENT_MASTER.map((d, i) => [d.id, i]));
 
 export function PrintPage() {
   const { caseId = "" } = useParams();
@@ -23,7 +25,7 @@ export function PrintPage() {
 
   const heirs = entities.filter((e) => e.type === "heir" && e.status !== "retracted" && e.status !== "rejected").map((e) => e.attributes.name?.value ?? e.attributes.relationship?.value ?? e.label);
   const list = docs.filter((d) => OUTSTANDING.includes(d.status) || (includeCandidates && d.status === "candidate") || (showSubmitted && SUBMITTED.includes(d.status)));
-  const ordered = CATEGORIES.flatMap((cat) => list.filter((d) => d.category === cat.id).sort((a, b) => (a.target ?? "").localeCompare(b.target ?? "")));
+  const ordered = CATEGORIES.flatMap((cat) => list.filter((d) => d.category === cat.id).sort((a, b) => (a.target ?? "").localeCompare(b.target ?? "") || (MASTER_ORDER.get(a.documentId) ?? 999) - (MASTER_ORDER.get(b.documentId) ?? 999)));
   const unconfirmedCount = list.filter((d) => d.status === "candidate").length;
 
   return (
@@ -53,7 +55,12 @@ export function PrintPage() {
       </div>
       <p className="mt-4">相続税の申告に必要な資料を下記のとおりご案内いたします。お手数ですが、ご準備をお願いいたします。ご不明な点はお気軽にお問い合わせください。</p>
 
-      <table className="mt-4 w-full border-collapse text-[11px]">
+      <table className="mt-4 w-full table-fixed border-collapse text-[11px]">
+        <colgroup>
+          {["4%", "19%", "13%", "29%", "13%", "8%", "6%", "8%"].map((w, i) => (
+            <col key={i} style={{ width: w }} />
+          ))}
+        </colgroup>
         <thead>
           <tr className="bg-slate-100">
             {["No", "資料名", "取得先", "取得方法", "対象期間", "ご提出者", "期限", "状況"].map((h) => (
