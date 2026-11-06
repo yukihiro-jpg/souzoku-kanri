@@ -1,0 +1,80 @@
+rules_version = '2';
+
+// 相続税 AI面談システム Firestore Security Rules
+//  - ログイン済みかつ users/{uid}.active == true のユーザーのみ利用可（Google Workspace の許可ドメインは ensureUser 関数で判定）
+//  - 案件単位のアクセス権限（admin は全案件、staff/viewer は members に含まれる案件のみ）
+//  - 抽出情報・確認事項・必要資料などの変更はすべて Cloud Functions 経由（ブラウザから直接書き込めない）
+//  - ブラウザから書き込めるのは「確定した発言の新規保存」と「計測値」「録音ファイルの登録」のみ
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function active() { return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && me().active == true; }
+    function isAdmin() { return active() && me().role == 'admin'; }
+    function caseData(caseId) { return get(/databases/$(database)/documents/cases/$(caseId)).data; }
+    function canRead(caseId) { return isAdmin() || (active() && request.auth.uid in caseData(caseId).memberIds); }
+    function canWrite(caseId) {
+      return isAdmin() || (active() && me().role == 'staff'
+        && request.auth.uid in caseData(caseId).memberIds
+        && caseData(caseId).members[request.auth.uid] == 'staff');
+    }
+
+    match /users/{uid} {
+      allow read: if (signedIn() && request.auth.uid == uid) || isAdmin();
+      allow write: if false;
+    }
+
+    match /cases/{caseId} {
+      allow read: if canRead(caseId);
+      allow write: if false;
+
+      match /meetings/{meetingId} {
+        allow read: if canRead(caseId);
+        // 録音ファイルの登録・通信断の記録・最終発言番号のみブラウザから更新可
+        allow update: if canWrite(caseId)
+          && resource.data.status == 'in_progress'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['audioParts', 'gaps', 'lastSeq']);
+
+        match /segments/{segId} {
+          allow read: if canRead(caseId);
+          // 確定した発言の新規保存のみ（同じIDの二重保存・上書き・削除は不可）
+          allow create: if canWrite(caseId)
+            && get(/databases/$(database)/documents/cases/$(caseId)/meetings/$(meetingId)).data.status == 'in_progress'
+            && request.resource.data.id == segId
+            && request.resource.data.caseId == caseId
+            && request.resource.data.meetingId == meetingId
+            && request.resource.data.seq is int
+            && request.resource.data.text is string
+            && request.resource.data.text.size() <= 5000
+            && request.resource.data.final == true
+            && request.resource.data.kind in ['speech', 'system']
+            && request.resource.data.analysisStatus in ['pending', 'skipped']
+            && request.resource.data.speaker in ['staff', 'client', 'other', 'unknown']
+            && request.resource.data.createdBy == request.auth.uid;
+          allow update, delete: if false;
+        }
+      }
+
+      match /aiJobs/{jobId} {
+        allow read: if canRead(caseId);
+        // 画面反映時刻などクライアント側の計測値のみ追記可
+        allow update: if canWrite(caseId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clientTimings']);
+      }
+
+      match /{sub}/{docId} {
+        allow read: if canRead(caseId) && sub in ['entities', 'checkItems', 'documents', 'reviewItems', 'auditLogs'];
+        allow write: if false;
+      }
+    }
+
+    match /documentRules/{id} { allow read: if active(); allow write: if false; }
+    match /documentMaster/{id} { allow read: if active(); allow write: if false; }
+    match /vocabulary/{id} { allow read: if active(); allow write: if false; }
+    match /settings/{id} { allow read: if active(); allow write: if false; }
+    match /ruleHistory/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /costLogs/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /costSummary/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /notifications/{id} { allow read: if isAdmin(); allow write: if false; }
+  }
+}

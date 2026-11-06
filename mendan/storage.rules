@@ -1,0 +1,23 @@
+rules_version = '2';
+
+// 録音データ: 案件の担当者のみアップロード・閲覧可（音声ファイル・20MB以下）
+service firebase.storage {
+  match /b/{bucket}/o {
+    function user() { return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data; }
+    function caseData(caseId) { return firestore.get(/databases/(default)/documents/cases/$(caseId)).data; }
+    function member(caseId) {
+      return request.auth != null && user().active == true
+        && (user().role == 'admin' || request.auth.uid in caseData(caseId).memberIds);
+    }
+
+    match /audio/{caseId}/{meetingId}/{file} {
+      allow read: if member(caseId);
+      allow create: if member(caseId) && user().role != 'viewer'
+        && caseData(caseId).consent.recording == true
+        && request.resource.size < 20 * 1024 * 1024
+        && request.resource.contentType.matches('audio/.*');
+      allow update, delete: if false;
+    }
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}

@@ -1,0 +1,17 @@
+node_modules/
+dist/
+lib/
+.emulator-data/
+*.log
+.env
+.env.local
+functions/.env
+functions/.env.*
+!functions/.env.example
+!functions/.env.local
+functions/.secret.local
+web/.env.local
+.firebase/
+eval/results/
+test-results/
+playwright-report/
