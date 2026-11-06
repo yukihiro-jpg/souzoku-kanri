@@ -26,7 +26,8 @@ service cloud.firestore {
     }
 
     match /cases/{caseId} {
-      allow read: if canRead(caseId);
+      // 一覧取得（where memberIds array-contains uid）に対応するため resource を参照
+      allow read: if isAdmin() || (active() && request.auth.uid in resource.data.memberIds);
       allow write: if false;
 
       match /meetings/{meetingId} {

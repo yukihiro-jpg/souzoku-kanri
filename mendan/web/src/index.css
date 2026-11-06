@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+}
+
+@keyframes flash {
+  0% { background-color: rgb(254 240 138); }
+  100% { background-color: transparent; }
+}
+.flash { animation: flash 1.6s ease-out; }
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; }
+  @page { size: A4; margin: 14mm 12mm; }
+}

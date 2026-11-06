@@ -93,7 +93,7 @@ export function mockAnalyze(input: { newSegments: TranscriptSegment[]; contextSe
       if (place) {
         const kinds: string[] = [];
         if (/土地|駐車場|田んぼ|畑/.test(t)) kinds.push("土地");
-        if (/建物|家屋|アパート|マンション|自宅/.test(t)) kinds.push("建物");
+        if (/建物|家屋|アパート|マンション/.test(t)) kinds.push("建物");
         const usage = /アパート|貸家|貸して/.test(t) ? "貸家" : /駐車場/.test(t) ? "貸駐車場" : /自宅/.test(t) ? "自宅" : undefined;
         const attrs = [{ key: "location", value: place }];
         if (kinds.length) attrs.push({ key: "kinds", value: kinds.join("、") });

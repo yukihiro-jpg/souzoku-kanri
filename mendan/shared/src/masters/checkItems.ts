@@ -17,7 +17,7 @@ export interface CheckItemMaster {
 
 export const CHECK_ITEM_MASTER: CheckItemMaster[] = [
   // 1. 基本情報
-  { id: "basic.decedent_name", category: "basic", question: "被相続人の氏名", prompt: "亡くなられた方のお名前を正確に教えてください。", priority: "high", autoFromEntityTypes: ["decedent"] },
+  { id: "basic.decedent_name", category: "basic", question: "被相続人の氏名", prompt: "亡くなられた方のお名前を正確に教えてください。", priority: "high" },
   { id: "basic.death_date", category: "basic", question: "相続開始日（死亡日）", prompt: "お亡くなりになった日はいつですか？", priority: "high" },
   { id: "basic.decedent_address", category: "basic", question: "被相続人の最後の住所", prompt: "亡くなる直前のご住所はどちらでしたか？", priority: "high" },
   { id: "basic.decedent_birth", category: "basic", question: "被相続人の生年月日・本籍地", prompt: "生年月日と本籍地を教えてください。", priority: "medium" },
