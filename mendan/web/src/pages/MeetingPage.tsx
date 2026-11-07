@@ -226,7 +226,8 @@ export function MeetingPage() {
     <div className="flex h-screen flex-col bg-slate-50">
       {/* ===== 上部: 案件情報 ===== */}
       <header className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b bg-white px-4 py-2 text-sm">
-        <Link to={`/cases/${caseId}`} className="font-bold text-slate-800 hover:underline">{c.name}</Link>
+        <Link to="/" data-testid="back-to-list" className="rounded-lg border px-2 py-1 text-slate-600 hover:bg-slate-50">← 案件一覧</Link>
+        <Link to={`/cases/${caseId}`} className="font-bold text-slate-800 hover:underline" title="案件の詳細へ">{c.name}</Link>
         <span>被相続人 <b>{c.decedentName}</b></span>
         <span>相続開始日 <b>{c.inheritanceStartDate ?? "未入力"}</b></span>
         <span>担当 <b>{m.interviewer}</b></span>
@@ -247,7 +248,11 @@ export function MeetingPage() {
               <button data-testid="start-demo" disabled={busy} onClick={startDemo} className="rounded-lg border px-3 py-1.5 hover:bg-slate-50">デモ再生</button>
             </>
           )}
-          {live && <button data-testid="stop" onClick={stop} className="rounded-lg bg-slate-800 px-3 py-1.5 text-white">■ 停止</button>}
+          {live && (
+            <button data-testid="stop" onClick={stop} className="rounded-lg bg-slate-800 px-3 py-1.5 font-medium text-white hover:bg-slate-700" title="停止中は文字起こしの料金はかかりません。「録音開始」で再開できます">
+              {transcriber.current instanceof DemoTranscriber ? "■ デモ停止" : "■ 録音停止"}
+            </button>
+          )}
           {!ended && canEdit && <button data-testid="end-meeting" disabled={busy} onClick={() => endMeeting(false)} className="rounded-lg border border-slate-400 px-3 py-1.5">面談終了</button>}
           {ended && canEdit && (
             <button disabled={busy || m.reanalysis?.status === "running"} onClick={() => act(async () => toast(`追加確認候補 ${(await api.reanalyzeMeeting({ caseId, meetingId })).reviewItems} 件`, "info"))} className="rounded-lg border px-3 py-1.5">
