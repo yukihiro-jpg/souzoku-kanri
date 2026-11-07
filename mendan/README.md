@@ -176,10 +176,11 @@ done
 # ビルドして公開（mendan/relay フォルダで実行）
 npm install && npm run build
 gcloud run deploy transcribe-relay --source . --project $PROJECT --region asia-northeast1 \
-  --service-account transcribe-relay@$PROJECT.iam.gserviceaccount.com --allow-unauthenticated \
+  --service-account transcribe-relay@$PROJECT.iam.gserviceaccount.com --no-invoker-iam-check \
   --timeout 3600 --set-env-vars GOOGLE_CLOUD_PROJECT=$PROJECT,VERTEX_LOCATION=us-central1
 ```
-- `--allow-unauthenticated` は「Google のログインなしで接続を受け付ける」という意味です。中継サーバー自身が1回限りのチケットを確認するため、チケットのない接続はすべて拒否されます。
+- `--no-invoker-iam-check` は「Google Cloud 側の入口の確認（IAM）をしない」という意味です。中継サーバー自身が1回限りのチケットを確認するため、チケットのない接続はすべて拒否されます。
+  （`--allow-unauthenticated` は「allUsers（だれでも）」に権限を付ける方法のため、組織のポリシー「ドメインで制限された共有」があると失敗します）
 - 表示された URL（`https://transcribe-relay-…run.app`）を `functions/.env` の `RELAY_URL` に設定します。
 - `VERTEX_LOCATION` は文字起こしモデル（gemini-3.5-transcribe-live）が使えるリージョンにします。東京（asia-northeast1）で提供されていればそちらに変更してください（データが国内で処理されます）。
 
@@ -200,7 +201,7 @@ npx firebase functions:secrets:set ANTHROPIC_API_KEY
 
 # (4) サーバーの設定ファイルを作成して編集
 cp functions/.env.example functions/.env
-#   → functions/.env を開き、ALLOWED_EMAIL_DOMAINS（事務所のドメイン）と ADMIN_EMAILS（管理者）を書き換える
+#   → functions/.env を開き、ALLOWED_EMAIL_DOMAINS（事務所のドメイン）・ALLOWED_EMAILS（ログインできるアドレス）・ADMIN_EMAILS（管理者）を書き換える
 
 # (5) 画面の設定ファイルを作成して編集
 cp web/.env.example web/.env.production
@@ -210,6 +211,12 @@ cp web/.env.example web/.env.production
 npm run build
 npx firebase deploy
 ```
+
+組織のポリシーで「allUsers」に権限を付けられない場合（kskac.com はこれに該当）は、関数の公開時に
+「Unable to set the invoker for the IAM policy」と表示されます。その場合は、画面から呼ぶ関数ごとに
+`gcloud run services update <関数名を小文字にしたもの> --region asia-northeast1 --no-invoker-iam-check` を実行します
+（`scripts/deploy.sh` はこれを自動で行います）。関数は毎回 Firebase のログインと `ALLOWED_EMAILS` を確認するため、
+ログインしていない人・許可されていない人は利用できません。
 
 デプロイが終わると `https://<プロジェクトID>.web.app` で利用できます。
 最初に `ADMIN_EMAILS` のアカウントでログインすると管理者になります。管理画面 →「専門用語」→「初期語彙を登録」を一度押してください。

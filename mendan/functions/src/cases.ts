@@ -1,29 +1,17 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { CHECK_ITEM_MASTER, P, completionStats, initialCheckItems, type CaseDoc, type CheckItem, type Consent, type Meeting, type Role } from "@mendan/shared";
-import { optStr, requireCase, requireRole, requireUser, str } from "./auth.js";
-import { ADMIN_EMAILS, ALLOWED_EMAIL_DOMAINS, REGION } from "./config.js";
+import { assertEmailAllowed, csvList, optStr, requireCase, requireRole, requireUser, str } from "./auth.js";
+import { ADMIN_EMAILS, REGION } from "./config.js";
 import { FieldValue, audit, db, nowIso } from "./db.js";
 
-const list = (v: string) =>
-  v
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-
 /**
- * ログイン直後に呼ぶ。許可された Google Workspace ドメインのアカウントだけを登録する。
+ * ログイン直後に呼ぶ。許可された Google Workspace ドメイン（ALLOWED_EMAILS を設定していればそのアドレス）のアカウントだけを登録する。
  * users/{uid} が作られて active=true でない限り、Firestore も関数も利用できない。
  */
 export const ensureUser = onCall({ region: REGION }, async (req) => {
   const a = req.auth;
   if (!a) throw new HttpsError("unauthenticated", "ログインしてください。");
-  const email = String(a.token.email ?? "").toLowerCase();
-  const verified = a.token.email_verified === true;
-  const domains = list(ALLOWED_EMAIL_DOMAINS.value());
-  const domain = email.split("@")[1] ?? "";
-  if (!verified || !email) throw new HttpsError("permission-denied", "メールアドレスが確認できないアカウントです。");
-  if (domains.length === 0) throw new HttpsError("failed-precondition", "ALLOWED_EMAIL_DOMAINS が未設定のため、ログインを受け付けられません。");
-  if (!domains.includes(domain)) throw new HttpsError("permission-denied", `このアカウント（@${domain}）は利用が許可されていません。`);
+  const email = assertEmailAllowed(a.token);
 
   const ref = db.doc(P.user(a.uid));
   const snap = await ref.get();
@@ -31,7 +19,7 @@ export const ensureUser = onCall({ region: REGION }, async (req) => {
     await ref.update({ lastLoginAt: nowIso() });
     return snap.data();
   }
-  const role: Role = list(ADMIN_EMAILS.value()).includes(email) ? "admin" : "staff";
+  const role: Role = csvList(ADMIN_EMAILS.value()).includes(email) ? "admin" : "staff";
   const user = { uid: a.uid, email, displayName: String(a.token.name ?? email), role, active: true, createdAt: nowIso(), lastLoginAt: nowIso() };
   await ref.set(user);
   return user;

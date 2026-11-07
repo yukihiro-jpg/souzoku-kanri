@@ -66,6 +66,9 @@ async function main() {
   ok(prof.role === "admin", "ADMIN_EMAILS のユーザーは管理者として登録");
   const outsider = await login("someone@gmail.com");
   ok(!!(await expectFail(outsider.call("ensureUser"))), "許可ドメイン外のアカウントは拒否");
+  const notListed = await login("stranger@example.com");
+  ok(!!(await expectFail(notListed.call("ensureUser"))), "同じドメインでも ALLOWED_EMAILS にないアカウントは拒否");
+  ok(!!(await expectFail(notListed.call("createCase", { name: "x", decedentName: "x" }))), "ALLOWED_EMAILS にないアカウントは操作もできない");
   const staff2 = await login("staff2@example.com");
   await staff2.call("ensureUser");
 

@@ -17,6 +17,15 @@
 #     4. サーバーの設定ファイルを作成（初回のみ質問あり）
 #     5. Claude の API キーを Secret Manager に登録（初回のみ。入力は画面に表示されません）
 #     6. セキュリティルール・サーバー処理（Cloud Functions）・画面（Hosting）を公開
+#
+#   入口の確認について（組織のポリシー「ドメインで制限された共有」への対応）:
+#     kskac.com の組織では「allUsers（だれでも）」に権限を付けられないため、
+#     中継サーバーと画面から呼ぶサーバー処理だけは、Google Cloud 側の入口の確認（IAM）を外して公開する
+#     （gcloud run ... --no-invoker-iam-check）。
+#     その代わり、アプリ自身が毎回確認する:
+#       - サーバー処理: Firebase のログイン（ALLOWED_EMAILS に書いたアドレスのみ）
+#       - 中継サーバー: サーバー処理が発行した1回限り・2分以内のチケット
+#     毎日の録音削除（purgeExpiredAudio）は Google Cloud 側の確認を残したまま。
 # =====================================================================
 set -euo pipefail
 
@@ -89,7 +98,7 @@ npm ci --no-audit --no-fund
 
 step "4. 文字起こし中継サーバーを Cloud Run（東京）に公開"
 ( cd relay && npm run build && gcloud run deploy transcribe-relay --source . --region "$REGION" \
-    --service-account "$RELAY_SA" --allow-unauthenticated --timeout 3600 --min-instances 0 --max-instances 5 \
+    --service-account "$RELAY_SA" --no-invoker-iam-check --timeout 3600 --min-instances 0 --max-instances 5 \
     --set-env-vars "GOOGLE_CLOUD_PROJECT=${PROJECT},VERTEX_LOCATION=${VERTEX_LOCATION}" --quiet )
 RELAY_URL="$(gcloud run services describe transcribe-relay --region "$REGION" --format 'value(status.url)')"
 echo "中継サーバー: ${RELAY_URL}"
@@ -99,8 +108,10 @@ ENV_FILE="functions/.env.${PROJECT}"
 if [ ! -f "$ENV_FILE" ]; then
   read -rp "ログインを許可する Google Workspace のドメイン（例: kskac.com）: " DOMAIN
   read -rp "最初に管理者にするメールアドレス（例: yukihiro@kskac.com）: " ADMIN
+  read -rp "ログインを許可するメールアドレス（カンマ区切り。Enter のみ = 管理者のアドレスだけ）: " ALLOWED
   cat > "$ENV_FILE" <<EOF
 ALLOWED_EMAIL_DOMAINS=${DOMAIN}
+ALLOWED_EMAILS=${ALLOWED:-$ADMIN}
 ADMIN_EMAILS=${ADMIN}
 AI_MODE=claude
 TRANSCRIBE_MODE=vertex
@@ -122,8 +133,16 @@ EOF
 else
   # 中継サーバーの URL だけは毎回最新にそろえる
   sed -i "s#^RELAY_URL=.*#RELAY_URL=${RELAY_URL}#" "$ENV_FILE"
+  # 以前の設定ファイルには ALLOWED_EMAILS がないため、管理者のアドレスだけに絞る設定を追加する
+  if ! grep -q '^ALLOWED_EMAILS=' "$ENV_FILE"; then
+    echo "ALLOWED_EMAILS=$(sed -n 's/^ADMIN_EMAILS=//p' "$ENV_FILE")" >> "$ENV_FILE"
+  fi
 fi
 echo "設定ファイル: ${ENV_FILE}（このファイルは Git に含めません）"
+echo "ログインできるアカウント: $(sed -n 's/^ALLOWED_EMAILS=//p' "$ENV_FILE")"
+if [ -z "$(sed -n 's/^ALLOWED_EMAILS=//p' "$ENV_FILE")" ]; then
+  echo "（ALLOWED_EMAILS が空欄のため、$(sed -n 's/^ALLOWED_EMAIL_DOMAINS=//p' "$ENV_FILE") の全員がログインできます）"
+fi
 
 step "6. Firebase へのログイン確認"
 if ! npx firebase projects:list >/dev/null 2>&1; then
@@ -142,9 +161,44 @@ fi
 step "8. 画面をビルド"
 npm run build -w web
 
-step "9. ルール・サーバー処理・画面を公開"
+step "9. セキュリティルールを公開"
 echo "途中で「Y/n」と聞かれた場合は、Y を入力して Enter を押してください。"
-npx firebase deploy --project "$PROJECT" --only firestore,storage,functions,hosting
+npx firebase deploy --project "$PROJECT" --only firestore,storage
+
+step "10. サーバー処理（Cloud Functions）を公開（初回は10分ほどかかります）"
+# 初回は Firebase が「だれでも呼べる」設定（allUsers）を付けようとして、組織のポリシーで断られる。
+# 関数そのものは作られるので、ここでは止めずに次の 11 で入口の確認を外す。
+set +e
+npx firebase deploy --project "$PROJECT" --only functions
+FUNCTIONS_CODE=$?
+set -e
+if [ "$FUNCTIONS_CODE" -ne 0 ]; then
+  echo ""
+  echo "※ 上に「Unable to set the invoker for the IAM policy」と出ている場合は想定どおりです（次で対応します）。"
+fi
+
+step "11. 画面から呼ぶサーバー処理の入口の確認を外す"
+# functions/src/index.ts で公開している関数のうち、毎日の録音削除（スケジュール実行）以外
+FUNCTION_NAMES="$(sed -n 's/^export {\(.*\)} from.*/\1/p' functions/src/index.ts | tr ',' '\n' | tr -d ' ' | grep -v '^purgeExpiredAudio$' | grep -v '^$')"
+MISSING=""
+for NAME in $FUNCTION_NAMES; do
+  SVC="$(echo "$NAME" | tr '[:upper:]' '[:lower:]')"
+  if gcloud run services describe "$SVC" --region "$REGION" >/dev/null 2>&1; then
+    gcloud run services update "$SVC" --region "$REGION" --no-invoker-iam-check --quiet >/dev/null
+    echo "  ✔ ${NAME}"
+  else
+    echo "  ✘ ${NAME}（まだ作られていません）"
+    MISSING="${MISSING} ${NAME}"
+  fi
+done
+if [ -n "$MISSING" ]; then
+  echo "作られていないサーバー処理があります:${MISSING}"
+  echo "10 の表示（または記録ファイル ${LOG_FILE}）に原因が出ています。もう一度 bash scripts/deploy.sh を実行してください。"
+  exit 1
+fi
+
+step "12. 画面（Hosting）を公開"
+npx firebase deploy --project "$PROJECT" --only hosting
 
 step "完了"
 echo "画面:            https://${PROJECT}.web.app"

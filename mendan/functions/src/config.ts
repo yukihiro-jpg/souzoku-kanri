@@ -47,6 +47,11 @@ export const GEMINI_USD_PER_AUDIO_HOUR = defineString("GEMINI_USD_PER_AUDIO_HOUR
 
 /** ログインを許可する Google Workspace のドメイン（カンマ区切り） */
 export const ALLOWED_EMAIL_DOMAINS = defineString("ALLOWED_EMAIL_DOMAINS", { default: "" });
+/**
+ * ログインを許可するメールアドレス（カンマ区切り）。設定した場合は、ドメインが合っていても
+ * ここに書いたアドレス以外は利用できない（空欄 = 許可ドメインの全員が利用可）
+ */
+export const ALLOWED_EMAILS = defineString("ALLOWED_EMAILS", { default: "" });
 /** 初回ログイン時に管理者にするメールアドレス（カンマ区切り） */
 export const ADMIN_EMAILS = defineString("ADMIN_EMAILS", { default: "" });
 

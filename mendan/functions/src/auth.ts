@@ -1,5 +1,6 @@
 import { HttpsError, type CallableRequest } from "firebase-functions/v2/https";
 import { P, type CaseDoc, type Role } from "@mendan/shared";
+import { ALLOWED_EMAILS, ALLOWED_EMAIL_DOMAINS } from "./config.js";
 import { db } from "./db.js";
 
 export interface Actor {
@@ -9,10 +10,35 @@ export interface Actor {
   role: Role;
 }
 
+export const csvList = (v: string) =>
+  v
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+/**
+ * このメールアドレスでの利用を許可するか（ログイン時と、毎回の操作の両方で確認する）
+ *  - メールアドレスが確認済みであること
+ *  - ALLOWED_EMAIL_DOMAINS のドメインであること
+ *  - ALLOWED_EMAILS を設定している場合は、そこに書かれたアドレスであること
+ */
+export function assertEmailAllowed(token: { email?: unknown; email_verified?: unknown }): string {
+  const email = String(token.email ?? "").toLowerCase();
+  if (token.email_verified !== true || !email) throw new HttpsError("permission-denied", "メールアドレスが確認できないアカウントです。");
+  const domains = csvList(ALLOWED_EMAIL_DOMAINS.value());
+  if (domains.length === 0) throw new HttpsError("failed-precondition", "ALLOWED_EMAIL_DOMAINS が未設定のため、ログインを受け付けられません。");
+  const domain = email.split("@")[1] ?? "";
+  if (!domains.includes(domain)) throw new HttpsError("permission-denied", `このアカウント（@${domain}）は利用が許可されていません。`);
+  const emails = csvList(ALLOWED_EMAILS.value());
+  if (emails.length > 0 && !emails.includes(email)) throw new HttpsError("permission-denied", `このアカウント（${email}）は利用が許可されていません。`);
+  return email;
+}
+
 /** ログイン中かつ、許可されたユーザー（users/{uid} が active）であること */
 export async function requireUser(req: CallableRequest<unknown>): Promise<Actor> {
   const a = req.auth;
   if (!a) throw new HttpsError("unauthenticated", "ログインしてください。");
+  assertEmailAllowed(a.token);
   const snap = await db.doc(P.user(a.uid)).get();
   const u = snap.data() as { role?: Role; active?: boolean; email?: string; displayName?: string } | undefined;
   if (!u || !u.active) throw new HttpsError("permission-denied", "このアカウントは利用が許可されていません。管理者に連絡してください。");
