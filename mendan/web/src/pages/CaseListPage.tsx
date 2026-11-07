@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { fmtDateTime } from "../lib/format";
 import { Link, useNavigate } from "react-router-dom";
 import { orderBy, where } from "firebase/firestore";
 import { P, type CaseDoc } from "@mendan/shared";
@@ -16,6 +17,7 @@ export function CaseListPage() {
   const [form, setForm] = useState({ name: "", decedentName: "", inheritanceStartDate: "" });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [tab, setTab] = useState<"active" | "closed">("active");
 
   const create = async () => {
     setBusy(true);
@@ -29,7 +31,10 @@ export function CaseListPage() {
       setBusy(false);
     }
   };
-  const sorted = [...cases].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const isClosed = (c: CaseDoc) => c.status === "closed";
+  const activeCases = cases.filter((c) => !isClosed(c)).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const closedCases = cases.filter(isClosed).sort((a, b) => (b.closedAt ?? b.updatedAt).localeCompare(a.closedAt ?? a.updatedAt));
+  const sorted = tab === "active" ? activeCases : closedCases;
 
   return (
     <Layout title="案件一覧">
@@ -51,10 +56,24 @@ export function CaseListPage() {
         </section>
       )}
       <section className="mt-6 rounded-xl border bg-white">
-        <h2 className="border-b px-5 py-3 font-bold">担当案件</h2>
+        <div className="flex items-center gap-2 border-b px-5 py-3">
+          {([
+            ["active", "進行中の案件", activeCases.length],
+            ["closed", "完了した案件", closedCases.length],
+          ] as const).map(([k, label, n]) => (
+            <button
+              key={k}
+              data-testid={`tab-${k}`}
+              onClick={() => setTab(k)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-bold ${tab === k ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-100"}`}
+            >
+              {label}（{n}）
+            </button>
+          ))}
+        </div>
         {loading && <p className="p-5 text-slate-500">読み込み中…</p>}
         {error && <p className="p-5 text-red-700">{error}</p>}
-        {!loading && sorted.length === 0 && <p className="p-5 text-slate-500">案件はまだありません。</p>}
+        {!loading && sorted.length === 0 && <p className="p-5 text-slate-500">{tab === "active" ? "進行中の案件はありません。" : "完了した案件はありません。"}</p>}
         <ul className="divide-y">
           {sorted.map((c) => (
             <li key={c.id}>
@@ -62,9 +81,13 @@ export function CaseListPage() {
                 <span className="font-medium">{c.name}</span>
                 <span className="text-sm text-slate-600">被相続人: {c.decedentName}</span>
                 <span className="text-sm text-slate-600">相続開始日: {c.inheritanceStartDate ?? "未入力"}</span>
+                {isClosed(c) ? (
+                  <span className="ml-auto rounded bg-slate-200 px-2 py-0.5 text-xs text-slate-700">完了 {fmtDateTime(c.closedAt ?? c.updatedAt)}</span>
+                ) : (
                 <span className={`ml-auto rounded px-2 py-0.5 text-xs ${c.consent?.recording && c.consent?.aiAnalysis ? "bg-green-100 text-green-800" : "bg-slate-100 text-slate-600"}`}>
                   {c.consent?.recording && c.consent?.aiAnalysis ? "同意済み" : "同意未記録"}
                 </span>
+                )}
               </Link>
             </li>
           ))}

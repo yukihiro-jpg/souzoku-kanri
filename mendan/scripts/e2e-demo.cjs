@@ -99,11 +99,36 @@ const ok = (c, m) => {
   const url = page.url().replace(/\/meetings\/.*/, "/print");
   await page.goto(url);
   await page.waitForTimeout(1500);
-  const rows = await page.$$eval("tbody tr", (r) => r.length);
+  const rows = await page.$$eval("section tbody tr", (r) => r.length);
   ok(rows > 10, `資料依頼書に資料が一覧表示（${rows}行）`);
   await page.screenshot({ path: path.join(OUT, "print.png"), fullPage: true });
   await page.evaluate(() => document.fonts.ready);
   await page.pdf({ path: path.join(OUT, "print.pdf"), format: "A4", preferCSSPageSize: true });
+
+  console.log("■ 案件の完了・削除");
+  const NAME = "山田家 相続税申告（架空）";
+  const caseUrl = url.replace(/\/print$/, "");
+  await page.goto(caseUrl);
+  page.once("dialog", (d) => d.accept());
+  await page.getByTestId("toggle-close").click();
+  await page.waitForURL((u) => new URL(u).pathname === "/", { timeout: 15000 });
+  await page.getByTestId("tab-active").waitFor();
+  await page.waitForTimeout(800);
+  ok(!(await page.getByText(NAME).isVisible()), "完了にした案件はトップ画面（進行中）に表示されない");
+  await page.getByTestId("tab-closed").click();
+  await page.getByText(NAME).waitFor({ timeout: 5000 });
+  ok(true, "「完了した案件」に表示される");
+  await page.screenshot({ path: path.join(OUT, "case-list-closed.png") });
+  await page.getByText(NAME).click();
+  await page.getByTestId("toggle-close").waitFor();
+  ok((await page.getByTestId("toggle-close").textContent())?.includes("進行中に戻す"), "完了した案件には「進行中に戻す」ボタン");
+  await page.screenshot({ path: path.join(OUT, "case-closed.png") });
+  page.once("dialog", (d) => d.accept(NAME));
+  await page.getByTestId("delete-case").click();
+  await page.waitForURL((u) => new URL(u).pathname === "/", { timeout: 30000 });
+  await page.getByTestId("tab-closed").click();
+  await page.waitForTimeout(800);
+  ok(!(await page.getByText(NAME).isVisible()), "削除した案件はどちらの一覧にも表示されない");
 
   ok(errors.length === 0, `ブラウザのエラーなし${errors.length ? `: ${errors.slice(0, 3).join(" / ")}` : ""}`);
   await browser.close();

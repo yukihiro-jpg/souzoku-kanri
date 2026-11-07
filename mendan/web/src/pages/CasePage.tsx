@@ -32,6 +32,7 @@ export function CasePage() {
   const stats = completionStats(checkItems);
   const activeDocs = docs.filter((d) => !["not_needed", "removal_candidate"].includes(d.status));
   const live = meetings.find((m) => m.status === "in_progress");
+  const closed = c.status === "closed";
 
   const run = async (f: () => Promise<void>) => {
     setBusy(true);
@@ -62,9 +63,50 @@ export function CasePage() {
             <dt className="text-slate-500">未確認事項</dt>
             <dd>{stats.open} 件（うち重要 {stats.highOpen} 件）</dd>
           </dl>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             <Link to={`/cases/${caseId}/print`} className="rounded border px-3 py-1.5 text-sm hover:bg-slate-50">必要資料依頼書（PDF出力）</Link>
+            {canWrite && (
+              <button
+                data-testid="toggle-close"
+                disabled={busy}
+                onClick={() =>
+                  run(async () => {
+                    if (closed) {
+                      await api.setCaseStatus({ caseId, status: "active" });
+                      return;
+                    }
+                    if (!window.confirm(`「${c.name}」を完了にします。トップ画面の「進行中の案件」から「完了した案件」へ移ります（データは残り、いつでも進行中に戻せます）。`)) return;
+                    await api.setCaseStatus({ caseId, status: "closed" });
+                    nav("/");
+                  })
+                }
+                className={closed ? "rounded border px-3 py-1.5 text-sm hover:bg-slate-50" : "rounded bg-green-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-800 disabled:opacity-50"}
+              >
+                {closed ? "進行中に戻す" : "✓ 案件を完了にする"}
+              </button>
+            )}
+            {profile?.role === "admin" && (
+              <button
+                data-testid="delete-case"
+                disabled={busy}
+                onClick={() =>
+                  run(async () => {
+                    const typed = window.prompt(
+                      `【注意】案件「${c.name}」を削除します。\n面談の文字起こし・録音・必要資料・確認事項などのデータがすべて削除され、元に戻せません。\n\n削除する場合は、確認のため案件名「${c.name}」を入力してください。`,
+                    );
+                    if (typed === null) return;
+                    if (typed.trim() !== c.name.trim()) throw new Error("入力された案件名が一致しないため、削除しませんでした。");
+                    await api.deleteCase({ caseId, confirmName: typed });
+                    nav("/");
+                  })
+                }
+                className="ml-auto rounded border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+              >
+                案件を削除
+              </button>
+            )}
           </div>
+          {closed && <p className="mt-2 text-sm text-slate-600">この案件は完了しています（{fmtDateTime(c.closedAt ?? c.updatedAt)}）。</p>}
         </section>
 
         <section className="rounded-xl border bg-white p-5">

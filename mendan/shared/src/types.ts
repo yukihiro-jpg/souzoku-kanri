@@ -328,7 +328,10 @@ export interface CaseDoc {
   memberIds: string[];
   members: Record<string, Role>;
   consent: Consent | null;
+  /** active = 進行中 / closed = 完了（トップ画面には進行中のみ表示） */
   status: "active" | "closed";
+  closedAt?: string | null;
+  closedBy?: string | null;
   createdAt: string;
   createdBy: string;
   updatedAt: string;

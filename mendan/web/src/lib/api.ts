@@ -18,6 +18,8 @@ export const api = {
   ensureUser: call<void, { role: Role; email: string; displayName: string; active: boolean }>("ensureUser"),
   createCase: call<{ name: string; decedentName: string; inheritanceStartDate?: string }, { caseId: string }>("createCase"),
   updateCase: call<{ caseId: string; name?: string; decedentName?: string; inheritanceStartDate?: string | null; addMemberEmail?: string; memberRole?: Role }, { ok: true }>("updateCase"),
+  setCaseStatus: call<{ caseId: string; status: "active" | "closed" }, { ok: true }>("setCaseStatus"),
+  deleteCase: call<{ caseId: string; confirmName: string }, { ok: true }>("deleteCase", 300_000),
   recordConsent: call<{ caseId: string; recording: boolean; aiAnalysis: boolean; method: "verbal" | "written"; note?: string }, unknown>("recordConsent"),
   startMeeting: call<{ caseId: string }, { meetingId: string; no: number }>("startMeeting"),
   endMeeting: call<{ caseId: string; meetingId: string; force?: boolean }, { ended: boolean; warnings: string[] }>("endMeeting"),

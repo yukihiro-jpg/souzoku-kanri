@@ -1,4 +1,6 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions";
+import { getStorage } from "firebase-admin/storage";
 import { CHECK_ITEM_MASTER, P, completionStats, initialCheckItems, type CaseDoc, type CheckItem, type Consent, type Meeting, type Role } from "@mendan/shared";
 import { assertEmailAllowed, csvList, optStr, requireCase, requireRole, requireUser, str } from "./auth.js";
 import { ADMIN_EMAILS, REGION } from "./config.js";
@@ -80,6 +82,58 @@ export const updateCase = onCall({ region: REGION }, async (req) => {
   batch.update(db.doc(P.case(d.caseId)), patch);
   audit(batch, d.caseId, { actor: actor.uid, action: "case_updated", target: d.caseId, detail: { fields: Object.keys(patch) } });
   await batch.commit();
+  return { ok: true };
+});
+
+async function assertNoLiveMeeting(caseId: string, what: string) {
+  const live = await db.collection(P.meetings(caseId)).where("status", "==", "in_progress").limit(1).get();
+  if (!live.empty) throw new HttpsError("failed-precondition", `面談中のため${what}できません。先に面談を終了してください。`);
+}
+
+/** 案件の完了／進行中に戻す。完了した案件はトップ画面（進行中）から「完了」の一覧へ移る */
+export const setCaseStatus = onCall({ region: REGION }, async (req) => {
+  const actor = await requireUser(req);
+  requireRole(actor, ["admin", "staff"]);
+  const d = (req.data ?? {}) as { caseId: string; status: "active" | "closed" };
+  if (d.status !== "active" && d.status !== "closed") throw new HttpsError("invalid-argument", "status は active か closed です。");
+  await requireCase(actor, d.caseId, true);
+  if (d.status === "closed") await assertNoLiveMeeting(d.caseId, "完了に");
+  const now = nowIso();
+  const batch = db.batch();
+  batch.update(db.doc(P.case(d.caseId)), {
+    status: d.status,
+    closedAt: d.status === "closed" ? now : null,
+    closedBy: d.status === "closed" ? actor.uid : null,
+    updatedAt: now,
+  });
+  audit(batch, d.caseId, { actor: actor.uid, action: d.status === "closed" ? "case_closed" : "case_reopened", target: d.caseId });
+  await batch.commit();
+  return { ok: true };
+});
+
+/**
+ * 案件の削除（管理者のみ・元に戻せない）
+ * 案件・面談・発言・資料・確認事項・操作記録などの配下データと、録音ファイルをすべて削除する。
+ * 誤操作防止のため、案件名の入力（confirmName）が一致した場合だけ実行する。
+ * 料金の記録（costLogs）は月の集計のため残し、削除した事実（案件名・削除者・日時）だけを deletedCases に残す。
+ */
+export const deleteCase = onCall({ region: REGION, timeoutSeconds: 300 }, async (req) => {
+  const actor = await requireUser(req);
+  requireRole(actor, ["admin"]);
+  const d = (req.data ?? {}) as { caseId: string; confirmName: string };
+  const c = await requireCase(actor, d.caseId, true);
+  if (typeof d.confirmName !== "string" || d.confirmName.trim() !== c.name.trim()) {
+    throw new HttpsError("invalid-argument", "入力された案件名が一致しないため、削除しませんでした。");
+  }
+  await assertNoLiveMeeting(d.caseId, "削除");
+  try {
+    await getStorage().bucket().deleteFiles({ prefix: `audio/${d.caseId}/` });
+  } catch (e) {
+    logger.error("audio delete failed", { caseId: d.caseId, message: (e as Error).message });
+    throw new HttpsError("internal", "録音ファイルの削除に失敗したため、案件の削除を中止しました。時間をおいて再度お試しください。");
+  }
+  await db.recursiveDelete(db.doc(P.case(d.caseId)));
+  await db.collection(P.deletedCases()).doc(d.caseId).set({ caseId: d.caseId, name: c.name, deletedBy: actor.uid, deletedByEmail: actor.email, deletedAt: nowIso() });
   return { ok: true };
 });
 

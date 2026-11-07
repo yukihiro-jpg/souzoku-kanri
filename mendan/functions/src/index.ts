@@ -6,7 +6,7 @@
  *  - Claude（analyze.ts / reanalyze.ts）: 確定した発言 → 事実の構造化
  *  - ルールエンジン（@mendan/shared）: 事実 → 必要資料・追加確認項目（AIに依存しない）
  */
-export { ensureUser, createCase, updateCase, recordConsent, startMeeting, endMeeting } from "./cases.js";
+export { ensureUser, createCase, updateCase, setCaseStatus, deleteCase, recordConsent, startMeeting, endMeeting } from "./cases.js";
 export { createTranscriptionSession, reportAudioUsage } from "./gemini.js";
 export { analyzeSegments } from "./analyze.js";
 export { reanalyzeMeeting } from "./reanalyze.js";

@@ -156,6 +156,21 @@ async function main() {
   ok(typeof re.reviewItems === "number", `面談後の全体再解析（追加確認候補 ${re.reviewItems} 件）`);
   ok(!!(await expectFail(setDoc(doc(admin.db, P.segment(caseId, meetingId, segmentId(meetingId, 999))), { id: segmentId(meetingId, 999) }))), "終了した面談には発言を追加できない");
 
+  console.log("■ 案件の完了・削除");
+  const m2 = await admin.call("startMeeting", { caseId });
+  ok(!!(await expectFail(admin.call("setCaseStatus", { caseId, status: "closed" }))), "面談中の案件は完了にできない");
+  await admin.call("endMeeting", { caseId, meetingId: m2.meetingId, force: true });
+  await admin.call("setCaseStatus", { caseId, status: "closed" });
+  const closedCase = (await getDoc(doc(admin.db, P.case(caseId)))).data();
+  ok(closedCase?.status === "closed" && !!closedCase?.closedAt, "案件を完了にできる（完了日時を記録）");
+  await admin.call("setCaseStatus", { caseId, status: "active" });
+  ok((await getDoc(doc(admin.db, P.case(caseId)))).data()?.status === "active", "完了した案件を進行中に戻せる");
+  ok(!!(await expectFail(staff2.call("deleteCase", { caseId, confirmName: "テスト案件（架空）" }))), "管理者以外は削除できない");
+  ok(!!(await expectFail(admin.call("deleteCase", { caseId, confirmName: "違う名前" }))), "案件名が一致しないと削除しない");
+  await admin.call("deleteCase", { caseId, confirmName: "テスト案件（架空）" });
+  const left = await Promise.all([P.documents(caseId), P.entities(caseId), P.checkItems(caseId), P.meetings(caseId), P.segments(caseId, meetingId)].map((c) => getDocs(collection(admin.db, c)).then((r) => r.size).catch(() => 0)));
+  ok(!(await getDoc(doc(admin.db, P.case(caseId)))).exists() && left.every((n) => n === 0), `削除すると案件と配下のデータがすべて消える（残り ${left.join("/")}）`);
+
   for (const c of [admin, outsider, staff2]) await deleteApp(c.app);
   console.log(failures === 0 ? "\n結合テスト: すべて成功" : `\n結合テスト: ${failures} 件失敗`);
   process.exit(failures === 0 ? 0 : 1);

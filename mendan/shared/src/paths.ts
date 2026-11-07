@@ -14,6 +14,8 @@ export const P = {
   auditLogs: (c: string) => `cases/${c}/auditLogs`,
   aiJobs: (c: string) => `cases/${c}/aiJobs`,
   costLogs: () => "costLogs",
+  /** 削除した案件の記録（案件名・削除者・日時のみ。面談内容は残さない） */
+  deletedCases: () => "deletedCases",
   costSummary: (month: string) => `costSummary/${month}`,
   documentRules: () => "documentRules",
   vocabulary: () => "vocabulary",
