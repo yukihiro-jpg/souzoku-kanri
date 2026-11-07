@@ -54,14 +54,22 @@ step "0. 準備（プロジェクト: ${PROJECT}）"
 gcloud config set project "$PROJECT" >/dev/null
 node_major="$(node -v 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/' || echo 0)"
 if [ "${node_major:-0}" != "22" ]; then
-  echo "Node.js 22 を用意します…"
-  # nvm は未定義の変数を参照するため、この間だけ厳格モードを外す
-  set +u
-  # shellcheck disable=SC1091
-  source "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
-  nvm install 22 >/dev/null
-  nvm use 22 >/dev/null
-  set -u
+  # Cloud Shell の Node.js が 22 以外のときは、公式サイトから Node.js 22 をホームフォルダに用意する（初回のみ・1分ほど）
+  NODE_DIR="$HOME/.mendan-node22"
+  if [ ! -x "$NODE_DIR/bin/node" ]; then
+    echo "Node.js 22 を用意します（初回のみ）…"
+    BASE="https://nodejs.org/dist/latest-v22.x"
+    SUMS="$(curl -fsSL "$BASE/SHASUMS256.txt")"
+    FILE="$(echo "$SUMS" | grep -oE 'node-v22\.[0-9.]+-linux-x64\.tar\.xz' | head -1)"
+    TMP="$(mktemp -d)"
+    curl -fsSL -o "$TMP/$FILE" "$BASE/$FILE"
+    # 改ざんされていないか確認（公式の SHA256 と一致すること）
+    (cd "$TMP" && echo "$SUMS" | grep " ${FILE}\$" | sha256sum -c - >/dev/null)
+    rm -rf "$NODE_DIR" && mkdir -p "$NODE_DIR"
+    tar -xJf "$TMP/$FILE" -C "$NODE_DIR" --strip-components=1
+    rm -rf "$TMP"
+  fi
+  export PATH="$NODE_DIR/bin:$PATH"
 fi
 echo "Node.js $(node -v)"
 
