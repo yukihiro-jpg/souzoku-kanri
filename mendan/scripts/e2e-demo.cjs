@@ -102,6 +102,8 @@ const ok = (c, m) => {
   const rows = await page.$$eval("tbody tr", (r) => r.length);
   ok(rows > 10, `資料依頼書に資料が一覧表示（${rows}行）`);
   await page.screenshot({ path: path.join(OUT, "print.png"), fullPage: true });
+  await page.evaluate(() => document.fonts.ready);
+  await page.pdf({ path: path.join(OUT, "print.pdf"), format: "A4", preferCSSPageSize: true });
 
   ok(errors.length === 0, `ブラウザのエラーなし${errors.length ? `: ${errors.slice(0, 3).join(" / ")}` : ""}`);
   await browser.close();

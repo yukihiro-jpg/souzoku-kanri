@@ -10,6 +10,12 @@
 }
 .flash { animation: flash 1.6s ease-out; }
 
+/* 資料依頼書: Noto Sans JP。背景色を印刷・PDFにも反映する */
+.doc-request { font-family: "Noto Sans JP", "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif; }
+.doc-request * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.doc-request .keep { break-inside: avoid; }
+.doc-request .keep-next { break-after: avoid; }
+
 @media print {
   .no-print { display: none !important; }
   body { background: white; }
