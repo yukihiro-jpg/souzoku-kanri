@@ -44,7 +44,7 @@ fi
 step "0. 準備（プロジェクト: ${PROJECT}）"
 gcloud config set project "$PROJECT" >/dev/null
 node_major="$(node -v 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/' || echo 0)"
-if [ "${node_major:-0}" -lt 22 ]; then
+if [ "${node_major:-0}" != "22" ]; then
   echo "Node.js 22 を用意します…"
   # nvm は未定義の変数を参照するため、この間だけ厳格モードを外す
   set +u
@@ -127,8 +127,8 @@ echo "設定ファイル: ${ENV_FILE}（このファイルは Git に含めま�
 
 step "6. Firebase へのログイン確認"
 if ! npx firebase projects:list >/dev/null 2>&1; then
-  echo "Firebase にログインします。表示される URL をブラウザで開き、事務所のアカウントで許可して、表示されたコードを貼り付けてください。"
-  npx firebase login --no-localhost
+  echo "Firebase にログインし直します。表示される URL をブラウザで開き、事務所のアカウントで許可して、表示されたコードを貼り付けてください。"
+  npx firebase login --reauth --no-localhost
 fi
 
 step "7. Claude の API キー（Secret Manager）"
