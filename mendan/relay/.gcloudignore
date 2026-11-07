@@ -1,0 +1,8 @@
+# Cloud Run へのアップロード対象: package.json / Dockerfile / dist（ビルド済み）だけ
+.gcloudignore
+node_modules/
+src/
+test/
+*.md
+tsconfig.json
+build.mjs

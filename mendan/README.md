@@ -153,6 +153,16 @@ npm run dev
 - **Gemini**: https://aistudio.google.com/ →「Get API key」で、上と同じ Google Cloud プロジェクトにキーを作成
   - 無料枠では送信データがサービス改善に使われる場合があります。**実データは有料（課金）設定のキーで**、データ利用条件を確認のうえ使用してください
 
+### 5-2a. かんたん公開（おすすめ）：Cloud Shell でスクリプトを1つ実行
+Google Cloud コンソール右上の「Cloud Shell をアクティブにする」（`>_` のマーク）を押し、表示された黒い画面に次を貼り付けます。
+```bash
+git clone -b claude/trusting-wozniak-swj60e https://github.com/yukihiro-jpg/souzoku-kanri.git
+cd souzoku-kanri/mendan
+bash scripts/deploy.sh
+```
+以下の 5-2b・5-3 の作業（中継サーバー・設定・キー登録・公開）をまとめて行います。初回のみ、許可するドメイン・管理者のメールアドレス・Claude の API キーを聞かれます。
+更新を反映するときは、同じフォルダで `git pull && bash scripts/deploy.sh` を実行します。
+
 ### 5-2b. 文字起こし中継サーバー（Cloud Run）の公開
 Vertex AI（後払い）を使うため、中継サーバーを Cloud Run に公開します（Google Cloud コンソール右上の「Cloud Shell」から実行できます）。
 
