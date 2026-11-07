@@ -17,6 +17,7 @@ import type { Transcriber, TranscriberEvents } from "./types";
 const MAX_BUFFER_FRAMES = 600; // 100ms × 600 = 60秒
 const FINAL_FLUSH_MS = 2500; // finished が来ない場合の確定待ち
 const STALL_MS = 15_000; // 発話があるのに応答がない時間
+const CONNECT_TIMEOUT_MS = 15_000; // 接続の待ち時間の上限
 
 interface Buffered {
   index: number;
@@ -46,6 +47,8 @@ export class GeminiTranscriber implements Transcriber {
   private audioMs = 0;
   private reconnecting = false;
   private lastFinalIndex = -1;
+  /** vertex の場合、音声時間は中継サーバーが記録するので画面からは報告しない */
+  private mode: "gemini" | "vertex" = "gemini";
 
   constructor(
     private readonly getSession: (resumeHandle: string | null) => Promise<TranscriptionSession>,
@@ -63,19 +66,45 @@ export class GeminiTranscriber implements Transcriber {
   private async connect() {
     this.ev.onState(this.disconnectedAt ? "reconnecting" : "connecting", this.disconnectedAt ? "再接続しています…" : "音声認識に接続しています…");
     const info = await this.getSession(this.resumeHandle);
-    if (info.mode !== "gemini") throw new Error(`音声認識が利用できません（${info.reason}）`);
-    const ai = new GoogleGenAI({ apiKey: info.token, httpOptions: { apiVersion: "v1alpha" } });
+    if (info.mode === "mock") throw new Error(`音声認識が利用できません（${info.reason}）`);
+    this.mode = info.mode;
+    // vertex: 事務所の中継サーバー経由で Vertex AI（後払い）へ。Google Cloud の認証は中継サーバーだけが持つ
+    //         （ブラウザ版SDKはキーの指定が必須のため、中継サーバー用の仮の値を入れる。実際の認可はURL内の1回限りのチケット）
+    // gemini: AI Studio（前払い）へ一時トークンで直接接続
+    const ai =
+      info.mode === "vertex"
+        ? new GoogleGenAI({ vertexai: true, apiKey: "relay", httpOptions: { baseUrl: info.relayBaseUrl } })
+        : new GoogleGenAI({ apiKey: info.token, httpOptions: { apiVersion: "v1alpha" } });
     const resumed = !!this.resumeHandle;
-    this.session = await ai.live.connect({
-      model: info.model,
-      config: info.config,
-      callbacks: {
-        onopen: () => undefined,
-        onmessage: (m: LiveServerMessage) => this.onMessage(m),
-        onerror: (e: ErrorEvent) => this.ev.onState("error", `音声認識の通信エラー: ${e.message ?? ""}`),
-        onclose: (e: CloseEvent) => this.onClose(e),
-      },
-    });
+    // 接続が拒否された場合、SDK の connect() は完了しないことがあるため、閉じた・時間切れで失敗として扱う
+    let failEarly: (e: Error) => void = () => undefined;
+    const early = new Promise<never>((_, reject) => (failEarly = reject));
+    let opened = false;
+    const timeout = setTimeout(() => failEarly(new Error("音声認識への接続が時間内に完了しませんでした")), CONNECT_TIMEOUT_MS);
+    try {
+      this.session = await Promise.race([
+        ai.live.connect({
+          model: info.model,
+          config: info.config,
+          callbacks: {
+            onopen: () => undefined,
+            onmessage: (m: LiveServerMessage) => this.onMessage(m),
+            onerror: (e: ErrorEvent) => {
+              if (!opened) failEarly(new Error("音声認識に接続できませんでした"));
+              else this.ev.onState("error", `音声認識の通信エラー: ${e.message ?? ""}`);
+            },
+            onclose: (e: CloseEvent) => {
+              if (!opened) failEarly(new Error(`音声認識の接続が拒否されました（${e.code}${e.reason ? `: ${e.reason}` : ""}）`));
+              else this.onClose(e);
+            },
+          },
+        }),
+        early,
+      ]);
+      opened = true;
+    } finally {
+      clearTimeout(timeout);
+    }
     this.connected = true;
     this.retry = 0;
     this.lastServerAt = Date.now();
@@ -95,7 +124,7 @@ export class GeminiTranscriber implements Transcriber {
 
   private onFrame(f: AudioFrame) {
     this.audioMs += 100;
-    if (this.audioMs % 60_000 === 0) this.ev.onAudioSeconds?.(60);
+    if (this.audioMs % 60_000 === 0 && this.mode === "gemini") this.ev.onAudioSeconds?.(60);
     if (f.rms > 0.02) this.lastVoiceAt = f.at;
     const data = toBase64(f.pcm);
     if (this.connected && this.session) this.sendAudio(data, true);
@@ -245,7 +274,7 @@ export class GeminiTranscriber implements Transcriber {
     this.session = null;
     this.connected = false;
     const rest = (this.audioMs % 60_000) / 1000;
-    if (rest > 0) this.ev.onAudioSeconds?.(rest);
+    if (rest > 0 && this.mode === "gemini") this.ev.onAudioSeconds?.(rest);
     this.ev.onState("stopped", "録音を停止しました");
   }
 }

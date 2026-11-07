@@ -1,0 +1,22 @@
+{
+  "name": "@mendan/relay",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Gemini Live（Vertex AI）文字起こしの中継サーバー（Cloud Run）",
+  "main": "dist/server.js",
+  "engines": { "node": "22" },
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "firebase-admin": "14.5.0",
+    "google-auth-library": "9.15.1",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/ws": "8.18.1"
+  }
+}

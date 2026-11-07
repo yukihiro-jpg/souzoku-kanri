@@ -3,17 +3,23 @@
   "private": true,
   "version": "0.1.0",
   "description": "相続税申告 AIリアルタイム面談・必要資料管理システム",
-  "workspaces": ["shared", "functions", "web"],
+  "workspaces": [
+    "shared",
+    "functions",
+    "web",
+    "relay"
+  ],
   "scripts": {
-    "build": "npm run build -w functions && npm run build -w web",
-    "typecheck": "npm run typecheck -w shared && npm run typecheck -w functions && npm run typecheck -w web",
+    "build": "npm run build -w functions && npm run build -w relay && npm run build -w web",
+    "typecheck": "npm run typecheck -w shared && npm run typecheck -w functions && npm run typecheck -w relay && npm run typecheck -w web",
     "test": "vitest run",
     "emulators": "npm run build -w functions && firebase emulators:start --project demo-souzoku-mendan --import=./.emulator-data --export-on-exit=./.emulator-data",
     "emulators:clean": "npm run build -w functions && firebase emulators:start --project demo-souzoku-mendan",
     "dev": "npm run dev -w web",
     "eval": "tsx eval/run-eval.ts",
     "seed": "tsx scripts/seed.ts",
-    "test:integration": "tsx scripts/integration-test.ts"
+    "test:integration": "tsx scripts/integration-test.ts",
+    "test:relay": "tsx scripts/relay-integration-test.ts"
   },
   "devDependencies": {
     "esbuild": "0.28.2",

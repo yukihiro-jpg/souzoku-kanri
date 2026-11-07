@@ -13,8 +13,15 @@ export const REGION = "asia-northeast1";
 
 /** claude: Claude API を使う / mock: 開発用の簡易解析器（APIキー不要） */
 export const AI_MODE = defineString("AI_MODE", { default: "claude" });
-/** gemini: Gemini Live を使う / mock: マイクを使わないデモ文字起こしのみ */
-export const TRANSCRIBE_MODE = defineString("TRANSCRIBE_MODE", { default: "gemini" });
+/**
+ * 文字起こしの接続方式
+ *  vertex: Google Cloud の Vertex AI（後払い）。中継サーバー（Cloud Run）経由で接続する（既定）
+ *  gemini: AI Studio の Gemini API（前払い）。一時トークンでブラウザから直接接続する
+ *  mock  : マイクを使わないデモ文字起こしのみ
+ */
+export const TRANSCRIBE_MODE = defineString("TRANSCRIBE_MODE", { default: "vertex" });
+/** 中継サーバー（Cloud Run）の URL（例: https://transcribe-relay-xxxxx-an.a.run.app） */
+export const RELAY_URL = defineString("RELAY_URL", { default: "" });
 
 export const CLAUDE_MODEL_REALTIME = defineString("CLAUDE_MODEL_REALTIME", { default: "claude-sonnet-5-5" });
 export const CLAUDE_MODEL_REVIEW = defineString("CLAUDE_MODEL_REVIEW", { default: "claude-sonnet-5-5" });

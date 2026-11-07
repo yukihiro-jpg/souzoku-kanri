@@ -43,11 +43,13 @@
 
 ```
  ブラウザ（担当者のPC）                          サーバー（Cloud Functions / 東京リージョン）
- ┌──────────────────────┐   ①一時トークン要求   ┌────────────────────────────┐
- │ マイク → 16kHz PCM    │ ───────────────────▶ │ createTranscriptionSession │ ← Gemini APIキー（Secret Manager）
- │                      │ ◀─── 一時トークン ─── │ （同意・権限を確認）          │
- │ ②Gemini Live へ直接   │                      └────────────────────────────┘
- │   ストリーミング（遅延最小）                   ┌────────────────────────────┐
+ ┌──────────────────────┐ ①1回限りのチケット要求 ┌────────────────────────────┐
+ │ マイク → 16kHz PCM    │ ───────────────────▶ │ createTranscriptionSession │
+ │                      │ ◀──── チケット ────── │ （同意・権限を確認）          │
+ │ ②中継サーバー経由で    │                      └────────────────────────────┘
+ │   ストリーミング ───────▶ 文字起こし中継（Cloud Run）──▶ Vertex AI（Gemini Live・後払い）
+ │                      │   チケット確認・モデル固定・音声以外は遮断・音声時間の記録
+ │                      │                      ┌────────────────────────────┐
  │ ③暫定/確定テキスト表示 │ ④確定発言を保存 ───▶ │ Firestore（発言）             │
  │                      │ ⑤解析依頼（発言IDのみ）▶│ analyzeSegments             │ ← Claude APIキー（Secret Manager）
  │                      │                      │  ・Claude: 事実を構造化        │
@@ -56,7 +58,8 @@
                                                 └────────────────────────────┘
 ```
 
-- **Gemini**: 音声 → 文字だけを担当。APIキーはブラウザに渡さず、サーバーが**1回限り・短時間の一時トークン**を発行します（モデル・語彙・設定もトークン側で固定）。
+- **Gemini**: 音声 → 文字だけを担当。Google Cloud の **Vertex AI（後払い）** を使います。Google Cloud の認証は**文字起こし中継サーバー（`relay/`、Cloud Run）だけ**が持ち、ブラウザには渡しません。ブラウザはサーバーが発行する**1回限り・2分以内のチケット**で中継に接続し、中継がモデルの固定・音声以外の要求の遮断・音声時間の記録を行います。
+  （AI Studio の Gemini API は2026年に前払い方式に一本化されたため、後払いで使える Vertex AI を既定にしました。AI Studio 方式に戻す設定 `TRANSCRIBE_MODE=gemini` も残しています。）
 - **Claude**: 文字 → 事実（財産・人物・回答）の構造化だけを担当。必ず根拠の発言IDを付けさせ、根拠のない事実は登録しません。
 - **ルールエンジン**（`shared/src/ruleEngine.ts`）: 事実 → 必要資料。AIに依存しない決定的な判定で、税理士が管理画面から変更できます。
 
@@ -76,6 +79,7 @@
 | 一時トークン | `authTokens.create`（v1alpha）、`liveConnectConstraints` で設定固定 | 同上 |
 | セッション再開 | `sessionResumption`（`transparent: true` で未処理の音声位置を通知） | 同上 |
 | 音声形式 | 16bit PCM / 16kHz / モノラル | 同上・Web検索 |
+| Vertex AI での接続 | 公式SDKの Vertex モードで中継サーバーのURLを指定して接続（ブラウザ版SDKはヘッダーを送らないため、チケットはURLに入れる）。動作は偽の Vertex AI サーバーで確認 | SDK のソースと実験 |
 | Claude | `claude-sonnet-5-5`（環境変数で変更可）、Structured Outputs（`output_config.format`）、プロンプトキャッシュ | Anthropic SDK 1.3.0・公式ドキュメント |
 
 > ⚠️ **注意（必ずお読みください）**
@@ -149,6 +153,26 @@ npm run dev
 - **Gemini**: https://aistudio.google.com/ →「Get API key」で、上と同じ Google Cloud プロジェクトにキーを作成
   - 無料枠では送信データがサービス改善に使われる場合があります。**実データは有料（課金）設定のキーで**、データ利用条件を確認のうえ使用してください
 
+### 5-2b. 文字起こし中継サーバー（Cloud Run）の公開
+Vertex AI（後払い）を使うため、中継サーバーを Cloud Run に公開します（Google Cloud コンソール右上の「Cloud Shell」から実行できます）。
+
+```bash
+# 中継サーバー専用のサービスアカウント（Vertex AI の呼び出しと Firestore のチケット確認だけを許可）
+PROJECT=<プロジェクトID>
+gcloud iam service-accounts create transcribe-relay --project $PROJECT
+for ROLE in roles/aiplatform.user roles/datastore.user; do
+  gcloud projects add-iam-policy-binding $PROJECT --member "serviceAccount:transcribe-relay@$PROJECT.iam.gserviceaccount.com" --role $ROLE
+done
+# ビルドして公開（mendan/relay フォルダで実行）
+npm install && npm run build
+gcloud run deploy transcribe-relay --source . --project $PROJECT --region asia-northeast1 \
+  --service-account transcribe-relay@$PROJECT.iam.gserviceaccount.com --allow-unauthenticated \
+  --timeout 3600 --set-env-vars GOOGLE_CLOUD_PROJECT=$PROJECT,VERTEX_LOCATION=us-central1
+```
+- `--allow-unauthenticated` は「Google のログインなしで接続を受け付ける」という意味です。中継サーバー自身が1回限りのチケットを確認するため、チケットのない接続はすべて拒否されます。
+- 表示された URL（`https://transcribe-relay-…run.app`）を `functions/.env` の `RELAY_URL` に設定します。
+- `VERTEX_LOCATION` は文字起こしモデル（gemini-3.5-transcribe-live）が使えるリージョンにします。東京（asia-northeast1）で提供されていればそちらに変更してください（データが国内で処理されます）。
+
 ### 5-3. コマンドでの設定とデプロイ
 ここではパソコンのターミナルで操作します。
 
@@ -160,9 +184,9 @@ npx firebase login
 cd mendan
 npx firebase use --add        # 一覧から選び、別名は「prod」などでOK
 
-# (3) APIキーを Secret Manager に登録（入力を求められたらキーを貼り付け。画面には表示されません）
+# (3) Claude の APIキーを Secret Manager に登録（入力を求められたらキーを貼り付け。画面には表示されません）
+#     Gemini は Vertex AI（Google Cloud の権限）で使うため、キーの登録は不要です
 npx firebase functions:secrets:set ANTHROPIC_API_KEY
-npx firebase functions:secrets:set GEMINI_API_KEY
 
 # (4) サーバーの設定ファイルを作成して編集
 cp functions/.env.example functions/.env
@@ -197,10 +221,12 @@ Cloud Functions は使われていないと停止し、最初の呼び出しが�
 | `npm test` | ルールエンジン・統合ロジックの単体テスト（訂正・承認保護・根拠必須・順序逆転・重複防止・ガイド準拠のルール・取得代行表記なし など33件） | 不要 |
 | `npm run test:integration` | エミュレーター上で関数・セキュリティルールを結合テスト（権限・同意・二重保存拒否・承認保護 など24項目）※要 `npm run emulators:clean` | 不要 |
 | `node scripts/e2e-demo.cjs` | ブラウザでログイン〜デモ面談〜資料依頼書までを自動操作（18項目）※要 エミュレーター＋`npm run dev` | 不要 |
+| `npm test`（relay） | 文字起こし中継サーバーの単体テスト（公式SDKで接続→偽の Vertex AI。チケットの使い回し・期限切れ・別モデル・音声以外の要求の拒否 など7件） | 不要 |
+| `npm run test:relay` | チケット発行（Cloud Functions）→ 中継（Firestore でチケット確認）→ 偽の Vertex AI の結合テスト ※要 `npm run emulators:clean` | 不要 |
 | `npm run eval` | 指示書16の10シナリオで精度指標を計算（簡易解析器） | 不要 |
 | `ANTHROPIC_API_KEY=... npm run eval -- --mode=claude` | **同じ10シナリオを実際の Claude で評価**（抽出再現率・資料再現率・不要資料・訂正・根拠対応率・P50/P95）。結果は `eval/results/` | 必要（数十回の呼び出し・料金発生） |
 
-**今回の実行結果（この開発環境）**: 単体テスト 33/33、結合テスト 24/24、ブラウザ通しテスト 18/18 成功。
+**今回の実行結果（この開発環境）**: 単体テスト 42/42（中継サーバー7件を含む）、中継の結合テスト 7/7、結合テスト 24/24、ブラウザ通しテスト 18/18 成功。
 精度評価は簡易解析器のみ実行（再現率 約68%。キーワード判定のため参考値で、Claude の精度ではありません）。
 **Claude による精度評価（目標: 重要財産・必要資料の再現率 99% 以上）は APIキー設定後に実施が必要です。**
 
@@ -233,12 +259,13 @@ Cloud Functions は使われていないと停止し、最初の呼び出しが�
 | 話者の自動識別 | Live API の話者分離の対応状況を確認できなかったため既定オフ | 話者は「話者未確定」で表示され、クリックで修正。AIは未確定でも内容から判断する指示にしている |
 | 資料依頼書の PDF 生成ライブラリ | 日本語フォントの埋め込みが重く、ブラウザの印刷機能で十分なため | 「印刷 → PDFに保存」で出力 |
 | 実APIでの動作確認・精度評価 | 開発環境にAPIキーがないため | 6章の手順で実施が必要 |
+| Vertex AI 実環境での文字起こし | 開発環境から Google Cloud に接続できないため、偽の Vertex AI サーバーで中継を検証 | 公開後に実際のマイクで確認が必要（セッション再開・話者分離の対応状況も合わせて確認） |
 
 ---
 
 ## 9. セキュリティ
 
-- Gemini・Claude の APIキーは **Secret Manager** に保存し、ブラウザには一切渡しません（Gemini は1回限り・2分以内に接続・30分で失効する一時トークン）
+- Claude の APIキーは **Secret Manager** に保存し、ブラウザには一切渡しません。Gemini は Vertex AI を Google Cloud の権限（中継サーバー専用のサービスアカウント）で呼び出し、ブラウザには1回限り・2分以内に使う接続チケットだけを渡します
 - ログインは許可した Google Workspace ドメインのみ（`ensureUser` で確認し、`users/{uid}.active` がないと Firestore も関数も使えません）
 - **案件単位のアクセス権限**（管理者は全案件、担当者・閲覧者はメンバーの案件のみ）を Firestore／Storage のセキュリティルールで強制
 - 抽出情報・確認事項・必要資料の変更は**すべてサーバー経由**で、操作履歴（AuditLogs）と各データの修正履歴を保存
@@ -254,7 +281,8 @@ Cloud Functions は使われていないと停止し、最初の呼び出しが�
 ```
 mendan/
 ├── shared/        共通ロジック（型、確認事項・資料・ルールのマスタ、ルールエンジン、統合処理、プロンプト）
-├── functions/     Cloud Functions（認証・案件・Gemini一時トークン・Claude解析・再解析・手動修正・管理）
+├── functions/     Cloud Functions（認証・案件・文字起こしチケット・Claude解析・再解析・手動修正・管理）
+├── relay/         文字起こし中継サーバー（Cloud Run。ブラウザ ⇔ Vertex AI）
 ├── web/           画面（React + TypeScript + Vite + Tailwind CSS）
 ├── eval/          精度検証（指示書16の10シナリオと評価スクリプト）
 ├── scripts/       結合テスト・ブラウザ通しテスト

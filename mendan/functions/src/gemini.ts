@@ -13,6 +13,7 @@ import {
   GEMINI_SILENCE_MS,
   GEMINI_TRANSCRIPTION_MODE,
   GEMINI_VOCAB_LIMIT,
+  RELAY_URL,
   REGION,
   TRANSCRIBE_MODE,
   bool,
@@ -20,6 +21,7 @@ import {
 } from "./config.js";
 import { recordAudioUsage } from "./cost.js";
 import { db } from "./db.js";
+import { issueRelayTicket } from "./relayTicket.js";
 
 /**
  * Gemini Live 文字起こしの短期セッション認証
@@ -29,7 +31,12 @@ import { db } from "./db.js";
  *  - モデル・語彙・文字起こし設定をトークンに固定（ブラウザ側で変更不可）
  *  - 再接続のたびに新しいトークンを発行（セッション再開ハンドルを引き継ぐ）
  */
-export const createTranscriptionSession = onCall({ region: REGION, secrets: [GEMINI_API_KEY], timeoutSeconds: 30 }, async (req) => {
+/*
+ * 注意: 既定の Vertex AI 方式では Gemini の API キーは不要なため、secrets に GEMINI_API_KEY を含めていない
+ * （含めると、キーを Secret Manager に登録しない限りデプロイできなくなる）。
+ * AI Studio 方式（TRANSCRIBE_MODE=gemini）に切り替える場合は、下の secrets に GEMINI_API_KEY を追加すること。
+ */
+export const createTranscriptionSession = onCall({ region: REGION, secrets: [], timeoutSeconds: 30 }, async (req) => {
   const actor = await requireUser(req);
   requireRole(actor, ["admin", "staff"]);
   const { caseId, meetingId, resumeHandle } = (req.data ?? {}) as { caseId: string; meetingId: string; resumeHandle?: string | null };
@@ -40,14 +47,23 @@ export const createTranscriptionSession = onCall({ region: REGION, secrets: [GEM
   const m = (await db.doc(P.meeting(caseId, meetingId)).get()).data() as Meeting | undefined;
   if (!m || m.status !== "in_progress") throw new HttpsError("failed-precondition", "面談が開始されていません。");
 
-  const key = secretValue(GEMINI_API_KEY);
-  if (TRANSCRIBE_MODE.value() === "mock" || !key) {
-    return { mode: "mock" as const, reason: key ? "TRANSCRIBE_MODE=mock" : "GEMINI_API_KEY が未設定です" };
-  }
+  const mode = TRANSCRIBE_MODE.value();
+  if (mode === "mock") return { mode: "mock" as const, reason: "TRANSCRIBE_MODE=mock" };
 
   const vocabulary = await buildVocabulary(caseId, c.decedentName);
   const config = buildLiveConfig(vocabulary, resumeHandle ?? null);
   const model = GEMINI_MODEL.value();
+
+  if (mode === "vertex") {
+    // Vertex AI（後払い）：中継サーバー用の1回限りのチケットを発行する（2分以内に接続しないと無効）
+    const relay = RELAY_URL.value().replace(/\/+$/, "");
+    if (!relay) return { mode: "mock" as const, reason: "RELAY_URL（文字起こし中継サーバーの URL）が未設定です" };
+    const { ticket, expiresAt } = await issueRelayTicket(db, { uid: actor.uid, caseId, meetingId, model });
+    return { mode: "vertex" as const, relayBaseUrl: `${relay}/t/${ticket}`, model, config, vocabularyCount: vocabulary.length, expiresAt };
+  }
+
+  const key = secretValue(GEMINI_API_KEY);
+  if (!key) return { mode: "mock" as const, reason: "GEMINI_API_KEY が未設定です" };
   const ai = new GoogleGenAI({ apiKey: key, httpOptions: { apiVersion: "v1alpha" } });
   const now = Date.now();
   try {

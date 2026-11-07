@@ -117,10 +117,12 @@ export function MeetingPage() {
       }
       pipeline.current = makePipeline();
       let first: typeof probe | null = probe;
+      const probedAt = Date.now();
       // Gemini SDK は録音開始時にだけ読み込む（初期表示を軽くする）
       const { GeminiTranscriber } = await import("../live/geminiTranscriber");
       const tr = new GeminiTranscriber(async (handle) => {
-        if (first && !handle) {
+        // 最初の接続は確認時のチケットを使う（マイク許可に時間がかかって1分を過ぎたら取り直す）
+        if (first && !handle && Date.now() - probedAt < 60_000) {
           const p = first;
           first = null;
           return p;
