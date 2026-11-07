@@ -29,15 +29,30 @@ RELAY_SA="${RELAY_SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
 cd "$(dirname "$0")/.."
 step() { printf '\n\033[1;34m== %s\033[0m\n' "$1"; }
 
+# 実行内容を記録（エラーで止まったときは、このファイルの最後を見れば原因が分かる）
+LOG_FILE="$HOME/deploy-$(date +%Y%m%d-%H%M%S).log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+trap 'code=$?; [ $code -ne 0 ] && printf "\n\033[1;31m止まりました（行 %s・終了コード %s）。記録: %s\033[0m\n確認方法: tail -40 %s\n" "$LINENO" "$code" "$LOG_FILE" "$LOG_FILE"' EXIT
+echo "記録ファイル: ${LOG_FILE}"
+
+# Cloud Shell のログイン状態を確認（承認画面が出たら「承認」を押す）
+if ! gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | grep -q '@'; then
+  echo "Google Cloud にログインしていません。Cloud Shell の承認画面で「承認」を押してから、もう一度実行してください。"
+  exit 1
+fi
+
 step "0. 準備（プロジェクト: ${PROJECT}）"
 gcloud config set project "$PROJECT" >/dev/null
 node_major="$(node -v 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/' || echo 0)"
 if [ "${node_major:-0}" -lt 22 ]; then
   echo "Node.js 22 を用意します…"
+  # nvm は未定義の変数を参照するため、この間だけ厳格モードを外す
+  set +u
   # shellcheck disable=SC1091
   source "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
   nvm install 22 >/dev/null
   nvm use 22 >/dev/null
+  set -u
 fi
 echo "Node.js $(node -v)"
 
