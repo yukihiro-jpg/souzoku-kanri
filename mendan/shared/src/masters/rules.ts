@@ -47,9 +47,10 @@ export interface DocumentRule {
   enabled: boolean;
 }
 
-const pending = { status: "pending_review" as const, by: null, at: null };
+/** 税理士の承認記録：確認表（第2版）で全ルールの内容を確認・承認（2026-11-07）。以後の変更は版を上げて再承認する */
+const pending = { status: "approved" as const, by: "確認表第2版にて税理士承認", at: "2026-11-07T00:00:00+09:00" };
 
-/** ルール定義の簡略記法（既定値: version 1・未承認・有効・2024-01-01 から有効） */
+/** ルール定義の簡略記法（既定値: version 1・承認済み（上記）・有効・2024-01-01 から有効） */
 function rule(r: Omit<DocumentRule, "version" | "approval" | "enabled" | "effectiveFrom" | "conditions" | "exceptions"> & Partial<DocumentRule>): DocumentRule {
   return { version: 1, approval: pending, enabled: true, effectiveFrom: "2024-01-01", conditions: [], exceptions: [], ...r };
 }
