@@ -145,9 +145,17 @@ if [ -z "$(sed -n 's/^ALLOWED_EMAILS=//p' "$ENV_FILE")" ]; then
 fi
 
 step "6. Firebase へのログイン確認"
-if ! npx firebase projects:list >/dev/null 2>&1; then
-  echo "Firebase にログインし直します。表示される URL をブラウザで開き、事務所のアカウントで許可して、表示されたコードを貼り付けてください。"
-  npx firebase login --reauth --no-localhost
+# Cloud Shell では、Cloud Shell 自身のログイン（gcloud と同じアカウント）で Firebase を操作する。
+# 以前に firebase login した古いログイン情報が残っていると、そちらが優先されて
+# 「credentials are no longer valid」で止まるため、先に消しておく（URL を開く手順は不要になる）。
+export GOOGLE_CLOUD_QUOTA_PROJECT="$PROJECT"
+npx firebase logout >/dev/null 2>&1 || true
+if npx firebase projects:list >/dev/null 2>&1; then
+  echo "Cloud Shell のログイン（$(gcloud config get-value account 2>/dev/null)）で Firebase を操作します。"
+else
+  echo "Cloud Shell のログインで Firebase を操作できませんでした。Firebase に直接ログインします。"
+  echo "表示される URL をブラウザで開き、事務所のアカウントで許可して、表示されたコードを貼り付けてください。"
+  npx firebase login --no-localhost
 fi
 
 step "7. Claude の API キー（Secret Manager）"
