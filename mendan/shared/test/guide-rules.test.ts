@@ -24,6 +24,9 @@ describe("資料マスタ・ルールの整合性", () => {
   it("取得代行の表記がない（事務所方針）", () => {
     for (const d of DOCUMENT_MASTER) expect(`${d.name}${d.howTo}${d.defaultSubmitter}`).not.toMatch(/代行|事務所で取得/);
   });
+  it("「対象外」という表現を使わない（相続人向けの説明として分かりにくいため）", () => {
+    for (const d of DOCUMENT_MASTER) expect(`${d.name}${d.howTo}`).not.toMatch(/対象外/);
+  });
 });
 
 describe("すべての案件で必要な資料", () => {
@@ -58,6 +61,12 @@ describe("今の相続で増えている財産", () => {
     const st = docsFor("retirement_allowance", "iDeCo", { payer: "iDeCo（個人型確定拠出年金）" });
     expect(ids(st)).toContain("retirement_notice");
     expect(st.checkItems.find((c) => c.id === "insurance.dc_kyosai")!.status).toBe("ai_candidate");
+  });
+  it("事務所方針で不要とした電話加入権・著作権は資料を求めない（汎用資料も出さない）", () => {
+    for (const kind of ["電話加入権", "著作権・特許権"]) {
+      const l = docsFor("other_asset", kind, { kind }).documents.filter((d) => d.entityId).map((d) => d.documentId);
+      expect(l).toEqual([]);
+    }
   });
   it("種類が不明なその他の財産 → 汎用資料", () => {
     expect(ids(docsFor("other_asset", "何かの権利", { kind: "その他" }))).toContain("other_asset_eval");

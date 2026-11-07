@@ -59,7 +59,6 @@ const entity = (entityType: EntityType) => ({ kind: "entity" as const, entityTyp
 /** その他の財産の種類（kind 属性）→ 資料 */
 const OTHER_KINDS: { id: string; title: string; any: string; docs: string[]; reason: string; importance: Priority }[] = [
   { id: "CAR", title: "自動車", any: "自動車|車|バイク", docs: ["car_docs"], reason: "{target}（自動車等）があると発言があったため", importance: "low" },
-  { id: "PHONE", title: "電話加入権", any: "電話加入権|固定電話", docs: ["phone_right"], reason: "電話加入権があると発言があったため", importance: "low" },
   { id: "MEMBER", title: "ゴルフ・リゾート会員権", any: "ゴルフ|リゾート|会員権", docs: ["membership_docs"], reason: "{target}があると発言があったため", importance: "medium" },
   { id: "LOAN", title: "貸付金・前払金", any: "貸付|貸したお金|前払", docs: ["loan_receivable"], reason: "{target}があると発言があったため（貸付金債権）", importance: "medium" },
   { id: "VALUABLE", title: "貴金属・書画・骨董", any: "貴金属|宝石|書画|骨董|美術|絵画", docs: ["valuables_docs"], reason: "{target}があると発言があったため", importance: "low" },
@@ -70,7 +69,6 @@ const OTHER_KINDS: { id: string; title: string; any: string; docs: string[]; rea
   { id: "FOREIGN", title: "国外財産", any: "国外|海外|外国|外貨", docs: ["foreign_assets"], reason: "{target}（国外財産）があると発言があったため", importance: "high" },
   { id: "HOUSEHOLD", title: "家庭用財産", any: "家財|家庭用", docs: ["household_docs"], reason: "家財について発言があったため", importance: "low" },
   { id: "BUSINESS", title: "事業用資産", any: "事業|店舗|在庫|売掛", docs: ["business_docs"], reason: "被相続人の事業に関する財産について発言があったため", importance: "high" },
-  { id: "IP", title: "著作権・特許権", any: "著作権|特許|印税|商標", docs: ["ip_docs"], reason: "{target}について発言があったため", importance: "low" },
   { id: "SOLAR", title: "太陽光発電設備", any: "太陽光", docs: ["solar_docs"], reason: "{target}（太陽光発電設備）があると発言があったため", importance: "medium" },
   { id: "SAFE", title: "貸金庫", any: "貸金庫", docs: ["safe_box"], reason: "{target}の貸金庫があると発言があったため", importance: "medium" },
 ];
@@ -88,7 +86,9 @@ const SITUATIONS: { id: string; title: string; any: string; docs: string[]; reas
   { id: "SECOND", title: "二次相続の検討", any: "二次相続", docs: ["spouse_assets"], reason: "二次相続を考慮した分割の検討について発言があったため", importance: "low" },
 ];
 
-const OTHER_ALL = OTHER_KINDS.map((k) => k.any).join("|");
+/** 資料を求めない種類（事務所方針で不要としたもの）。汎用資料も出さない */
+const NO_DOC_KINDS = "電話加入権|固定電話|著作権|特許|印税|商標";
+const OTHER_ALL = [...OTHER_KINDS.map((k) => k.any), NO_DOC_KINDS].join("|");
 
 export const DEFAULT_RULES: DocumentRule[] = [
   // ===== 案件共通（すべての案件で必要） =====
@@ -214,7 +214,7 @@ export const DEFAULT_RULES: DocumentRule[] = [
     category: "real_estate",
     title: "不動産の評価資料",
     appliesTo: entity("real_estate"),
-    documentIds: ["re_tax_notice", "re_registry", "re_maps", "re_valuation", "re_nayose", "re_housing_map"],
+    documentIds: ["re_tax_notice", "re_registry", "re_maps", "re_valuation", "re_nayose"],
     reason: "{target}に不動産があると発言があったため（所有関係の確認と評価）",
     period: { kind: "as_of_death" },
     importance: "high",
