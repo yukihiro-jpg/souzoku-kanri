@@ -31,7 +31,7 @@ export const CLAUDE_EFFORT_REVIEW = defineString("CLAUDE_EFFORT_REVIEW", { defau
 /** "default" = 安全判定で回答が止まった場合にAnthropic側で自動的に別モデルで再実行 / "off" */
 export const CLAUDE_FALLBACKS = defineString("CLAUDE_FALLBACKS", { default: "default" });
 /** 料金表（USD / 100万トークン）。変更時は JSON で上書き */
-export const CLAUDE_PRICING_JSON = defineString("CLAUDE_PRICING_JSON", { default: "" });
+export const CLAUDE_PRICING_JSON = defineString("CLAUDE_PRICING_JSON", { default: "{}" });
 
 export const GEMINI_MODEL = defineString("GEMINI_MODEL", { default: "gemini-3.5-transcribe-live" });
 export const GEMINI_LANGUAGE = defineString("GEMINI_LANGUAGE", { default: "ja-JP" });
@@ -40,7 +40,7 @@ export const GEMINI_TRANSCRIPTION_MODE = defineString("GEMINI_TRANSCRIPTION_MODE
 export const GEMINI_DIARIZATION = defineString("GEMINI_DIARIZATION", { default: "false" });
 export const GEMINI_SESSION_RESUMPTION = defineString("GEMINI_SESSION_RESUMPTION", { default: "true" });
 export const GEMINI_RESPONSE_MODALITIES = defineString("GEMINI_RESPONSE_MODALITIES", { default: "TEXT" });
-export const GEMINI_SILENCE_MS = defineString("GEMINI_SILENCE_MS", { default: "" });
+export const GEMINI_SILENCE_MS = defineString("GEMINI_SILENCE_MS", { default: "0" });
 export const GEMINI_VOCAB_LIMIT = defineString("GEMINI_VOCAB_LIMIT", { default: "100" });
 /** Gemini の概算単価（USD / 音声1時間）。公式料金表で確認のうえ設定する */
 export const GEMINI_USD_PER_AUDIO_HOUR = defineString("GEMINI_USD_PER_AUDIO_HOUR", { default: "0.54" });
