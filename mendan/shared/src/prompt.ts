@@ -90,6 +90,7 @@ ${checkDoc}
 
 # 話者
 - 発言には話者（staff=営業担当者 / client=相続人 / unknown=未確定）が付きます。話者識別は不確実な場合があります。
+  「/spk_1」のような印は音声から自動で聞き分けた話者の番号です（同じ番号は同じ人の可能性が高いが、誤りもあり得ます）。
   事実の根拠になるのは主に相続人の発言ですが、営業担当者の確認（「常陽銀行ですね」）に相続人が同意した場合も根拠になります。`;
 }
 
@@ -104,7 +105,8 @@ export interface UserPromptInput {
 const SPEAKER: Record<TranscriptSegment["speaker"], string> = { staff: "staff", client: "client", other: "other", unknown: "unknown" };
 
 export function formatSegment(s: TranscriptSegment): string {
-  const sp = SPEAKER[s.speaker] + (s.speakerConfirmed ? "" : "?");
+  // 自動の話者識別のラベル（spk_1 等）も渡し、同じ人の発言のまとまりを判断できるようにする
+  const sp = SPEAKER[s.speaker] + (s.speakerConfirmed ? "" : "?") + (s.speakerLabel ? `/${s.speakerLabel}` : "");
   return `[${s.id}] (${sp}) ${s.text}`;
 }
 

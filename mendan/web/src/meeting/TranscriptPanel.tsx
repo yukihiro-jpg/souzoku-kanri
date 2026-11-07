@@ -8,6 +8,8 @@ const SPEAKER: Record<TranscriptSegment["speaker"], { label: string; cls: string
   other: { label: "その他", cls: "bg-slate-200 text-slate-700" },
   unknown: { label: "話者未確定", cls: "bg-slate-100 text-slate-500 border border-dashed border-slate-400" },
 };
+/** 自動の話者識別のラベル（spk_1 → 話者1） */
+export const labelName = (l: string | null | undefined) => (l ? `話者${l.replace(/^spk_?/i, "")}` : "");
 const NEXT: Record<TranscriptSegment["speaker"], TranscriptSegment["speaker"]> = { unknown: "client", client: "staff", staff: "other", other: "client" };
 
 const ANALYSIS: Record<TranscriptSegment["analysisStatus"], { label: string; cls: string }> = {
@@ -85,15 +87,22 @@ export function TranscriptPanel({ segments, interim, selectedId, highlightedIds,
               <div className="w-16 shrink-0 pt-0.5 text-[11px] text-slate-400">{fmtTime(s.timings.finalAt)}</div>
               <button
                 disabled={!canEdit}
-                title={canEdit ? "クリックで話者を変更（Shift+クリックで同じ話者ラベルの発言すべて）" : ""}
+                title={
+                  canEdit
+                    ? s.speakerLabel
+                      ? `クリックで話者を変更（${labelName(s.speakerLabel)}の発言すべてと、これからの発言に反映。Shift+クリックはこの発言だけ）`
+                      : "クリックで話者を変更"
+                    : ""
+                }
                 onClick={(e) => {
                   e.stopPropagation();
-                  onSpeaker(s, NEXT[s.speaker], e.shiftKey);
+                  onSpeaker(s, NEXT[s.speaker], !!s.speakerLabel && !e.shiftKey);
                 }}
                 className={cx("h-fit shrink-0 rounded px-1.5 py-0.5 text-[11px]", SPEAKER[s.speaker].cls, !s.speakerConfirmed && s.speaker !== "unknown" && "italic")}
               >
-                {SPEAKER[s.speaker].label}
+                {s.speaker === "unknown" && s.speakerLabel ? labelName(s.speakerLabel) : SPEAKER[s.speaker].label}
                 {!s.speakerConfirmed && s.speaker !== "unknown" ? "?" : ""}
+                {s.speakerLabel && s.speaker !== "unknown" && <span className="ml-1 opacity-60">{labelName(s.speakerLabel)}</span>}
               </button>
               <div className="min-w-0 flex-1 text-[15px] leading-relaxed">
                 {s.text}

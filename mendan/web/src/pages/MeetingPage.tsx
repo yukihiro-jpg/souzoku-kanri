@@ -106,6 +106,12 @@ export function MeetingPage() {
     [caseId, meetingId, toast],
   );
 
+  /** 経過時間は最初に録音（またはデモ再生）を始めたときから数える */
+  const markRecordingStarted = () => {
+    if (m?.recordingStartedAt) return;
+    void updateDoc(doc(db, P.meeting(caseId, meetingId)), { recordingStartedAt: new Date().toISOString() }).catch(() => undefined);
+  };
+
   const startMic = async () => {
     if (!c?.consent?.recording || !c?.consent?.aiAnalysis) return toast("録音・AI利用の同意が記録されていません。案件画面で同意を記録してください。");
     setBusy(true);
@@ -131,6 +137,7 @@ export function MeetingPage() {
       }, events());
       transcriber.current = tr;
       await tr.start();
+      markRecordingStarted();
     } catch (e) {
       setState("error");
       setStateMsg(errorMessage(e));
@@ -148,6 +155,7 @@ export function MeetingPage() {
     const tr = new DemoTranscriber(events(), undefined, speed);
     transcriber.current = tr;
     await tr.start();
+    markRecordingStarted();
   };
 
   const stop = async () => {
@@ -232,7 +240,14 @@ export function MeetingPage() {
         <span>相続開始日 <b>{c.inheritanceStartDate ?? "未入力"}</b></span>
         <span>担当 <b>{m.interviewer}</b></span>
         <span>開始 {fmtDateTime(m.startedAt)}</span>
-        <span>経過 <b className="tabular-nums">{fmtElapsed(m.startedAt, ended && m.endedAt ? new Date(m.endedAt).getTime() : now)}</b></span>
+        <span data-testid="elapsed">
+          経過{" "}
+          {m.recordingStartedAt ? (
+            <b className="tabular-nums">{fmtElapsed(m.recordingStartedAt, ended && m.endedAt ? new Date(m.endedAt).getTime() : now)}</b>
+          ) : (
+            <b className="text-slate-400">録音前</b>
+          )}
+        </span>
         <span data-testid="completion">確認完了率 <b>{pct(stats.confirmedRate)}</b><span className="text-slate-400">（話題済 {pct(stats.coveredRate)}）</span></span>
         <span data-testid="doc-count">必要資料 <b>{activeDocs.length}</b>件</span>
         <span>未確認 <b className={stats.highOpen ? "text-red-600" : ""}>{stats.open}</b>件</span>

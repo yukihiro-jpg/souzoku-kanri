@@ -10,6 +10,12 @@ export interface EntitySpec {
   attributes: Record<string, string>;
 }
 
+/** 属性キーの日本語名（画面・Word 出力用。説明のかっこ書きは除く） */
+export function attrLabel(type: EntityType, key: string): string {
+  const d = ENTITY_SPECS[type]?.attributes[key];
+  return d ? d.replace(/[（(].*$/, "") : key;
+}
+
 export const ENTITY_SPECS: Record<EntityType, EntitySpec> = {
   decedent: {
     keyAttrs: [],

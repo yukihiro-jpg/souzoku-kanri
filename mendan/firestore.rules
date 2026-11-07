@@ -32,10 +32,12 @@ service cloud.firestore {
 
       match /meetings/{meetingId} {
         allow read: if canRead(caseId);
-        // 録音ファイルの登録・通信断の記録・最終発言番号のみブラウザから更新可
+        // 録音ファイルの登録・通信断の記録・最終発言番号・録音開始日時（最初の1回のみ）だけブラウザから更新可
         allow update: if canWrite(caseId)
           && resource.data.status == 'in_progress'
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['audioParts', 'gaps', 'lastSeq']);
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['audioParts', 'gaps', 'lastSeq', 'recordingStartedAt'])
+          && (!('recordingStartedAt' in request.resource.data.diff(resource.data).affectedKeys())
+              || resource.data.get('recordingStartedAt', null) == null);
 
         match /segments/{segId} {
           allow read: if canRead(caseId);

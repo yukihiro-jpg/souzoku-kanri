@@ -246,7 +246,8 @@ export const setSegmentSpeaker = onCall({ region: REGION }, async (req) => {
   batch.update(ref, { speaker: d.speaker, speakerConfirmed: true });
   if (d.applyToLabel && seg.speakerLabel) {
     const same = await db.collection(P.segments(d.caseId, d.meetingId)).where("speakerLabel", "==", seg.speakerLabel).get();
-    for (const s of same.docs) if (!(s.data() as TranscriptSegment).speakerConfirmed) batch.update(s.ref, { speaker: d.speaker, speakerConfirmed: true });
+    // 同じ話者番号の発言はすべて同じ人として扱う（話者を切り替え直したときも全体に反映する）
+    for (const s of same.docs) batch.update(s.ref, { speaker: d.speaker, speakerConfirmed: true });
     batch.set(db.doc(P.meeting(d.caseId, d.meetingId)), { speakerMap: { [seg.speakerLabel]: d.speaker } }, { merge: true });
   }
   audit(batch, d.caseId, { actor: actor.uid, action: "speaker_updated", target: d.segmentId, detail: { speaker: d.speaker } });

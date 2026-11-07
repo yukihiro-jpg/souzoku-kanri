@@ -45,12 +45,15 @@ const ok = (c, m) => {
   await page.waitForURL(/meetings\//, { timeout: 20000 });
   await page.goto(page.url() + "?demoSpeed=4");
   await page.getByTestId("start-demo").waitFor();
+  ok((await page.getByTestId("elapsed").textContent())?.includes("録音前"), "録音を始めるまでは経過時間が進まない（録音前）");
 
   console.log("■ デモ面談の再生");
   const t0 = Date.now();
   await page.getByTestId("start-demo").click();
   await page.getByTestId("interim").waitFor({ timeout: 10000 });
   ok(true, "暫定テキストが表示される");
+  await page.waitForFunction(() => /\d+:\d+/.test(document.querySelector('[data-testid="elapsed"]')?.textContent ?? ""), null, { timeout: 10000 });
+  ok(true, "録音（デモ）を始めると経過時間が進み始める");
   await page.waitForTimeout(9000);
   await page.getByTestId("tab-docs").click();
   await page.screenshot({ path: path.join(OUT, "meeting-during.png") });
@@ -105,10 +108,20 @@ const ok = (c, m) => {
   await page.evaluate(() => document.fonts.ready);
   await page.pdf({ path: path.join(OUT, "print.pdf"), format: "A4", preferCSSPageSize: true });
 
-  console.log("■ 案件の完了・削除");
+  console.log("■ 文字起こしの Word 出力");
   const NAME = "山田家 相続税申告（架空）";
   const caseUrl = url.replace(/\/print$/, "");
   await page.goto(caseUrl);
+  for (const id of ["word-1", "word-all"]) {
+    const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 30000 }), page.getByTestId(id).click()]);
+    // ※ テスト用のブラウザは日本語のファイル名を「download」に置き換えるため、中身（Word 形式）で確認する
+    const file = path.join(OUT, `${id}.docx`);
+    await dl.saveAs(file);
+    const buf = require("node:fs").readFileSync(file);
+    ok(buf.subarray(0, 2).toString() === "PK" && buf.includes("word/document.xml") && buf.length > 5000, `${id === "word-1" ? "第1回" : "全回まとめ"}の Word を出力（${Math.round(buf.length / 1024)}KB）`);
+  }
+
+  console.log("■ 案件の完了・削除");
   page.once("dialog", (d) => d.accept());
   await page.getByTestId("toggle-close").click();
   await page.waitForURL((u) => new URL(u).pathname === "/", { timeout: 15000 });

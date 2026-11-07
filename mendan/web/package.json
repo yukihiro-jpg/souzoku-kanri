@@ -12,6 +12,7 @@
   "dependencies": {
     "@google/genai": "2.31.0",
     "@mendan/shared": "0.1.0",
+    "docx": "9.13.0",
     "firebase": "13.1.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",

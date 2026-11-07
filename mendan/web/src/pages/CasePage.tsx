@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { orderBy } from "firebase/firestore";
-import { P, completionStats, type CaseDoc, type CheckItem, type DocumentRequirement, type Meeting } from "@mendan/shared";
+import { collection, getDocs, orderBy } from "firebase/firestore";
+import { P, completionStats, type CaseDoc, type CheckItem, type DocumentRequirement, type Entity, type Meeting, type TranscriptSegment } from "@mendan/shared";
 import { Layout } from "../components/Layout";
 import { api, errorMessage } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { db } from "../lib/firebase";
 import { fmtDateTime, pct } from "../lib/format";
 import { useCollection, useDoc } from "../lib/hooks";
 
@@ -33,6 +34,20 @@ export function CasePage() {
   const activeDocs = docs.filter((d) => !["not_needed", "removal_candidate"].includes(d.status));
   const live = meetings.find((m) => m.status === "in_progress");
   const closed = c.status === "closed";
+
+  /** 文字起こしを Word で出力（target を省略すると全回を1つのファイルに） */
+  const exportWord = (target?: Meeting) =>
+    run(async () => {
+      const list = target ? [target] : [...meetings].sort((a, b) => a.no - b.no);
+      if (list.length === 0) throw new Error("面談がまだありません。");
+      const [{ downloadTranscriptDocx }, ents, transcripts] = await Promise.all([
+        import("../lib/transcriptDocx"),
+        getDocs(collection(db, P.entities(caseId))).then((r) => r.docs.map((d) => d.data() as Entity)),
+        Promise.all(list.map(async (m) => ({ meeting: m, segments: (await getDocs(collection(db, P.segments(caseId, m.id)))).docs.map((d) => d.data() as TranscriptSegment) }))),
+      ]);
+      const name = target ? `${c.name}_第${target.no}回_文字起こし` : `${c.name}_文字起こし_全${list.length}回`;
+      await downloadTranscriptDocx(c, transcripts, docs, ents, name);
+    });
 
   const run = async (f: () => Promise<void>) => {
     setBusy(true);
@@ -128,13 +143,21 @@ export function CasePage() {
           {!consented && <p className="mt-2 text-xs text-red-700">録音・AI利用の同意を記録すると開始できます。</p>}
           <ul className="mt-4 space-y-1 text-sm">
             {meetings.map((m) => (
-              <li key={m.id}>
+              <li key={m.id} className="flex items-center gap-2">
                 <Link to={`/cases/${caseId}/meetings/${m.id}`} className="text-blue-700 hover:underline">
                   第{m.no}回 {fmtDateTime(m.startedAt)} {m.interviewer} {m.status === "ended" ? "（終了）" : "（面談中）"}
                 </Link>
+                <button data-testid={`word-${m.no}`} disabled={busy} onClick={() => exportWord(m)} className="ml-auto shrink-0 rounded border px-1.5 py-0.5 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-50" title={`第${m.no}回の文字起こしを Word で出力`}>
+                  Word
+                </button>
               </li>
             ))}
           </ul>
+          {meetings.length > 0 && (
+            <button data-testid="word-all" disabled={busy} onClick={() => exportWord()} className="mt-3 w-full rounded-lg border px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50">
+              文字起こしを Word 出力（全{meetings.length}回を1つに）
+            </button>
+          )}
         </section>
       </div>
 

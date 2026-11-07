@@ -345,6 +345,8 @@ export interface Meeting {
   interviewerUid: string;
   status: "in_progress" | "ended";
   startedAt: string;
+  /** 最初に「録音開始」（またはデモ再生）を押した日時。経過時間はここから数える */
+  recordingStartedAt?: string | null;
   endedAt: string | null;
   lastSeq: number;
   /** 「次の質問」を最後に更新した解析の発言seq（古い解析結果で上書きしないため） */

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CATEGORIES, CHECK_STATUS_LABELS, ENTITY_TYPE_LABELS, PRIORITY_ORDER, type CheckItem, type CheckStatus, type Entity } from "@mendan/shared";
+import { CATEGORIES, CHECK_STATUS_LABELS, ENTITY_TYPE_LABELS, attrLabel, PRIORITY_ORDER, type CheckItem, type CheckStatus, type Entity } from "@mendan/shared";
 import { AiTag, CheckBadge, PriorityDot, UserTag } from "../components/Badges";
 import { cx } from "../lib/format";
 
@@ -61,7 +61,7 @@ export function CheckItemsTab({ items, entities, selectedSegmentId, onEvidence, 
                 <div className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-slate-600">
                   {Object.entries(e.attributes).map(([k, v]) => (
                     <span key={k} title={v.history?.length ? `訂正前: ${v.history.map((h) => h.value).join(" → ")}` : undefined}>
-                      {k}: <b className="font-medium text-slate-800">{v.value}</b>
+                      {attrLabel(e.type, k)}: <b className="font-medium text-slate-800">{v.value}</b>
                       {v.history?.length ? <span className="text-orange-600">（訂正あり）</span> : null}
                     </span>
                   ))}

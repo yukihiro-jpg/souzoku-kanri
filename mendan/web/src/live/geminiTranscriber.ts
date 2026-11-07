@@ -160,6 +160,8 @@ export class GeminiTranscriber implements Transcriber {
     }
     const it = sc?.inputTranscription;
     if (it?.text) {
+      // 話者識別がオンのとき、話者が変わったら前の話者の発言をいったん確定させる（1つの発言に2人分が混ざらないように）
+      if (it.speakerLabel && this.pendingSpeaker && it.speakerLabel !== this.pendingSpeaker && this.pendingFinal.trim()) this.flushFinal();
       this.pendingFinal += it.text;
       this.pendingSpeaker = it.speakerLabel ?? this.pendingSpeaker;
       if (!this.speechStartAt) this.speechStartAt = Date.now() - 500;
