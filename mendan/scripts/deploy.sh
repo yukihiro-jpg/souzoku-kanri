@@ -31,7 +31,7 @@ set -euo pipefail
 
 PROJECT="${PROJECT:-gen-lang-client-0548763356}"
 REGION="asia-northeast1"                         # Cloud Run・Cloud Functions（東京）
-VERTEX_LOCATION="${VERTEX_LOCATION:-us-central1}" # Vertex AI（文字起こしモデルが東京で使えれば asia-northeast1 に変更）
+VERTEX_LOCATION="${VERTEX_LOCATION:-global}"     # Vertex AI（gemini-3.5-transcribe-live は global / us / eu のみ提供）
 RELAY_SA_NAME="transcribe-relay"
 RELAY_SA="${RELAY_SA_NAME}@${PROJECT}.iam.gserviceaccount.com"
 

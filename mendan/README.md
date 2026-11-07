@@ -177,12 +177,12 @@ done
 npm install && npm run build
 gcloud run deploy transcribe-relay --source . --project $PROJECT --region asia-northeast1 \
   --service-account transcribe-relay@$PROJECT.iam.gserviceaccount.com --no-invoker-iam-check \
-  --timeout 3600 --set-env-vars GOOGLE_CLOUD_PROJECT=$PROJECT,VERTEX_LOCATION=us-central1
+  --timeout 3600 --set-env-vars GOOGLE_CLOUD_PROJECT=$PROJECT,VERTEX_LOCATION=global
 ```
 - `--no-invoker-iam-check` は「Google Cloud 側の入口の確認（IAM）をしない」という意味です。中継サーバー自身が1回限りのチケットを確認するため、チケットのない接続はすべて拒否されます。
   （`--allow-unauthenticated` は「allUsers（だれでも）」に権限を付ける方法のため、組織のポリシー「ドメインで制限された共有」があると失敗します）
 - 表示された URL（`https://transcribe-relay-…run.app`）を `functions/.env` の `RELAY_URL` に設定します。
-- `VERTEX_LOCATION` は文字起こしモデル（gemini-3.5-transcribe-live）が使えるリージョンにします。東京（asia-northeast1）で提供されていればそちらに変更してください（データが国内で処理されます）。
+- `VERTEX_LOCATION` は文字起こしモデル（gemini-3.5-transcribe-live）が提供されている場所にします（2026年11月時点で global / us / eu。us-central1 や asia-northeast1 では使えず「Publisher model … not found」で切断されます）。
 
 ### 5-3. コマンドでの設定とデプロイ
 ここではパソコンのターミナルで操作します。

@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 import type http from "node:http";
 import { WebSocketServer } from "ws";
 import { GoogleGenAI, type LiveServerMessage } from "@google/genai/web";
-import { audioSecondsOf, createRelayServer, sanitizeSetup, type Ticket } from "../src/relay.js";
+import { audioSecondsOf, createRelayServer, defaultUpstreamUrl, sanitizeSetup, type Ticket } from "../src/relay.js";
 
 /**
  * 中継サーバーの検証。ブラウザと同じ「Google公式SDK（Vertexモード）」で接続し、
@@ -162,5 +162,12 @@ describe("制限と計算", () => {
   });
   it("音声の長さを base64 の長さから計算する", () => {
     expect(audioSecondsOf({ realtimeInput: { audio: { data: Buffer.alloc(16000).toString("base64") } } })).toBeCloseTo(0.5, 2);
+  });
+});
+
+describe("Vertex AI の接続先", () => {
+  it("global は地域なしのホスト、地域指定は地域つきのホストに接続する", () => {
+    expect(defaultUpstreamUrl("global")).toBe("wss://aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent");
+    expect(defaultUpstreamUrl("us-central1")).toBe("wss://us-central1-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent");
   });
 });
