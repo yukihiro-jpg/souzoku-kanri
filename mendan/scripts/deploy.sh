@@ -72,6 +72,18 @@ for ROLE in roles/aiplatform.user roles/datastore.user; do
 done
 echo "権限: Vertex AI の利用・Firestore（チケット確認と使用量の記録）のみ"
 
+step "2b. 標準の作業用アカウント（ビルドとサーバー処理の実行）に必要な権限"
+# 新しいプロジェクトでは、Cloud Build と Cloud Functions が使う「Compute Engine の既定のサービスアカウント」に
+# 権限が付いていないため、ビルド（ソースの読み込み・イメージの保存）と実行（Firestore・録音データ・ログ）に必要な分だけ付ける
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
+COMPUTE_SA="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+for ROLE in roles/cloudbuild.builds.builder roles/datastore.user roles/storage.objectAdmin roles/logging.logWriter roles/run.invoker; do
+  gcloud projects add-iam-policy-binding "$PROJECT" --member "serviceAccount:${COMPUTE_SA}" --role "$ROLE" --condition None --quiet >/dev/null
+done
+echo "権限を付けました: ${COMPUTE_SA}（ビルド・Firestore・録音データ・ログ・関数の呼び出し）"
+echo "権限の反映を待っています（1分）…"
+sleep 60
+
 step "3. 依存パッケージのインストール"
 npm ci --no-audit --no-fund
 
