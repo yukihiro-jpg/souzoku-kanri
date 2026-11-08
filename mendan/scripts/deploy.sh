@@ -47,8 +47,15 @@ trap 'code=$?; [ $code -ne 0 ] && printf "\n\033[1;31m止まりました（行 %
 echo "記録ファイル: ${LOG_FILE}"
 
 # Cloud Shell のログイン状態を確認（承認画面が出たら「承認」を押す）
-if ! gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | grep -q '@'; then
-  echo "Google Cloud にログインしていません。Cloud Shell の承認画面で「承認」を押してから、もう一度実行してください。"
+has_account() { gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | grep -q '@'; }
+if ! has_account; then
+  # Cloud Shell を開き直した直後は未承認のことがある。認証が必要な操作をすると「Cloud Shell の承認」画面が出る
+  echo "Cloud Shell の承認を確認します。ブラウザに「Cloud Shell の承認」画面が出たら「承認」を押してください…"
+  gcloud auth print-access-token >/dev/null 2>&1 || true
+fi
+if ! has_account; then
+  echo "Google Cloud にログインできていません。次の1行を実行し、表示される案内に従ってログインしてから、もう一度実行してください。"
+  echo "  gcloud auth login"
   exit 1
 fi
 
