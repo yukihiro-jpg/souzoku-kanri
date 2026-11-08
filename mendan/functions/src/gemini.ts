@@ -51,7 +51,7 @@ export const createTranscriptionSession = onCall({ region: REGION, secrets: [], 
   if (mode === "mock") return { mode: "mock" as const, reason: "TRANSCRIBE_MODE=mock" };
 
   const vocabulary = await buildVocabulary(caseId, c.decedentName);
-  const config = buildLiveConfig(vocabulary, resumeHandle ?? null);
+  const config = buildLiveConfig(vocabulary, resumeHandle ?? null, mode);
   const model = GEMINI_MODEL.value();
 
   if (mode === "vertex") {
@@ -84,14 +84,16 @@ export const createTranscriptionSession = onCall({ region: REGION, secrets: [], 
   }
 });
 
-export function buildLiveConfig(vocabulary: string[], resumeHandle: string | null): LiveConnectConfig {
+export function buildLiveConfig(vocabulary: string[], resumeHandle: string | null, transcribeMode = "vertex"): LiveConnectConfig {
   const mode = GEMINI_TRANSCRIPTION_MODE.value() === "SMART" ? AudioTranscriptionConfigMode.SMART : AudioTranscriptionConfigMode.VERBATIM;
   const config: LiveConnectConfig = {
     inputAudioTranscription: {
       languageCodes: [GEMINI_LANGUAGE.value()],
       customVocabulary: vocabulary,
       mode,
-      ...(bool(GEMINI_DIARIZATION.value()) ? { diarization: true } : {}),
+      // 話者識別（diarization）は AI Studio 方式のみ。Vertex AI の Live API は 2026年11月時点でこの項目を受け付けず、
+      // 「Unknown name "diarization"」で接続が拒否されるため、Vertex 方式では設定がオンでも送らない
+      ...(transcribeMode === "gemini" && bool(GEMINI_DIARIZATION.value()) ? { diarization: true } : {}),
     },
   };
   const modalities = GEMINI_RESPONSE_MODALITIES.value().trim();
