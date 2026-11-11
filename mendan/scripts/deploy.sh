@@ -214,9 +214,25 @@ fi
 # OAuth クライアントのシークレット：作るまでは仮の値（unset）を入れておく
 if ! gcloud secrets describe GOOGLE_OAUTH_CLIENT_SECRET >/dev/null 2>&1; then
   printf 'unset' | gcloud secrets create GOOGLE_OAUTH_CLIENT_SECRET --replication-policy=automatic --data-file=- --quiet >/dev/null
-  echo "OAuth クライアントのシークレットは未設定です（Google ドライブ連携の準備のときに登録します）"
+fi
+# 画面の設定（web/.env.production）に OAuth クライアント ID があれば、サーバーの設定にも同じ ID を入れる
+OAUTH_CLIENT_ID="$(sed -n 's/^VITE_GOOGLE_OAUTH_CLIENT_ID=//p' web/.env.production | tr -d '[:space:]')"
+if [ -n "$OAUTH_CLIENT_ID" ]; then
+  sed -i "s#^GOOGLE_OAUTH_CLIENT_ID=.*#GOOGLE_OAUTH_CLIENT_ID=${OAUTH_CLIENT_ID}#" "$ENV_FILE"
+  if [ "$(gcloud secrets versions access latest --secret=GOOGLE_OAUTH_CLIENT_SECRET 2>/dev/null)" = "unset" ]; then
+    echo "OAuth クライアントのシークレット（GOCSPX- で始まる文字列）を貼り付けて Enter を押してください。入力した文字は画面に表示されません。"
+    read -rs OAUTH_SECRET
+    echo
+    if [ -n "$OAUTH_SECRET" ]; then
+      printf '%s' "$OAUTH_SECRET" | gcloud secrets versions add GOOGLE_OAUTH_CLIENT_SECRET --data-file=- --quiet >/dev/null
+      echo "登録しました"
+    fi
+    unset OAUTH_SECRET
+  else
+    echo "OAuth クライアント ID とシークレットは登録済みです"
+  fi
 else
-  echo "OAuth クライアントのシークレットは登録済みです"
+  echo "Google ドライブ連携の OAuth クライアントはまだ設定されていません（顧問モードの連携ボタンは「設定がまだ」と表示されます）"
 fi
 
 step "8. 画面をビルド"
