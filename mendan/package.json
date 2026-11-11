@@ -19,7 +19,8 @@
     "eval": "tsx eval/run-eval.ts",
     "seed": "tsx scripts/seed.ts",
     "test:integration": "tsx scripts/integration-test.ts",
-    "test:relay": "tsx scripts/relay-integration-test.ts"
+    "test:relay": "tsx scripts/relay-integration-test.ts",
+    "test:advisory": "tsx scripts/advisory-integration-test.ts"
   },
   "devDependencies": {
     "esbuild": "0.28.2",

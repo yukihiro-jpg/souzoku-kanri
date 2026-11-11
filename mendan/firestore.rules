@@ -82,5 +82,30 @@ service cloud.firestore {
     match /notifications/{id} { allow read: if isAdmin(); allow write: if false; }
     // 文字起こし中継サーバー用の1回限りのチケット（サーバーだけが読み書きする）
     match /liveTickets/{id} { allow read, write: if false; }
+
+    // ===== 顧問モード：顧問先ごとに完全に分ける（admin は全件、それ以外はその顧問先のメンバーだけ） =====
+    function clientData(clientId) { return get(/databases/$(database)/documents/clients/$(clientId)).data; }
+    function canReadClient(clientId) { return isAdmin() || (active() && request.auth.uid in clientData(clientId).memberIds); }
+
+    match /clients/{clientId} {
+      allow read: if isAdmin() || (active() && request.auth.uid in resource.data.memberIds);
+      allow write: if false;
+
+      match /ruleRuns/{runId} {
+        allow read: if canReadClient(clientId);
+        allow write: if false;
+        match /items/{itemId} {
+          allow read: if canReadClient(clientId);
+          allow write: if false;
+        }
+      }
+      match /{sub}/{docId} {
+        allow read: if canReadClient(clientId) && sub in ['cards', 'ruleChanges', 'auditLogs', 'aiJobs'];
+        allow write: if false;
+      }
+    }
+    // Google 連携の許可（暗号化した鍵）と、開発用のドキュメントの代わり：サーバーだけが読み書きする
+    match /oauthTokens/{uid} { allow read, write: if false; }
+    match /_mockDocs/{id} { allow read, write: if false; }
   }
 }

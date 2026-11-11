@@ -14,3 +14,4 @@ export * from "./prompt.js";
 export * from "./mockAnalyzer.js";
 export * from "./demoScript.js";
 export * from "./paths.js";
+export * from "./advisory/index.js";

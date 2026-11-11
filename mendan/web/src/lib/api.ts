@@ -1,5 +1,5 @@
 import { httpsCallable } from "firebase/functions";
-import type { AppSettings, CheckStatus, DocStatus, DocumentRule, Role, TranscriptSegment } from "@mendan/shared";
+import type { AccountingSystem, AppSettings, CheckStatus, ClientCard, DocStatus, DocumentRule, RuleItem, Role, TranscriptSegment } from "@mendan/shared";
 import type { LiveConnectConfig } from "@google/genai";
 import { functions } from "./firebase";
 
@@ -40,6 +40,16 @@ export const api = {
   saveSettings: call<Partial<AppSettings>, unknown>("saveSettings"),
   setUserRole: call<{ uid: string; role?: Role; active?: boolean }, unknown>("setUserRole"),
   getMetrics: call<{ days?: number }, Metrics>("getMetrics", 60_000),
+  // ===== 顧問モード =====
+  createClient: call<{ code: string; name: string; accountingSystem: AccountingSystem; fiscalMonth: number }, { clientId: string }>("createClient"),
+  updateClient: call<{ clientId: string; name?: string; accountingSystem?: AccountingSystem; fiscalMonth?: number; rulebookDocId?: string | null; rulebookDocName?: string | null; mfRulesPath?: string | null; status?: "active" | "closed"; addMemberEmail?: string }, { ok: true }>("updateClient"),
+  updateCard: call<{ clientId: string; cardId: string; status?: ClientCard["status"]; settlementPolicy?: string | null; due?: string | null }, { ok: true }>("updateCard"),
+  googleStatus: call<void, { configured: boolean; mock: boolean; connected: boolean; email: string | null; connectedAt: string | null }>("googleStatus"),
+  googleConnect: call<{ code?: string }, { ok: true; email: string }>("googleConnect"),
+  googleDisconnect: call<void, { ok: true }>("googleDisconnect"),
+  startRuleRun: call<{ clientId: string; notesDocId: string; notesDocName?: string }, { runId: string; items: number; segments: number; hints: number }>("startRuleRun", 540_000),
+  decideRuleItem: call<{ clientId: string; runId: string; itemId: string; decision: "approve" | "reject" | "reset"; edit?: Partial<RuleItem>; answer?: string; convertToRule?: boolean }, { item: RuleItem }>("decideRuleItem"),
+  applyRuleRun: call<{ clientId: string; runId: string }, { written: number; exported: number; errors: { itemId: string; reason: string }[] }>("applyRuleRun", 120_000),
 };
 
 export interface Metrics {

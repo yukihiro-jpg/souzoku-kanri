@@ -114,7 +114,8 @@ gcloud services enable \
   aiplatform.googleapis.com run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com \
   cloudfunctions.googleapis.com secretmanager.googleapis.com cloudscheduler.googleapis.com \
   eventarc.googleapis.com pubsub.googleapis.com firestore.googleapis.com firebasestorage.googleapis.com \
-  firebaserules.googleapis.com firebasehosting.googleapis.com identitytoolkit.googleapis.com --quiet
+  firebaserules.googleapis.com firebasehosting.googleapis.com identitytoolkit.googleapis.com \
+  docs.googleapis.com drive.googleapis.com picker.googleapis.com --quiet
 
 step "2. 文字起こし中継サーバー専用のサービスアカウント"
 if ! gcloud iam service-accounts describe "$RELAY_SA" >/dev/null 2>&1; then
@@ -182,6 +183,9 @@ else
     echo "ALLOWED_EMAILS=$(sed -n 's/^ADMIN_EMAILS=//p' "$ENV_FILE")" >> "$ENV_FILE"
   fi
 fi
+# 顧問モード（Google ドライブ連携）の設定。OAuth クライアントを作るまでは unset（連携ボタンは「設定がまだ」と表示）
+grep -q '^GOOGLE_MODE=' "$ENV_FILE" || echo "GOOGLE_MODE=real" >> "$ENV_FILE"
+grep -q '^GOOGLE_OAUTH_CLIENT_ID=' "$ENV_FILE" || echo "GOOGLE_OAUTH_CLIENT_ID=unset" >> "$ENV_FILE"
 echo "設定ファイル: ${ENV_FILE}（このファイルは Git に含めません）"
 echo "ログインできるアカウント: $(sed -n 's/^ALLOWED_EMAILS=//p' "$ENV_FILE")"
 if [ -z "$(sed -n 's/^ALLOWED_EMAILS=//p' "$ENV_FILE")" ]; then
@@ -197,6 +201,22 @@ if gcloud secrets describe ANTHROPIC_API_KEY >/dev/null 2>&1; then
 else
   echo "Claude の API キー（sk-ant- で始まる文字列）を貼り付けて Enter を押してください。入力した文字は画面に表示されません。"
   npx firebase functions:secrets:set ANTHROPIC_API_KEY --project "$PROJECT"
+fi
+
+step "7b. 顧問モード（Google ドライブ連携）の鍵（Secret Manager）"
+# Google の更新用の鍵を暗号化する鍵：なければ自動で作る（画面にも記録にも出さない）
+if ! gcloud secrets describe OAUTH_TOKEN_KEY >/dev/null 2>&1; then
+  openssl rand -base64 32 | tr -d '\n' | gcloud secrets create OAUTH_TOKEN_KEY --replication-policy=automatic --data-file=- --quiet >/dev/null
+  echo "暗号化の鍵を作りました（OAUTH_TOKEN_KEY）"
+else
+  echo "暗号化の鍵は登録済みです"
+fi
+# OAuth クライアントのシークレット：作るまでは仮の値（unset）を入れておく
+if ! gcloud secrets describe GOOGLE_OAUTH_CLIENT_SECRET >/dev/null 2>&1; then
+  printf 'unset' | gcloud secrets create GOOGLE_OAUTH_CLIENT_SECRET --replication-policy=automatic --data-file=- --quiet >/dev/null
+  echo "OAuth クライアントのシークレットは未設定です（Google ドライブ連携の準備のときに登録します）"
+else
+  echo "OAuth クライアントのシークレットは登録済みです"
 fi
 
 step "8. 画面をビルド"

@@ -1,4 +1,4 @@
-import { AnalysisOutputSchema, ReanalysisOutputSchema, type AnalysisOutput, type ReanalysisOutput } from "@mendan/shared";
+import { AnalysisOutputSchema, ReanalysisOutputSchema, RuleRunOutputSchema, type AnalysisOutput, type ReanalysisOutput, type RuleRunOutput } from "@mendan/shared";
 import { callStructured, toEffort, type ClaudeUsage } from "./claudeCore.js";
 import {
   ANTHROPIC_API_KEY,
@@ -41,6 +41,21 @@ export async function analyzeFullTranscript(system: string, user: string): Promi
     user,
     schema: ReanalysisOutputSchema,
     maxTokens: 32000,
+    timeoutMs: 480_000,
+  });
+}
+
+/** 顧問モード：打ち合わせメモの振り分け（打ち合わせ後の処理。書き込みにつながるので見直し用のモデル・高い思考の深さ） */
+export async function analyzeRuleRun(system: string, user: string): Promise<{ output: RuleRunOutput; usage: ClaudeUsage }> {
+  return callStructured({
+    apiKey: secretValue(ANTHROPIC_API_KEY),
+    fallbacks: CLAUDE_FALLBACKS.value() === "default",
+    model: CLAUDE_MODEL_REVIEW.value(),
+    effort: toEffort(CLAUDE_EFFORT_REVIEW.value(), "high"),
+    system,
+    user,
+    schema: RuleRunOutputSchema,
+    maxTokens: 16000,
     timeoutMs: 480_000,
   });
 }

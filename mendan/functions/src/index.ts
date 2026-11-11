@@ -12,3 +12,8 @@ export { analyzeSegments } from "./analyze.js";
 export { reanalyzeMeeting } from "./reanalyze.js";
 export { updateCheckItem, updateDocument, addDocument, updateEntity, setSegmentSpeaker, resolveReviewItem } from "./edits.js";
 export { saveRule, approveRule, resetRule, saveVocabulary, saveSettings, setUserRole, getMetrics, purgeExpiredAudio } from "./admin.js";
+
+// ===== 顧問モード =====
+export { createClient, updateClient, updateCard } from "./advisory/clients.js";
+export { googleStatus, googleConnect, googleDisconnect } from "./advisory/google.js";
+export { startRuleRun, decideRuleItem, applyRuleRun } from "./advisory/ruleRuns.js";

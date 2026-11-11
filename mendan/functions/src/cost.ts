@@ -13,7 +13,8 @@ export function claudeCostUsd(u: ClaudeUsage): number {
 
 const keyOf = (model: string) => model.replace(/[./]/g, "_");
 
-export async function recordClaudeUsage(ref: { caseId: string; meetingId: string | null; jobId: string; kind: string }, u: ClaudeUsage) {
+/** 相続モードは caseId、顧問モードは clientId（caseId は空）で記録する */
+export async function recordClaudeUsage(ref: { caseId: string; clientId?: string; meetingId: string | null; jobId: string; kind: string }, u: ClaudeUsage) {
   const usd = claudeCostUsd(u);
   const month = monthJst();
   const batch = db.batch();
@@ -46,7 +47,7 @@ export async function recordClaudeUsage(ref: { caseId: string; meetingId: string
     },
     { merge: true },
   );
-  if (ref.meetingId) {
+  if (ref.caseId && ref.meetingId) {
     batch.set(
       db.doc(P.meeting(ref.caseId, ref.meetingId)),
       {

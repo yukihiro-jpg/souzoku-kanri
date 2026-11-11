@@ -11,6 +11,16 @@ export const GEMINI_API_KEY = defineSecret("GEMINI_API_KEY");
 
 export const REGION = "asia-northeast1";
 
+/* ===== 顧問モード：Google ドライブ連携 ===== */
+/** real: 本物の Google ドキュメント / mock: 開発用の代わり（エミュレーター専用） */
+export const GOOGLE_MODE = defineString("GOOGLE_MODE", { default: "real" });
+/** Google Cloud で作る OAuth クライアント ID（ウェブアプリ）。未設定なら "unset" */
+export const GOOGLE_OAUTH_CLIENT_ID = defineString("GOOGLE_OAUTH_CLIENT_ID", { default: "unset" });
+/** OAuth クライアントのシークレット（Secret Manager） */
+export const GOOGLE_OAUTH_CLIENT_SECRET = defineSecret("GOOGLE_OAUTH_CLIENT_SECRET");
+/** Google の更新用の鍵を暗号化する鍵（32バイトを base64。公開スクリプトが自動で作る） */
+export const OAUTH_TOKEN_KEY = defineSecret("OAUTH_TOKEN_KEY");
+
 /** claude: Claude API を使う / mock: 開発用の簡易解析器（APIキー不要） */
 export const AI_MODE = defineString("AI_MODE", { default: "claude" });
 /**
@@ -73,7 +83,7 @@ export interface ModelPrice {
 
 /** 2026-10 時点の Anthropic 公開料金（USD/100万トークン）。CLAUDE_PRICING_JSON で上書き可 */
 const DEFAULT_PRICING: Record<string, ModelPrice> = {
-  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 },
   "claude-sonnet-5": { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
   "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
   "claude-haiku-5-5": { input: 0.1, output: 0.5, cacheRead: 0.01, cacheWrite: 0.125 },

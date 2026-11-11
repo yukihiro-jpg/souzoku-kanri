@@ -306,3 +306,31 @@ mendan/
 ├── docs/          設計書
 ├── firestore.rules / storage.rules / firestore.indexes.json / firebase.json
 ```
+
+---
+
+## 11. 顧問モード（打ち合わせメモ → ルール集への反映）
+
+顧問先との打ち合わせの「Gemini によるメモ」（Google ドキュメント）を読み、AI が ①ルール集への反映案 ②確認事項 ③カード（宿題・継続論点・社長の悩みなど）に振り分けます。税理士が承認したものだけを、顧問先のルール集（Google ドキュメント）に確認日つきで書き込みます。設計は「顧問モード 設計案」を参照。
+
+**しくみ**
+
+1. メモの「文字起こし」タブを時刻の見出しごとに発言へ分ける（`shared/src/advisory/notes.ts`）
+2. ルール集を章に分け、口座・科目・取引先の辞書を作り、聞き間違い（常用銀行→常陽銀行など）の候補を探す（`rulebook.ts`）
+3. Claude（見直し用のモデル）が3つに振り分け、根拠の発言・読み直しを付ける（`prompt.ts`・`schema.ts`）
+4. プログラムが確かめる：引用が本文にあるか、章があるか、書き換える前の文が1か所だけあるか、重複していないか（`review.ts`）
+5. 承認画面で承認・修正・却下。承認したものだけを Docs API で書き込む。解析のあとにルール集が編集されていたら書き込まない（`writePlan.ts`・`functions/src/advisory/ruleRuns.ts`）
+
+**データ**：すべて `clients/{clientId}` の配下。顧問先のメンバー以外は読めず、AI への入力もその顧問先のメモとルール集だけ（`clients/{id}/aiJobs` に記録）。
+
+**Google ドライブ連携**：利用者本人の Google アカウントで許可（OAuth）。権限は `drive.file`（画面で選んだファイルとアプリが作ったファイルだけ）。更新用の鍵は暗号化してサーバー側だけに保存（`oauthTokens`、ブラウザからは読めない）。
+
+**管理者の準備（Google Cloud コンソール）**
+
+1. 「API とサービス」→「OAuth 同意画面」：ユーザーの種類「内部」で作成
+2. 「認証情報」→「OAuth クライアント ID」（ウェブ アプリケーション）：承認済みの JavaScript 生成元に `https://<プロジェクトID>.web.app` と `https://<プロジェクトID>.firebaseapp.com`
+3. 「認証情報」→「API キー」：API の制限を「Google Picker API」、ウェブサイトの制限を上の2つのアドレスに
+4. クライアント ID と API キー・プロジェクト番号を `web/.env.production` の `VITE_GOOGLE_*` に、クライアント ID を `functions/.env.<プロジェクトID>` の `GOOGLE_OAUTH_CLIENT_ID` に、クライアントのシークレットを Secret Manager の `GOOGLE_OAUTH_CLIENT_SECRET` に登録（`npx firebase functions:secrets:set GOOGLE_OAUTH_CLIENT_SECRET`）
+5. 暗号化の鍵 `OAUTH_TOKEN_KEY` は `scripts/deploy.sh` が自動で作る
+
+**テスト**：`npm run test:advisory`（エミュレーター。開発用のドキュメントと簡易振り分けを使い、本物の Google・AI にはつながない）。画面の通しテスト（`scripts/e2e-demo.cjs`）にも顧問モードの流れを含む。

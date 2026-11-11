@@ -21,6 +21,21 @@ export const P = {
   vocabulary: () => "vocabulary",
   settings: () => "settings/app",
   notifications: () => "notifications",
+  // ===== 顧問モード（顧問先ごとに clients/{clientId} の配下へ。顧問先をまたぐ箱は作らない） =====
+  clients: () => "clients",
+  client: (c: string) => `clients/${c}`,
+  ruleRuns: (c: string) => `clients/${c}/ruleRuns`,
+  ruleRun: (c: string, r: string) => `clients/${c}/ruleRuns/${r}`,
+  ruleItems: (c: string, r: string) => `clients/${c}/ruleRuns/${r}/items`,
+  ruleItem: (c: string, r: string, i: string) => `clients/${c}/ruleRuns/${r}/items/${i}`,
+  ruleChanges: (c: string) => `clients/${c}/ruleChanges`,
+  cards: (c: string) => `clients/${c}/cards`,
+  clientAudit: (c: string) => `clients/${c}/auditLogs`,
+  clientAiJobs: (c: string) => `clients/${c}/aiJobs`,
+  /** Google 連携の許可（暗号化した更新用の鍵。ブラウザからは読めない） */
+  oauthToken: (uid: string) => `oauthTokens/${uid}`,
+  /** 開発用の Google ドキュメントの代わり（GOOGLE_MODE=mock のときだけ使う） */
+  mockDoc: (id: string) => `_mockDocs/${id}`,
 };
 
 /** 発言IDは meeting と連番から決定的に作る（同じ発言の二重保存を防ぐ） */

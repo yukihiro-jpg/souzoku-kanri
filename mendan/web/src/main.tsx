@@ -9,6 +9,9 @@ import { CasePage } from "./pages/CasePage";
 import { MeetingPage } from "./pages/MeetingPage";
 import { PrintPage } from "./pages/PrintPage";
 import { AdminPage } from "./pages/AdminPage";
+import { ClientListPage } from "./pages/ClientListPage";
+import { ClientPage } from "./pages/ClientPage";
+import { RuleRunPage } from "./pages/RuleRunPage";
 
 function Guard({ children, admin }: { children: React.ReactNode; admin?: boolean }) {
   const { user, profile, loading } = useAuth();
@@ -29,6 +32,9 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/cases/:caseId/meetings/:meetingId" element={<Guard><MeetingPage /></Guard>} />
           <Route path="/cases/:caseId/print" element={<Guard><PrintPage /></Guard>} />
           <Route path="/admin" element={<Guard admin><AdminPage /></Guard>} />
+          <Route path="/clients" element={<Guard><ClientListPage /></Guard>} />
+          <Route path="/clients/:clientId" element={<Guard><ClientPage /></Guard>} />
+          <Route path="/clients/:clientId/runs/:runId" element={<Guard><RuleRunPage /></Guard>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
