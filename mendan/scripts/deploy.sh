@@ -264,7 +264,7 @@ deploy_functions() {
   npx firebase deploy --project "$PROJECT" --only functions 2>&1 | tee "$OUT"
   set -e
   for TRY in 1 2 3; do
-    FAILED="$(grep -oE 'failed to (update|create) function projects/[^ ]+/functions/[A-Za-z0-9_]+' "$OUT" | sed -E 's#.*/functions/##' | sort -u | tr '\n' ' ')"
+    FAILED="$(grep -oE 'failed to (update|create) function projects/[^ ]+/functions/[A-Za-z0-9_]+' "$OUT" | sed -E 's#.*/functions/##' | sort -u | tr '\n' ' ' || true)"
     [ -z "${FAILED// /}" ] && break
     echo ""
     echo "更新に失敗したサーバー処理を、5つずつ公開し直します（${TRY}回目）: ${FAILED}"
@@ -286,7 +286,7 @@ deploy_functions() {
       set +e; npx firebase deploy --project "$PROJECT" --only "$BATCH" 2>&1 | tee -a "$OUT"; set -e
     fi
   done
-  FAILED="$(grep -oE 'failed to (update|create) function projects/[^ ]+/functions/[A-Za-z0-9_]+' "$OUT" | sed -E 's#.*/functions/##' | sort -u | tr '\n' ' ')"
+  FAILED="$(grep -oE 'failed to (update|create) function projects/[^ ]+/functions/[A-Za-z0-9_]+' "$OUT" | sed -E 's#.*/functions/##' | sort -u | tr '\n' ' ' || true)"
   rm -f "$OUT"
   if [ -n "${FAILED// /}" ]; then
     echo ""
@@ -327,9 +327,9 @@ open_invokers() {
 # Google 連携の設定が、動いているサーバー処理に入ったかを確かめる
 check_google_config() {
   local WANT GOT
-  WANT="$(sed -n 's/^GOOGLE_OAUTH_CLIENT_ID=//p' "functions/.env.${PROJECT}" 2>/dev/null | tr -d '[:space:]')"
-  [ -z "$WANT" ] || [ "$WANT" = "unset" ] && return 0
-  GOT="$(gcloud run services describe googlestatus --region "$REGION" --format=json 2>/dev/null | grep -A1 '"GOOGLE_OAUTH_CLIENT_ID"' | sed -n 's/.*"value": "\(.*\)".*/\1/p')"
+  WANT="$(sed -n 's/^GOOGLE_OAUTH_CLIENT_ID=//p' "functions/.env.${PROJECT}" 2>/dev/null | tr -d '[:space:]' || true)"
+  if [ -z "$WANT" ] || [ "$WANT" = "unset" ]; then return 0; fi
+  GOT="$(gcloud run services describe googlestatus --region "$REGION" --format=json 2>/dev/null | grep -A1 '"GOOGLE_OAUTH_CLIENT_ID"' | sed -n 's/.*"value": "\(.*\)".*/\1/p' || true)"
   if [ "$GOT" = "$WANT" ]; then
     echo "Google 連携の設定がサーバー処理に入っています"
   else
