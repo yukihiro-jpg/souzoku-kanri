@@ -26,7 +26,7 @@ export function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center">
       <div className="w-[420px] rounded-xl border bg-white p-8 shadow-sm">
-        <h1 className="text-xl font-bold">相続税 AI面談・必要資料管理</h1>
+        <h1 className="text-xl font-bold">AI面談</h1>
         <p className="mt-2 text-sm text-slate-600">事務所の Google Workspace アカウントでログインしてください。</p>
         <button disabled={busy} onClick={() => run(signIn)} className="mt-6 w-full rounded-lg bg-blue-600 py-2.5 font-medium text-white hover:bg-blue-700 disabled:opacity-50">
           Google でログイン

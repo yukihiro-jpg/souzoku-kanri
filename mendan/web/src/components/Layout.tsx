@@ -12,7 +12,7 @@ export function Layout({ children, title }: { children: ReactNode; title?: strin
   return (
     <div className="min-h-screen">
       <header className="no-print flex items-center gap-4 border-b bg-white px-6 py-3">
-        <Link to="/" className="font-bold text-slate-800">相続税 AI面談</Link>
+        <Link to="/" className="font-bold text-slate-800">AI面談</Link>
         <nav className="flex gap-1" data-testid="mode-switch">
           <Link to="/" className={tab(!advisory)}>相続モード</Link>
           <Link to="/clients" data-testid="mode-advisory" className={tab(advisory)}>顧問モード</Link>

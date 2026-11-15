@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =====================================================================
-# 相続税 AI面談システムの公開（Google Cloud Shell で実行）
+# AI面談システムの公開（Google Cloud Shell で実行）
 #
 #   使い方（Cloud Shell）:
 #     git clone -b claude/trusting-wozniak-swj60e https://github.com/yukihiro-jpg/souzoku-kanri.git

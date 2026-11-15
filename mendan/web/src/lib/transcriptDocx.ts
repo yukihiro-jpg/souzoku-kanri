@@ -131,7 +131,7 @@ export async function downloadTranscriptDocx(c: CaseDoc, meetings: MeetingTransc
     children.push(...meetingSection(c, t, docs, entities));
   });
   const doc = new Document({
-    creator: "相続税 AI面談",
+    creator: "AI面談",
     title: fileName,
     styles: { default: { document: { run: { font: { ascii: FONT, eastAsia: FONT, hAnsi: FONT, cs: FONT }, size: 21 } } } },
     sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 } } }, children }],
