@@ -11,6 +11,8 @@
 #     git pull && bash scripts/deploy.sh
 #   画面だけの変更なら（2〜3分）
 #     git pull && bash scripts/deploy.sh hosting
+#   サーバー処理（Cloud Functions）だけを公開し直すなら（10〜15分）
+#     git pull && bash scripts/deploy.sh functions
 #
 #   行うこと:
 #     1. 必要な Google Cloud の機能（API）を有効化
@@ -109,6 +111,16 @@ if [ "${1:-}" = "hosting" ]; then
   exit 0
 fi
 
+# サーバー処理だけの更新（bash scripts/deploy.sh functions）: 設定ファイル・鍵は登録済みの前提（10〜15分）
+if [ "${1:-}" = "functions" ]; then
+  REGION="${REGION:-asia-northeast1}"
+  step "サーバー処理だけを更新します"
+  npm ci --no-audit --no-fund
+  firebase_auth
+  FUNCTIONS_ONLY=1
+fi
+
+if [ -z "${FUNCTIONS_ONLY:-}" ]; then
 step "1. Google Cloud の機能を有効化（初回は数分かかります）"
 gcloud services enable \
   aiplatform.googleapis.com run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com \
@@ -152,7 +164,7 @@ step "5. サーバーの設定ファイル（functions/.env.${PROJECT}）"
 ENV_FILE="functions/.env.${PROJECT}"
 if [ ! -f "$ENV_FILE" ]; then
   read -rp "ログインを許可する Google Workspace のドメイン（例: kskac.com）: " DOMAIN
-  read -rp "最初に管理者にするメールアドレス（例: yukihiro@kskac.com）: " ADMIN
+  read -rp "最初に管理者にするメールアドレス（事務所の Google アカウント）: " ADMIN
   read -rp "ログインを許可するメールアドレス（カンマ区切り。Enter のみ = 管理者のアドレスだけ）: " ALLOWED
   cat > "$ENV_FILE" <<EOF
 ALLOWED_EMAIL_DOMAINS=${DOMAIN}
@@ -242,36 +254,102 @@ step "9. セキュリティルールを公開"
 echo "途中で「Y/n」と聞かれた場合は、Y を入力して Enter を押してください。"
 npx firebase deploy --project "$PROJECT" --only firestore,storage
 
+fi # ここまで：サーバー処理だけの更新では行わない（1〜9）
+
+# サーバー処理を公開し、更新に失敗したものだけを少しずつ公開し直す（一度に多数を更新すると断られることがあるため）
+deploy_functions() {
+  local OUT RC FAILED TRY BATCH N
+  OUT="$(mktemp)"
+  set +e
+  npx firebase deploy --project "$PROJECT" --only functions 2>&1 | tee "$OUT"
+  set -e
+  for TRY in 1 2 3; do
+    FAILED="$(grep -oE 'failed to (update|create) function projects/[^ ]+/functions/[A-Za-z0-9_]+' "$OUT" | sed -E 's#.*/functions/##' | sort -u | tr '\n' ' ')"
+    [ -z "${FAILED// /}" ] && break
+    echo ""
+    echo "更新に失敗したサーバー処理を、5つずつ公開し直します（${TRY}回目）: ${FAILED}"
+    if [ -f firebase-debug.log ]; then
+      echo "（失敗の理由）"
+      grep -oE '"message": ?"[^"]{0,300}"' firebase-debug.log | sort | uniq -c | sort -rn | head -5 || true
+    fi
+    : > "$OUT"
+    sleep 20
+    BATCH=""; N=0
+    for NAME in $FAILED; do
+      BATCH="${BATCH:+$BATCH,}functions:mendan:${NAME}"; N=$((N + 1))
+      if [ "$N" -ge 5 ]; then
+        set +e; npx firebase deploy --project "$PROJECT" --only "$BATCH" 2>&1 | tee -a "$OUT"; set -e
+        BATCH=""; N=0
+      fi
+    done
+    if [ -n "$BATCH" ]; then
+      set +e; npx firebase deploy --project "$PROJECT" --only "$BATCH" 2>&1 | tee -a "$OUT"; set -e
+    fi
+  done
+  FAILED="$(grep -oE 'failed to (update|create) function projects/[^ ]+/functions/[A-Za-z0-9_]+' "$OUT" | sed -E 's#.*/functions/##' | sort -u | tr '\n' ' ')"
+  rm -f "$OUT"
+  if [ -n "${FAILED// /}" ]; then
+    echo ""
+    echo "何度か公開し直しても更新できなかったサーバー処理があります: ${FAILED}"
+    if [ -f firebase-debug.log ]; then
+      echo "（失敗の理由）"
+      grep -oE '"message": ?"[^"]{0,300}"' firebase-debug.log | sort | uniq -c | sort -rn | head -5 || true
+    fi
+    echo "この画面を Claude に送ってください。"
+    exit 1
+  fi
+  echo ""
+  echo "※ 上に「Unable to set the invoker for the IAM policy」と出ている場合は想定どおりです（次で対応します）。"
+}
+
+# 画面から呼ぶサーバー処理の入口の確認を外す（functions/src/index.ts で公開している関数のうち、毎日の録音削除以外）
+open_invokers() {
+  local FUNCTION_NAMES MISSING SVC
+  FUNCTION_NAMES="$(sed -n 's/^export {\(.*\)} from.*/\1/p' functions/src/index.ts | tr ',' '\n' | tr -d ' ' | grep -v '^purgeExpiredAudio$' | grep -v '^$')"
+  MISSING=""
+  for NAME in $FUNCTION_NAMES; do
+    SVC="$(echo "$NAME" | tr '[:upper:]' '[:lower:]')"
+    if gcloud run services describe "$SVC" --region "$REGION" >/dev/null 2>&1; then
+      gcloud run services update "$SVC" --region "$REGION" --no-invoker-iam-check --quiet >/dev/null 2>&1
+      echo "  ✔ ${NAME}"
+    else
+      echo "  ✘ ${NAME}（まだ作られていません）"
+      MISSING="${MISSING} ${NAME}"
+    fi
+  done
+  if [ -n "$MISSING" ]; then
+    echo "作られていないサーバー処理があります:${MISSING}"
+    echo "10 の表示（または記録ファイル ${LOG_FILE}）に原因が出ています。もう一度 bash scripts/deploy.sh を実行してください。"
+    exit 1
+  fi
+}
+
+# Google 連携の設定が、動いているサーバー処理に入ったかを確かめる
+check_google_config() {
+  local WANT GOT
+  WANT="$(sed -n 's/^GOOGLE_OAUTH_CLIENT_ID=//p' "functions/.env.${PROJECT}" 2>/dev/null | tr -d '[:space:]')"
+  [ -z "$WANT" ] || [ "$WANT" = "unset" ] && return 0
+  GOT="$(gcloud run services describe googlestatus --region "$REGION" --format=json 2>/dev/null | grep -A1 '"GOOGLE_OAUTH_CLIENT_ID"' | sed -n 's/.*"value": "\(.*\)".*/\1/p')"
+  if [ "$GOT" = "$WANT" ]; then
+    echo "Google 連携の設定がサーバー処理に入っています"
+  else
+    echo "※ Google 連携の設定がサーバー処理にまだ入っていません（いま: ${GOT:-不明}）。この画面を Claude に送ってください。"
+  fi
+}
+
 step "10. サーバー処理（Cloud Functions）を公開（初回は10分ほどかかります）"
 # 初回は Firebase が「だれでも呼べる」設定（allUsers）を付けようとして、組織のポリシーで断られる。
 # 関数そのものは作られるので、ここでは止めずに次の 11 で入口の確認を外す。
-set +e
-npx firebase deploy --project "$PROJECT" --only functions
-FUNCTIONS_CODE=$?
-set -e
-if [ "$FUNCTIONS_CODE" -ne 0 ]; then
-  echo ""
-  echo "※ 上に「Unable to set the invoker for the IAM policy」と出ている場合は想定どおりです（次で対応します）。"
-fi
+deploy_functions
 
 step "11. 画面から呼ぶサーバー処理の入口の確認を外す"
-# functions/src/index.ts で公開している関数のうち、毎日の録音削除（スケジュール実行）以外
-FUNCTION_NAMES="$(sed -n 's/^export {\(.*\)} from.*/\1/p' functions/src/index.ts | tr ',' '\n' | tr -d ' ' | grep -v '^purgeExpiredAudio$' | grep -v '^$')"
-MISSING=""
-for NAME in $FUNCTION_NAMES; do
-  SVC="$(echo "$NAME" | tr '[:upper:]' '[:lower:]')"
-  if gcloud run services describe "$SVC" --region "$REGION" >/dev/null 2>&1; then
-    gcloud run services update "$SVC" --region "$REGION" --no-invoker-iam-check --quiet >/dev/null
-    echo "  ✔ ${NAME}"
-  else
-    echo "  ✘ ${NAME}（まだ作られていません）"
-    MISSING="${MISSING} ${NAME}"
-  fi
-done
-if [ -n "$MISSING" ]; then
-  echo "作られていないサーバー処理があります:${MISSING}"
-  echo "10 の表示（または記録ファイル ${LOG_FILE}）に原因が出ています。もう一度 bash scripts/deploy.sh を実行してください。"
-  exit 1
+open_invokers
+check_google_config
+
+if [ -n "${FUNCTIONS_ONLY:-}" ]; then
+  step "完了"
+  echo "サーバー処理を更新しました。開いている画面は再読み込みしてください。"
+  exit 0
 fi
 
 step "12. 画面（Hosting）を公開"
